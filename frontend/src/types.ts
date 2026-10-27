@@ -88,3 +88,66 @@ export interface SessionState {
   events: EventRecord[]
   chunk_steps: number
 }
+
+export interface MetricStats {
+  n: number
+  mean: number
+  std: number
+  p50: number
+  p90: number
+  ci95_low: number
+  ci95_high: number
+}
+
+export interface BatchSummary {
+  combos: { params: Record<string, unknown>; n: number; metrics: Record<string, MetricStats> }[]
+  sensitivity: { param: string; metric: string; pearson_r: number; n_combos: number }[]
+  sensitivity_note: string
+  ci_note: string
+}
+
+export interface BatchDetail {
+  id: number
+  name: string
+  model_id: string
+  model_version: string
+  status: string
+  total_items: number
+  repeats: number
+  seed_strategy: string
+  seed_base: number | null
+  created_at: string | null
+  duration_ms: number | null
+  error: string | null
+  counts: Record<string, number>
+  spec: ModelSpec
+  grid: Record<string, unknown[]>
+  summary?: BatchSummary
+}
+
+export interface BatchListItem {
+  id: number
+  name: string
+  model_id: string
+  model_version: string
+  status: string
+  total_items: number
+  done_items: number
+  created_at: string
+}
+
+export interface BatchItem {
+  id: number
+  item_index: number
+  params: Record<string, unknown>
+  repeat_index: number
+  seed: number
+  status: string
+  attempts: number
+  steps: number | null
+  sim_time: number | null
+  metrics: Record<string, number> | null
+  result_sha256: string | null
+  error: string | null
+  duration_ms: number | null
+}

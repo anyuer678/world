@@ -1,4 +1,12 @@
-import type { ExperimentResult, ModelInfo, RunDetail, SessionState } from './types'
+import type {
+  BatchDetail,
+  BatchItem,
+  BatchListItem,
+  ExperimentResult,
+  ModelInfo,
+  RunDetail,
+  SessionState,
+} from './types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -47,4 +55,20 @@ export const api = {
   pauseSession: (id: string) => request<SessionState>(`/api/sessions/${id}/pause`, { method: 'POST' }),
   resumeSession: (id: string) => request<SessionState>(`/api/sessions/${id}/resume`, { method: 'POST' }),
   resetSession: (id: string) => request<SessionState>(`/api/sessions/${id}/reset`, { method: 'POST' }),
+  createBatch: (body: {
+    name: string
+    spec: unknown
+    grid: Record<string, unknown[]>
+    repeats: number
+    seed_strategy: string
+    max_retries: number
+    per_run_wall_seconds: number
+  }) => request<BatchDetail>('/api/batches', { method: 'POST', body: JSON.stringify(body) }),
+  listBatches: () =>
+    request<{ total: number; batches: BatchListItem[] }>('/api/batches?limit=10'),
+  getBatch: (id: number) => request<BatchDetail>(`/api/batches/${id}`),
+  listBatchItems: (id: number, limit = 50) =>
+    request<{ total: number; items: BatchItem[] }>(`/api/batches/${id}/items?limit=${limit}`),
+  cancelBatch: (id: number) =>
+    request<BatchDetail>(`/api/batches/${id}/cancel`, { method: 'POST' }),
 }

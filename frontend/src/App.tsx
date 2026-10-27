@@ -3,6 +3,8 @@ import { api } from './api'
 import type { ModelInfo, ModelSpec, SessionState } from './types'
 import ParamForm from './ParamForm'
 import SimView from './SimView'
+import BatchPanel from './BatchPanel'
+import ComparePanel from './ComparePanel'
 
 type StopType = 'steps' | 'sim_time' | 'until_empty'
 
@@ -353,6 +355,15 @@ export default function App() {
             </tbody>
           </table>
         )}
+      </section>
+      <section style={card}>
+        <h2>5. 批量实验与参数搜索</h2>
+        <BatchPanel spec={buildSpec()} />
+      </section>
+
+      <section style={card}>
+        <h2>6. 结果比较</h2>
+        <ComparePanel history={history} />
       </section>
     </div>
   )
