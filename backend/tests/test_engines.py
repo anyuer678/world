@@ -81,6 +81,35 @@ def test_run_max_steps_bounds_per_call():
     assert engine.model.finalize_metrics()["count"] == 1000.0
 
 
+def test_chunked_run_crosses_absolute_cap_des():
+    """limits.max_steps caps unbounded run() calls, not chunked ones: a
+    session worker chunking run(10) must be able to pass the cap."""
+    model = ToyDesModel({"total_events": 300}, rng_seed=8)
+    engine = SimulationEngine(
+        model, {"type": "steps", "value": 300}, limits=Limits(max_steps=150)
+    )
+    for _ in range(40):
+        r = engine.run(max_steps=10)
+        if r.status == "completed":
+            break
+    assert r.status == "completed"
+    assert engine.steps == 300
+
+
+def test_chunked_run_crosses_absolute_cap_time_stepped():
+    model = ToyStepModel({}, rng_seed=8)
+    engine = SimulationEngine(
+        model, {"type": "steps", "value": 300}, limits=Limits(max_steps=150)
+    )
+    for _ in range(40):
+        r = engine.run(max_steps=10)
+        if r.status == "completed":
+            break
+    assert r.status == "completed"
+    assert engine.steps == 300
+    assert engine.steps > 150
+
+
 def test_des_checkpoint_restore_equivalence():
     spec = {"type": "steps", "value": 500}
     a = SimulationEngine(ToyDesModel({"total_events": 500}, rng_seed=11), spec)

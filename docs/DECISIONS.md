@@ -20,6 +20,7 @@
 | D16 | running 期间 `state()` 返回 ≤100ms 节流的缓存快照（分片间隙在锁内生成） | 避免高频轮询与工作线程争锁造成撕裂读/饥饿；100ms 交互延迟可接受 | 锁内实时读模型 |
 | D17 | 引擎 `run(max_steps)` 必须在同一调用内强制步数上限，达上限返回 `chunk_done`（不写入内部 status） | 回归修复：原实现 hard_cap 只算不用，连续运行一步到底，轮询恒见 step 0、暂停仅在结束后生效；快照 status 保持 running 供会话层判别 | — |
 | D18 | 前端 300ms 轮询 running 会话 + `visibilitychange` 回前台立即拉取一次 | 后台标签页定时器被浏览器强节流（最长约 1 分钟/次），轮询间隔本身无法对抗节流，回页签即时补偿 | WebSocket 推送（阶段 6 视压测决定） |
+| D19 | `Limits.max_steps` 只约束「无界」`run()`（批量实验/直连调用）与手动 step 批量；分片连续运行（`run(max_steps=N)`）不受绝对上限截断，改由 `max_wall_seconds`（worker 循环顶）+ spec 停止条件约束 | 回归修复：原语义下会话分片运行累计步数一到 `default_max_steps` 即终止（轮询测试 500k 步恒在 100k 处 step_limit 收场）；而「worker 无视 step_limit」又会死转——chunked run 达上限后每次瞬间返回 0 步。改为 `_stop_reason(enforce_step_limit=)` 开关 + worker 顶墙钟；无界调用仍受保护 | 会话层记录并跳过 step_limit（治标不治本） |
 
 ## 环境审查（阶段 0，实测）
 

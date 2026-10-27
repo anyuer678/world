@@ -187,6 +187,14 @@ class SessionService:
                 with s.lock:
                     s.status = "paused"
                 return
+            # Continuous session runs are bounded by the wall clock, not the
+            # engine's absolute step cap (that one guards unbounded run()
+            # calls and manual step batches).
+            if time.monotonic() - t0 > self._settings.max_wall_seconds:
+                with s.lock:
+                    s.status = "wall_timeout"
+                    s.stop_reason = "wall_timeout"
+                return
             with s.lock:
                 if s.status != "running":
                     return
@@ -200,15 +208,8 @@ class SessionService:
                     s.error = "".join(traceback.format_exception_only(type(exc), exc)).strip()
                 return
             reason = result.status
-            if reason == "step_limit":
-                if time.monotonic() - t0 > self._settings.max_wall_seconds:
-                    reason = "wall_timeout"
-                elif s.pause_event.is_set():
-                    reason = "paused"
-                elif s.cancel_event.is_set():
-                    reason = "cancelled"
             with s.lock:
-                if reason in ("completed", "step_limit", "wall_timeout", "cancelled"):
+                if reason in ("completed", "wall_timeout", "cancelled"):
                     s.status = reason
                     s.stop_reason = reason
                     return

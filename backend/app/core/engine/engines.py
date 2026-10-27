@@ -7,6 +7,7 @@ Time semantics are strictly separated:
 """
 from __future__ import annotations
 
+import json
 import time as _time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -107,7 +108,7 @@ class _BaseEngine:
 
     def checkpoint(self) -> Checkpoint:
         self._ensure_init()
-        return {
+        cp = {
             "engine_version": ENGINE_VERSION,
             "model_id": self.model.model_id,
             "model_type": self.model.model_type,
@@ -118,6 +119,11 @@ class _BaseEngine:
             "model_state": self.model.dump_state(),
             "engine": self._engine_state(),
         }
+        # The checkpoint must not alias live model/queue state (models mutate
+        # their job dicts in place, so a continued run would corrupt any
+        # restored engine). JSON roundtrip = deep copy + D5 serializability
+        # check in one step.
+        return json.loads(json.dumps(cp))
 
     def restore(self, cp: Checkpoint) -> None:
         if cp.get("model_id") != self.model.model_id:
@@ -164,13 +170,13 @@ class TimeSteppedEngine(_BaseEngine):
         self.clock = self.steps * self.dt
         self.status = "running"
 
-    def _stop_reason(self, t0: float) -> str | None:
+    def _stop_reason(self, t0: float, enforce_step_limit: bool = True) -> str | None:
         stop_type = self.stop.get("type")
         if stop_type == "steps" and self.steps >= int(self.stop["value"]):
             return "completed"
         if stop_type == "sim_time" and self.clock >= float(self.stop["value"]) - 1e-12:
             return "completed"
-        if self.steps >= self.limits.max_steps:
+        if enforce_step_limit and self.steps >= self.limits.max_steps:
             return "step_limit"
         if self.steps % self.limits.cancel_poll_interval == 0:
             return self._wall_or_cancel(t0)
@@ -251,7 +257,7 @@ class DesEngine(_BaseEngine):
         self._chain_count = 0
         self._last_event_time = self.clock if self.steps > 0 else None
 
-    def _stop_reason(self, t0: float) -> str | None:
+    def _stop_reason(self, t0: float, enforce_step_limit: bool = True) -> str | None:
         if len(self.queue) == 0:
             return "completed"
         stop_type = self.stop.get("type")
@@ -259,7 +265,7 @@ class DesEngine(_BaseEngine):
             nxt = self.queue.peek()
             if nxt is not None and nxt.time > float(self.stop["value"]) + 1e-12:
                 return "completed"
-        if self.steps >= self.limits.max_steps:
+        if enforce_step_limit and self.steps >= self.limits.max_steps:
             return "step_limit"
         if stop_type == "steps" and self.steps >= int(self.stop["value"]):
             return "completed"
@@ -333,14 +339,19 @@ class SimulationEngine:
     def run(self, max_steps: int | None = None) -> RunResult:
         t0 = _time.monotonic()
         self._inner._ensure_init()
-        hard_cap = self._inner.limits.max_steps
+        # limits.max_steps caps an unbounded run() call (batch experiments,
+        # direct runs). A caller-passed max_steps already bounds the call, so
+        # the absolute cap must not truncate a chunked continuous run mid-way
+        # (session workers chunk precisely so runs can exceed it).
         if max_steps is not None:
-            hard_cap = min(hard_cap, self._inner.steps + max_steps)
+            hard_cap = self._inner.steps + max_steps
+        else:
+            hard_cap = self._inner.limits.max_steps
         if self.stop.get("type") == "steps":
             hard_cap = min(hard_cap, int(self.stop["value"]))
         stop_reason: str | None = None
         while True:
-            reason = self._inner._stop_reason(t0)
+            reason = self._inner._stop_reason(t0, enforce_step_limit=max_steps is None)
             if reason is not None:
                 stop_reason = reason
                 break

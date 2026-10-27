@@ -76,17 +76,21 @@ def test_session_run_polls_show_progress(client):
     """Regression: while a continuous run is in flight, state() polls must see
     increasing steps (worker refreshes the cached state between chunks)."""
     spec = _spec(
-        params={"total_events": 500000, "delay_mean": 0.0001},
-        stop_condition={"type": "steps", "value": 500000},
+        params={"total_events": 5000000, "delay_mean": 0.0001},
+        stop_condition={"type": "steps", "value": 5000000},
     )
     sid = _create(client, spec)["session_id"]
     assert client.post(f"/api/sessions/{sid}/run").status_code == 200
+    # Consecutive polls can land inside one 0.1s cache-refresh window and read
+    # the same cached step; only distinct steps count as observations.
     seen = []
     deadline = time.time() + 5
     while time.time() < deadline and len(seen) < 3:
         st = client.get(f"/api/sessions/{sid}").json()
         if st["status"] == "running":
-            seen.append(st["snapshot"]["step"])
+            step = st["snapshot"]["step"]
+            if not seen or step != seen[-1]:
+                seen.append(step)
         time.sleep(0.05)
     client.post(f"/api/sessions/{sid}/pause")
     assert len(seen) >= 3, f"only {len(seen)} running polls: {seen}"
