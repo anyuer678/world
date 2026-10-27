@@ -1,0 +1,27 @@
+services:
+  api:
+    build: ./backend
+    volumes:
+      - worldlab-data:/data
+    ports:
+      - "8000:8000"
+    environment:
+      - WORLDLAB_DB=/data/worldlab.db
+      - WORLDLAB_MAX_WORKERS=2
+      - WORLDLAB_MAX_WALL_SECONDS=120
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  worldlab-data:
