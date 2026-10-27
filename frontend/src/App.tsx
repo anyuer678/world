@@ -385,7 +385,7 @@ export default function App() {
   )
 }
 
-function statusLabel(s: string): string {
+export function statusLabel(s: string): string {
   const map: Record<string, string> = {
     idle: '就绪',
     running: '运行中',

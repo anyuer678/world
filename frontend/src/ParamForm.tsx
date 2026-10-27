@@ -8,7 +8,7 @@ interface FieldProps {
   onChange: (v: unknown) => void
 }
 
-function resolve(root: JSONSchema, s: JSONSchema): JSONSchema {
+export function resolve(root: JSONSchema, s: JSONSchema): JSONSchema {
   if (s.$ref) {
     const name = s.$ref.replace('#/$defs/', '')
     const def = root.$defs?.[name]

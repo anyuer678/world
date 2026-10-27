@@ -265,7 +265,7 @@ function StateTable({ state }: { state: Record<string, unknown> }) {
   )
 }
 
-function formatValue(v: unknown): string {
+export function formatValue(v: unknown): string {
   if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(4)
   if (Array.isArray(v)) return `[${v.length} 项]`
   if (v !== null && typeof v === 'object') return JSON.stringify(v).slice(0, 80)

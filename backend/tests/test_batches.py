@@ -74,6 +74,48 @@ class AlwaysFailsModel(DiscreteEventModel):
 registry.register(AlwaysFailsModel)
 
 
+class SlowDesParams(WorldLabParams):
+    total_events: int = 100
+    delay_mean: float = 1.0
+
+
+class SlowDesModel(DiscreteEventModel):
+    model_id = "toy_slow_des"
+    display_name = "Slow toy DES"
+    description = "Toy DES that sleeps per event; long-lived item for cancel tests."
+    model_type = "discrete_event"
+    version = "1.0.0"
+    param_model = SlowDesParams
+
+    def initialize(self, ctx) -> None:
+        self.count = 0
+        ctx.schedule(1.0, "tick")
+
+    def handle_event(self, event, ctx) -> None:
+        self.count += 1
+        # 0.5ms/event: 100k steps (default_max_steps cap) ≈ 50s, and sleep
+        # releases the GIL so the cancel request is never starved. A fast
+        # item dies of step_limit in ~0.25s and races the cancel call.
+        time.sleep(0.0005)
+        if self.count < self.params.total_events:
+            ctx.schedule(self.rng.expovariate(1.0 / self.params.delay_mean), "tick")
+
+    def dump_state(self):
+        return {"count": self.count}
+
+    def load_state(self, state):
+        self.count = state["count"]
+
+    def snapshot(self):
+        return {"count": self.count}
+
+    def finalize_metrics(self):
+        return {"count": float(self.count)}
+
+
+registry.register(SlowDesModel)
+
+
 @pytest.fixture()
 def batches(settings):
     b = BatchService(settings, registry)
@@ -207,9 +249,17 @@ def test_retry_counts_attempts_then_fails(batches):
 
 # ------------------------------------------------------------------- cancel
 def test_cancel_running_batch(batches):
+    # toy_slow_des: 0.5ms/event means the item cannot hit step_limit (100k
+    # steps ≈ 50s) within the test window, so cancel deterministically wins.
     b = batches.create(
         "slow",
-        _spec(params={"total_events": 5_000_000, "delay_mean": 0.001}),
+        {
+            "schema_version": 1,
+            "model_id": "toy_slow_des",
+            "params": {"total_events": 1_000_000, "delay_mean": 1.0},
+            "stop_condition": {"type": "until_empty"},
+            "seed": 1000,
+        },
         {},
         repeats=1,
     )

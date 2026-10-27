@@ -5,6 +5,13 @@ import type { BatchDetail, BatchItem, BatchListItem, ModelSpec } from './types'
 const TERMINAL = new Set(['completed', 'failed', 'cancelled'])
 const BATCH_ITEM_CAP = 2000
 
+export function parseValues(raw: string): unknown[] {
+  return raw
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .map((tok) => (/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(tok) ? Number(tok) : tok))
+}
+
 interface GridRow {
   param: string
   values: string
@@ -50,13 +57,6 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     }, 700)
     return () => clearInterval(t)
   }, [batch, refreshBatches])
-
-  function parseValues(raw: string): unknown[] {
-    return raw
-      .split(/[,\s]+/)
-      .filter(Boolean)
-      .map((tok) => (/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(tok) ? Number(tok) : tok))
-  }
 
   function buildGrid(): Record<string, unknown[]> {
     const grid: Record<string, unknown[]> = {}

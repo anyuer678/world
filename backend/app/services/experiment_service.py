@@ -56,6 +56,29 @@ class ExperimentService:
         self._cancel_flags: dict[int, threading.Event] = {}
         self._lock = threading.Lock()
         apply_migrations(settings.db_path)
+        self._recover_interrupted()
+
+    def _recover_interrupted(self) -> None:
+        # Run rows are only inserted when a run starts, so any 'pending'/
+        # 'running' row left in the DB belongs to a run whose worker thread
+        # died with a previous process. Mark it failed instead of leaving a
+        # phantom 'running' forever.
+        msg = "interrupted: service restarted while run was in progress"
+        conn = self._conn()
+        try:
+            with conn:
+                conn.execute(
+                    "UPDATE experiment_runs SET status='failed', error=?, finished_at=datetime('now')"
+                    " WHERE status IN ('pending','running')",
+                    (msg,),
+                )
+                conn.execute(
+                    "UPDATE experiments SET status='failed', error=?, finished_at=datetime('now')"
+                    " WHERE status='running'",
+                    (msg,),
+                )
+        finally:
+            conn.close()
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)

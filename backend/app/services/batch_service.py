@@ -49,6 +49,27 @@ class BatchService:
         self._cancel_flags: dict[int, threading.Event] = {}
         self._lock = threading.Lock()
         apply_migrations(settings.db_path)
+        self._recover_interrupted()
+
+    def _recover_interrupted(self) -> None:
+        # Orchestrator threads live in the process that created the batch, so
+        # 'queued'/'running' rows from a previous process can never advance.
+        msg = "interrupted: service restarted while batch was in progress"
+        conn = self._conn()
+        try:
+            with conn:
+                conn.execute(
+                    "UPDATE batch_items SET status='cancelled', error=?, finished_at=datetime('now')"
+                    " WHERE status IN ('pending','running')",
+                    (msg,),
+                )
+                conn.execute(
+                    "UPDATE batch_runs SET status='cancelled', error=?, finished_at=datetime('now')"
+                    " WHERE status IN ('queued','running')",
+                    (msg,),
+                )
+        finally:
+            conn.close()
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)
