@@ -10,6 +10,7 @@ from . import APP_VERSION
 from .config import Settings, default_settings
 from .core.engine.base import ENGINE_VERSION
 from .core.schema.spec import SpecValidationError
+from .services.batch_service import BatchService
 from .services.experiment_service import ConflictError, ExperimentService, NotFoundError
 from .services.session_service import SessionService
 
@@ -21,17 +22,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or default_settings
     service = ExperimentService(settings, registry)
     sessions = SessionService(settings, registry)
+    batches = BatchService(settings, registry)
     service.sessions = sessions
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         yield
         sessions.shutdown()
+        batches.shutdown()
         service.shutdown()
 
     app = FastAPI(title="WorldLab", version=APP_VERSION, lifespan=lifespan)
     app.state.service = service
     app.state.sessions = sessions
+    app.state.batches = batches
 
     app.add_middleware(
         CORSMiddleware,

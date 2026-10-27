@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
@@ -200,3 +200,55 @@ def checkpoint_session(session_id: str, request: Request) -> dict[str, Any]:
 @router.post("/sessions/{session_id}/restore")
 def restore_session(session_id: str, request: Request, body: RestoreBody) -> dict[str, Any]:
     return _service(request).sessions.restore(session_id, body.checkpoint)
+
+
+# -------------------------------------------------------------------- batches
+class CreateBatchBody(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    spec: dict[str, Any]
+    grid: dict[str, list[Any]]
+    repeats: int = Field(default=1, ge=1, le=100)
+    seed_strategy: Literal["fixed", "per_repeat_increment", "unique"] = "fixed"
+    max_retries: int = Field(default=0, ge=0, le=10)
+    concurrency: int = Field(default=2, ge=1, le=64)
+    per_run_wall_seconds: float = Field(default=60.0, gt=0)
+
+
+def _batches(request: Request):
+    return request.app.state.batches
+
+
+@router.post("/batches", status_code=201)
+def create_batch(request: Request, body: CreateBatchBody) -> dict[str, Any]:
+    return _batches(request).create(
+        body.name,
+        body.spec,
+        body.grid,
+        body.repeats,
+        body.seed_strategy,
+        body.max_retries,
+        body.concurrency,
+        body.per_run_wall_seconds,
+    )
+
+
+@router.get("/batches")
+def list_batches(request: Request, limit: int = 50, offset: int = 0) -> dict[str, Any]:
+    return _batches(request).list_batches(limit, offset)
+
+
+@router.get("/batches/{batch_id}")
+def get_batch(batch_id: int, request: Request) -> dict[str, Any]:
+    return _batches(request).get_batch(batch_id)
+
+
+@router.get("/batches/{batch_id}/items")
+def list_batch_items(
+    batch_id: int, request: Request, limit: int = 200, offset: int = 0
+) -> dict[str, Any]:
+    return _batches(request).list_items(batch_id, limit, offset)
+
+
+@router.post("/batches/{batch_id}/cancel")
+def cancel_batch(batch_id: int, request: Request) -> dict[str, Any]:
+    return _batches(request).cancel(batch_id)

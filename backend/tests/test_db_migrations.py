@@ -7,11 +7,19 @@ from app.db.migrations import apply_migrations, current_version
 def test_fresh_db_migrates(tmp_path):
     db = str(tmp_path / "t.db")
     applied = apply_migrations(db)
-    assert applied == [1]
+    assert applied == [1, 2]
     conn = connect(db)
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"schema_migrations", "experiments", "experiment_runs", "model_registrations", "result_artifacts"} <= tables
-    assert current_version(conn) == 1
+    assert {
+        "schema_migrations",
+        "experiments",
+        "experiment_runs",
+        "model_registrations",
+        "result_artifacts",
+        "batch_runs",
+        "batch_items",
+    } <= tables
+    assert current_version(conn) == 2
     conn.close()
 
 
@@ -21,7 +29,7 @@ def test_migrations_idempotent(tmp_path):
     applied = apply_migrations(db)
     assert applied == []
     conn = connect(db)
-    assert current_version(conn) == 1
+    assert current_version(conn) == 2
     conn.close()
 
 
