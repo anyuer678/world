@@ -47,6 +47,7 @@ class AlwaysFailsParams(WorldLabParams):
 class AlwaysFailsModel(DiscreteEventModel):
     model_id = "toy_always_fails"
     display_name = "Always fails"
+    description = "Toy model whose initialize always raises, for retry tests."
     model_type = "discrete_event"
     version = "1.0.0"
     param_model = AlwaysFailsParams

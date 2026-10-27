@@ -22,6 +22,7 @@
 | D18 | 前端 300ms 轮询 running 会话 + `visibilitychange` 回前台立即拉取一次 | 后台标签页定时器被浏览器强节流（最长约 1 分钟/次），轮询间隔本身无法对抗节流，回页签即时补偿 | WebSocket 推送（阶段 6 视压测决定） |
 | D19 | `Limits.max_steps` 只约束「无界」`run()`（批量实验/直连调用）与手动 step 批量；分片连续运行（`run(max_steps=N)`）不受绝对上限截断，改由 `max_wall_seconds`（worker 循环顶）+ spec 停止条件约束 | 回归修复：原语义下会话分片运行累计步数一到 `default_max_steps` 即终止（轮询测试 500k 步恒在 100k 处 step_limit 收场）；而「worker 无视 step_limit」又会死转——chunked run 达上限后每次瞬间返回 0 步。改为 `_stop_reason(enforce_step_limit=)` 开关 + worker 顶墙钟；无界调用仍受保护 | 会话层记录并跳过 step_limit（治标不治本） |
 | D20 | 批量实验：专用 `ThreadPoolExecutor(max_workers=settings.max_workers)` 跑 batch item，单批次并发再经 `min(concurrency, max_workers)` 封顶；item 采用无界 `run()`（受 D19 绝对步数上限 + 每项 `per_run_wall_seconds` 与全局墙钟取 min 约束）；只重试**异常**（completed/step_limit/wall_timeout 是合法结果）；DB 只存 metrics+sha256 不存事件日志；统计纯 Python 实现（无 numpy），CI 为正态近似并显式标注；敏感性 = 数值网格参数与「每组合指标均值」的皮尔逊相关，响应内固定携带「相关性≠因果、单次批量不足以断言普遍最优」说明 | 并发总量有界（实验池 + 批量池各自 ≤ max_workers）；事件日志体量大且对统计无用（大型数据不逐帧全量传输）；避免为统计引入重依赖；防止把观察性关联当因果结论展示 | 共享单一全局池（需重构 ExperimentService 构造）；逐步回归分位数置信区间（需 bootstrap） |
+| D21 | 插件加载 = 环境变量 `WORLDLAB_PLUGIN_MODULES`（逗号/分号分隔模块名）+ 模块级 `register(registry)` 钩子；registry 注册契约强制 `description` 非空、`visualizer` 为含字符串 `kind` 的 dict、`model_type` 必须与继承的基类严格一致（DES↔discrete_event / 步进↔time_stepped）。插件是运维者安装的受信代码（与依赖包同级信任），非受信模型代码不在支持范围——行为由 spec 定义而非代码 | 新增模型零核心模块改动（只装包+配置环境变量）；强契约防「声明 DES 实则步进」之类的错位插件 | 请求头/URL 动态装插件（引入运行期信任问题）；放宽 model_type 校验（保留原始宽松检查） |
 
 ## 环境审查（阶段 0，实测）
 

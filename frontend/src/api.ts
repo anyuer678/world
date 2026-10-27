@@ -71,4 +71,7 @@ export const api = {
     request<{ total: number; items: BatchItem[] }>(`/api/batches/${id}/items?limit=${limit}`),
   cancelBatch: (id: number) =>
     request<BatchDetail>(`/api/batches/${id}/cancel`, { method: 'POST' }),
+  reportUrl: (id: number, format: 'markdown' | 'json') =>
+    `/api/experiments/${id}/report?format=${format}`,
+  batchCsvUrl: (id: number) => `/api/batches/${id}/export.csv`,
 }

@@ -348,7 +348,23 @@ export default function App() {
                   <td style={td}>
                     <button onClick={() => loadExperiment(h.id)} style={{ ...btn, padding: '4px 10px', fontSize: 12 }}>
                       载入配置
-                    </button>
+                    </button>{' '}
+                    <a
+                      href={api.reportUrl(h.id, 'markdown')}
+                      download={`worldlab-report-${h.id}.md`}
+                      aria-label={`导出实验 ${h.id} 的 Markdown 报告`}
+                      style={{ ...btn, padding: '4px 10px', fontSize: 12, textDecoration: 'none', display: 'inline-block' }}
+                    >
+                      报告MD
+                    </a>{' '}
+                    <a
+                      href={api.reportUrl(h.id, 'json')}
+                      download={`worldlab-report-${h.id}.json`}
+                      aria-label={`导出实验 ${h.id} 的 JSON 报告`}
+                      style={{ ...btn, padding: '4px 10px', fontSize: 12, textDecoration: 'none', display: 'inline-block' }}
+                    >
+                      报告JSON
+                    </a>
                   </td>
                 </tr>
               ))}

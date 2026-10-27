@@ -24,6 +24,7 @@ class ToyDesParams(WorldLabParams):
 class ToyDesModel(DiscreteEventModel):
     model_id = "toy_des"
     display_name = "Toy DES"
+    description = "Toy discrete-event model for tests."
     model_type = "discrete_event"
     version = "1.0.0"
     param_model = ToyDesParams
@@ -61,6 +62,7 @@ class ToyStepParams(WorldLabParams):
 class ToyStepModel(TimeSteppedModel):
     model_id = "toy_step"
     display_name = "Toy time-stepped"
+    description = "Toy time-stepped model for tests."
     model_type = "time_stepped"
     version = "1.0.0"
     dt = 1.0
@@ -97,6 +99,7 @@ class ZeroDelayLoopModel(DiscreteEventModel):
 
     model_id = "toy_zero_delay"
     display_name = "Zero-delay loop"
+    description = "Pathological zero-delay chain model for tests."
     model_type = "discrete_event"
     version = "1.0.0"
     param_model = ZeroDelayParams
@@ -135,6 +138,7 @@ def settings(tmp_path):
         event_log_size=500,
         zero_delay_chain_limit=10000,
         cancel_poll_interval=256,
+        plugin_modules=(),
     )
 
 

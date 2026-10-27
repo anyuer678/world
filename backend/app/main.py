@@ -15,11 +15,14 @@ from .services.experiment_service import ConflictError, ExperimentService, NotFo
 from .services.session_service import SessionService
 
 import app.models  # noqa: F401 - register built-in model plugins
+from .core.plugins import load_plugin_modules
 from .core.registry import registry
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or default_settings
+    if settings.plugin_modules:
+        load_plugin_modules(settings.plugin_modules, registry)
     service = ExperimentService(settings, registry)
     sessions = SessionService(settings, registry)
     batches = BatchService(settings, registry)

@@ -266,6 +266,14 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
             <button onClick={cancel} disabled={busy || !active} style={{ ...smallBtn, ...(active ? {} : { opacity: 0.5 }) }}>
               取消批量
             </button>
+            <a
+              href={api.batchCsvUrl(batch.id)}
+              download={`worldlab-batch-${batch.id}.csv`}
+              aria-label={`导出批量 ${batch.id} 的 CSV`}
+              style={{ ...smallBtn, textDecoration: 'none', display: 'inline-block' }}
+            >
+              导出 CSV
+            </a>
           </div>
           {Object.keys(batch.counts).length > 0 && (
             <p style={{ fontSize: 12, color: '#6b7280' }}>

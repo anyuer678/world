@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
+from .. import APP_VERSION
+from ..core.engine.base import ENGINE_VERSION
 from ..core.schema.spec import SpecValidationError
+from ..services import reporting
 from ..services.experiment_service import ConflictError, NotFoundError
 
 
@@ -125,6 +128,23 @@ def cancel_experiment(exp_id: int, request: Request) -> dict[str, Any]:
 @router.post("/experiments/{exp_id}/rerun")
 def rerun_experiment(exp_id: int, request: Request) -> dict[str, Any]:
     return _service(request).rerun_experiment(exp_id)
+
+
+@router.get("/experiments/{exp_id}/report")
+def get_experiment_report(
+    exp_id: int, request: Request, format: Literal["markdown", "json"] = "markdown"
+) -> Any:
+    service = _service(request)
+    result = service.get_result(exp_id)
+    report = reporting.build_experiment_report(result, APP_VERSION, ENGINE_VERSION)
+    if format == "json":
+        return report
+    md = reporting.render_report_markdown(report)
+    return Response(
+        content=md,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="worldlab-report-{exp_id}.md"'},
+    )
 
 
 # ----------------------------------------------------------------------- runs
@@ -252,3 +272,24 @@ def list_batch_items(
 @router.post("/batches/{batch_id}/cancel")
 def cancel_batch(batch_id: int, request: Request) -> dict[str, Any]:
     return _batches(request).cancel(batch_id)
+
+
+@router.get("/batches/{batch_id}/export.csv")
+def export_batch_csv(batch_id: int, request: Request) -> Response:
+    batches = _batches(request)
+    batch = batches.get_batch(batch_id, include_summary=False)
+    items: list[dict[str, Any]] = []
+    offset = 0
+    page = 500
+    while True:
+        res = batches.list_items(batch_id, page, offset)
+        items.extend(res["items"])
+        if len(items) >= res["total"] or not res["items"]:
+            break
+        offset += page
+    csv_text = reporting.render_batch_items_csv(batch, items)
+    return Response(
+        content=csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="worldlab-batch-{batch_id}.csv"'},
+    )

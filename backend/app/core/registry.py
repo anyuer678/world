@@ -20,7 +20,7 @@ class ModelRegistry:
     def register(self, cls: Type[BaseWorldModel]) -> Type[BaseWorldModel]:
         missing = [
             name
-            for name in ("model_id", "display_name", "model_type", "param_model", "version")
+            for name in ("model_id", "display_name", "description", "model_type", "param_model", "version")
             if not getattr(cls, name, None)
         ]
         if missing:
@@ -29,6 +29,18 @@ class ModelRegistry:
             raise RegistryError(f"{cls.__name__}: invalid model_type {cls.model_type!r}")
         if not (isinstance(cls.model_type, str) and issubclass(cls, (DiscreteEventModel, TimeSteppedModel))):
             raise RegistryError(f"{cls.__name__}: model_type does not match base class")
+        expected_type = (
+            ModelType.DISCRETE_EVENT if issubclass(cls, DiscreteEventModel) else ModelType.TIME_STEPPED
+        )
+        if cls.model_type != expected_type:
+            raise RegistryError(
+                f"{cls.__name__}: model_type {cls.model_type!r} does not match declared base"
+                f" (expected {expected_type!r})"
+            )
+        if not isinstance(getattr(cls, "visualizer", None), dict) or not isinstance(
+            cls.visualizer.get("kind"), str
+        ):
+            raise RegistryError(f"{cls.__name__}: visualizer must be a dict with a string 'kind'")
         versions = self._by_id.setdefault(cls.model_id, {})
         if cls.version in versions:
             raise RegistryError(f"duplicate registration: {cls.model_id} v{cls.version}")
