@@ -211,3 +211,26 @@
    （上限 0.98）提交 → UI 错误横幅「spec validation failed:
    params.occupancy Input should be less than or equal to 0.98」，控制台
    仅该预期 422。回归：后端 227/227（+1）、前端 43/43、tsc/build 干净。
+22. **R14 巡检轮：报告导出/载入配置/比较面板/终态 UX/检查点全链路实测**（决策见
+   DECISIONS D38）。本轮零代码改动，九条此前仅 pytest 覆盖或从未实跑的链路
+   全部浏览器/HTTP 实测通过：① 报告导出——历史区「报告MD/报告JSON」
+   （<a download> 指向 /api/experiments/{id}/report），curl 实测 MD 200
+   text/markdown（标题/配置/指标齐全）、JSON 200 application/json
+   （report_version/generated_at/software/experiment/runs/aggregate 七键）；
+   ② 载入配置——点历史行「载入配置」→ 表单切换至 queueing v1.0.0 并提示
+   「已载入实验 #3 的配置」；③ 比较面板——勾选 ≤4 个实验（第 5 个勾选被
+   上限拒绝）→「比较所选实验」→ 31 列指标按模型补齐、不适用显示 —，跨
+   模型比较自动显示「默认不可直接比较」警示；④ 终态 UX——queueing 会话
+   跑至 200/200 状态已完成（completed）后，单步/连续运行/暂停/恢复全部
+   正确禁用（disabled=true，仅重置可用），点按无请求发出（前端静默防呆
+   属预期）；⑤ 单步 ×N——步数填 25 后按钮动态显示「单步 ×25」，一次请求
+   推进 25 步；⑥ 存配置为新实验并运行——生成 #6 并全新运行，历史即时
+   刷新；⑦ 批量非法参数名——网格参数名填 bogus_param 提交 → 错误横幅
+   「grid unknown parameters for model queueing: ['bogus_param']」，批量
+   未创建，控制台仅该预期 422；⑧ 检查点全链路（阶段 2 功能首次脱离
+   pytest 的 HTTP 实测）——cache_sim 会话跑 500 步 → POST checkpoint
+   （step 500, model v1.0.0, params_digest 等十键）→ 新会话 POST restore
+   → 快照与源会话逐字节相等（hits 267 / hit_rate 0.534 / 缓存内容 /
+   recent 历史 / metrics）；⑨ 恢复后重跑——停止条件已达成时 run 返回
+   200 并优雅再次完成（无悬挂）。回归：后端 227/227、前端 43/43、
+   tsc/build 干净。
