@@ -119,3 +119,15 @@
    消失）」+ 平均逗留 2462.97→1（约 2462.974 倍），免责声明文案在列；
    0→0 假阳性（drop_rate/dropped）与 9.3e15 无意义倍数均在浏览器实测
    复现后修掉；后端 207/207、前端 38/38、tsc/vite build 干净。
+15. **Docker 复验与镜像钉版**（R7）：R1-R6 大量改码后重验生产形态，并修掉三个
+   交付缺陷——①前后端均无 .dockerignore，构建上下文携带 node_modules/.venv
+   共约 149MB（实测 du）→ 新增两个 .dockerignore；②前端镜像只 COPY
+   package.json 且用 npm install，锁文件完全不参与 → 改为 COPY
+   package-lock.json + `npm ci`；③后端镜像未 COPY uv.lock，`uv sync --frozen`
+   在容器内必然失败并静默回退到非锁定解析 → COPY uv.lock 并去掉 `||`
+   回退。复验（compose up）：api healthcheck 通过；nginx 反代 /api 返回六
+   模型；浏览器在 5173 点「轻微偏好」场景卡跑完 60 步，不满 0（0.0%）/
+   累计搬家 382，与 R5 本地验证逐位一致（确定性跨环境成立）；容器 API 建
+   批（servers [1,2,4]）后 GET findings 返回 4 条（final_queue_length
+   ratio=null 坍缩 + 3 条有限因子）。阶段 6 已验的会话步进/实验运行/导出
+   链路本轮未重复验证。
