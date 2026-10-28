@@ -41,6 +41,22 @@ class ModelRegistry:
             cls.visualizer.get("kind"), str
         ):
             raise RegistryError(f"{cls.__name__}: visualizer must be a dict with a string 'kind'")
+        scenarios = getattr(cls, "scenarios", [])
+        if not isinstance(scenarios, list) or not all(
+            isinstance(s, dict)
+            and isinstance(s.get("id"), str) and s["id"]
+            and isinstance(s.get("title"), str) and s["title"]
+            and isinstance(s.get("description"), str) and s["description"]
+            and isinstance(s.get("params"), dict)
+            for s in scenarios
+        ):
+            raise RegistryError(
+                f"{cls.__name__}: scenarios must be a list of dicts with non-empty "
+                "id/title/description and a params dict"
+            )
+        ids = [s["id"] for s in scenarios]
+        if len(set(ids)) != len(ids):
+            raise RegistryError(f"{cls.__name__}: duplicate scenario ids")
         versions = self._by_id.setdefault(cls.model_id, {})
         if cls.version in versions:
             raise RegistryError(f"duplicate registration: {cls.model_id} v{cls.version}")
@@ -74,6 +90,7 @@ class ModelRegistry:
                         "model_type": cls.model_type,
                         "params_schema": cls.param_model.model_json_schema(),
                         "visualizer": cls.visualizer,
+                        "scenarios": cls.scenarios,
                     }
                 )
         return out

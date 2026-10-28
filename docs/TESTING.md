@@ -38,6 +38,18 @@
    车辆上限；API 会话/实验闭环。前端（trafficRender.ts 单测 + 浏览器实测）：
    路网解析/边界退化/格数推导；工作台路网编辑（预设/JSON/预览）与实时车辆
    canvas 渲染经像素级探针验证（车辆蓝/红点、信号相位、路段占用着色）。
+10. **场景库**（test_scenarios.py，R3-P0）：内置 5 模型每个 ≥2 个场景；逐场景
+   校验形状（六键齐全、params 非空 dict、steps 停止条件、seed 非负）、
+   标题/描述含中文、经 `validate_spec` 双层校验、引擎实跑 200 步产出非空
+   metrics；`/api/models` 暴露 scenarios；模型 display_name/description 中文。
+   前端（App.tsx 导出纯函数单测 + 浏览器实测）：modelTypeLabel/scenarioSpec
+   单测；一键场景卡片点击 → 自动建会话 + 连续运行 + 滚动到模拟视图，经
+   evaluate 探针实测三模型链路（排队三窗口等待 0.03s vs 单窗口 9.59s、
+   交通场景 canvas 像素证据：车辆/停止车/红灯像素均 >1000，指标 400 拍
+   完成 596 辆）。
+    - 浏览器环境注意：内嵌离屏浏览器中 `requestAnimationFrame` 永不触发、
+      `behavior:'smooth'` 平滑滚动不执行——滚动引导必须用瞬时
+      `scrollIntoView({block:'start'})`，勿用 rAF 门控。
 
 ## 已知环境噪声
 - Windows + CPython 3.11 下 pytest 偶发打印

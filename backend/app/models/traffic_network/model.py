@@ -22,12 +22,11 @@ _INFINITE_ALLOWANCE = 1 << 30
 
 class TrafficNetworkModel(TimeSteppedModel):
     model_id: ClassVar[str] = "traffic_network"
-    display_name: ClassVar[str] = "Traffic Network"
+    display_name: ClassVar[str] = "交通路网"
     description: ClassVar[str] = (
-        "Directed road network with cell-based vehicle movement (one vehicle "
-        "per cell, Nagel-Schreckenberg rules), optional parity-group traffic "
-        "signals, and shortest-path routing. Nodes/edges/signals are defined "
-        "in params; metrics track throughput, travel time and waiting."
+        "有向路网上的车流模拟：道路按元胞划分（每格一辆车），车辆按 "
+        "Nagel-Schreckenberg 规则加减速、避让与启停，可在节点上配置红绿灯相位，"
+        "发车走最短路径。输出吞吐、平均行程时间与等待，适合观察拥堵的形成与消散。"
     )
     model_type: ClassVar[str] = "time_stepped"
     version: ClassVar[str] = "1.0.0"
@@ -37,6 +36,50 @@ class TrafficNetworkModel(TimeSteppedModel):
         "series": ["active_vehicles", "completed", "avg_travel_time"],
     }
     param_model: ClassVar[type] = TrafficParams
+    scenarios: ClassVar[list[dict[str, Any]]] = [
+        {
+            "id": "no-signal",
+            "title": "没有红绿灯的十字路口",
+            "description": (
+                "默认的十字路网（N/E/S/W 汇入中心 C），车流从四个方向持续汇入："
+                "路口没有信号时，抢行的车在 C 点互相顶住，看拥堵如何从路口向上游蔓延。"
+            ),
+            "params": {"spawn_rate": 0.5, "slow_prob": 0.0},
+            "seed": 9,
+            "stop_condition": {"type": "steps", "value": 400},
+        },
+        {
+            "id": "signal-crossroad",
+            "title": "给路口装上红绿灯",
+            "description": (
+                "同样的车流（同种子），在 C 装信号灯：南北向与东西向每 4 拍轮换放行。"
+                "对比上一个场景的完成数与平均等待，看信号如何用「轮流等」换「不堵死」。"
+            ),
+            "params": {
+                "spawn_rate": 0.5,
+                "slow_prob": 0.0,
+                "signals": [{"node": "C", "cycle": 8, "group_a": ["N", "S"], "group_b": ["E", "W"]}],
+            },
+            "seed": 9,
+            "stop_condition": {"type": "steps", "value": 400},
+        },
+        {
+            "id": "rush-aftermath",
+            "title": "高峰过后，堵车多久才散",
+            "description": (
+                "前 60 拍高密度发车（高峰），之后不再发车：观察路上积压的车辆"
+                "如何逐渐排空，体会「停止输入」到「恢复畅通」之间的时间差。"
+            ),
+            "params": {
+                "spawn_rate": 0.7,
+                "spawn_until": 60,
+                "slow_prob": 0.0,
+                "signals": [{"node": "C", "cycle": 8, "group_a": ["N", "S"], "group_b": ["E", "W"]}],
+            },
+            "seed": 9,
+            "stop_condition": {"type": "steps", "value": 400},
+        },
+    ]
 
     def __init__(self, params: dict[str, Any] | TrafficParams, rng_seed: int | None):
         super().__init__(params, rng_seed)

@@ -1,3 +1,12 @@
+export interface ScenarioInfo {
+  id: string
+  title: string
+  description: string
+  params: Record<string, unknown>
+  seed: number
+  stop_condition: { type: 'steps' | 'sim_time' | 'until_empty'; value?: number }
+}
+
 export interface ModelInfo {
   model_id: string
   version: string
@@ -7,6 +16,7 @@ export interface ModelInfo {
   params_schema: Record<string, unknown>
   visualizer: { kind: string; series?: string[] }
   example_spec: ModelSpec
+  scenarios: ScenarioInfo[]
 }
 
 export interface ModelSpec {

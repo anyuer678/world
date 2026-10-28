@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from './api'
-import type { ModelInfo, ModelSpec, SessionState } from './types'
+import type { ModelInfo, ModelSpec, ScenarioInfo, SessionState } from './types'
 import ParamForm from './ParamForm'
 import TrafficPanel from './TrafficPanel'
 import SimView from './SimView'
@@ -24,6 +24,7 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState<{ id: number; name: string; model_id: string; status: string }[]>([])
   const sessionRef = useRef<string | null>(null)
+  const simSectionRef = useRef<HTMLElement | null>(null)
   sessionRef.current = session?.session_id ?? null
 
   useEffect(() => {
@@ -79,6 +80,29 @@ export default function App() {
     setSeed(spec.seed != null ? String(spec.seed) : '')
     setStopType(spec.stop_condition.type)
     setStopValue(spec.stop_condition.value != null ? String(spec.stop_condition.value) : '')
+  }
+
+  async function runScenario(modelId: string, scenario: ScenarioInfo) {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      applySpec({
+        model_id: modelId,
+        params: scenario.params,
+        stop_condition: scenario.stop_condition,
+        seed: scenario.seed,
+      })
+      const s = await api.createSession(scenarioSpec(modelId, scenario))
+      setSession(s)
+      setNotice(`已按场景「${scenario.title}」创建会话，正在连续运行。`)
+      simSectionRef.current?.scrollIntoView({ block: 'start' })
+      setSession(await api.runSession(s.session_id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
   }
 
   function refreshHistory() {
@@ -179,12 +203,37 @@ export default function App() {
           >
             {models.map((m) => (
               <option key={m.model_id} value={m.model_id}>
-                {m.display_name}（{m.model_id} v{m.version} · {m.model_type}）
+                {m.display_name}
               </option>
             ))}
           </select>
         </label>
+        {model && (
+          <p style={{ color: '#9ca3af', fontSize: 12, margin: '2px 0 6px' }}>
+            内部标识 {model.model_id} · v{model.version} · {modelTypeLabel(model.model_type)}
+          </p>
+        )}
         {model?.description && <p style={{ color: '#666', fontSize: 13 }}>{model.description}</p>}
+        {model && model.scenarios?.length > 0 && (
+          <div style={{ margin: '8px 0 4px' }}>
+            <h3 style={{ fontSize: 14, marginBottom: 6 }}>一键场景</h3>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {model.scenarios.map((sc) => (
+                <button
+                  key={sc.id}
+                  onClick={() => runScenario(model.model_id, sc)}
+                  disabled={busy}
+                  aria-label={`一键运行场景：${sc.title}`}
+                  style={scenarioCard}
+                >
+                  <strong style={{ fontSize: 13 }}>{sc.title}</strong>
+                  <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 400 }}>{sc.description}</span>
+                  <span style={{ fontSize: 12, color: '#2563eb', fontWeight: 600 }}>▶ 一键运行</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ flex: 2, minWidth: 320 }}>
             <h3 style={{ fontSize: 14 }}>
@@ -225,16 +274,16 @@ export default function App() {
               <input value={name} onChange={(e) => setName(e.target.value)} style={control} />
             </label>
             <button onClick={() => act(() => api.createSession(buildSpec()))} disabled={busy || !selected} style={primaryBtn}>
-              创建会话
+              开始实时模拟
             </button>
           </div>
         </div>
       </section>
 
-      <section style={card}>
+      <section style={card} ref={simSectionRef}>
         <h2>2. 实时模拟视图</h2>
         {session === null ? (
-          <p style={{ color: '#888' }}>尚未创建会话。配置参数后点击「创建会话」。</p>
+          <p style={{ color: '#888' }}>尚未开始模拟。点上方「一键场景」直接看结果，或配置好参数后点「开始实时模拟」。</p>
         ) : (
           <>
             <p style={{ fontSize: 13, color: '#374151' }}>
@@ -406,6 +455,22 @@ export function statusLabel(s: string): string {
   return map[s] ?? s
 }
 
+export function modelTypeLabel(t: string): string {
+  if (t === 'discrete_event') return '离散事件'
+  if (t === 'time_stepped') return '时间步进'
+  return t
+}
+
+export function scenarioSpec(modelId: string, scenario: ScenarioInfo): ModelSpec {
+  return {
+    schema_version: 1,
+    model_id: modelId,
+    params: structuredClone(scenario.params),
+    stop_condition: structuredClone(scenario.stop_condition),
+    seed: scenario.seed,
+  }
+}
+
 const card: React.CSSProperties = {
   border: '1px solid #e5e7eb',
   borderRadius: 8,
@@ -432,3 +497,17 @@ const primaryBtn: React.CSSProperties = {
 const table: React.CSSProperties = { borderCollapse: 'collapse', width: '100%', fontSize: 14 }
 const th: React.CSSProperties = { textAlign: 'left', borderBottom: '2px solid #e5e7eb', padding: '6px 8px' }
 const td: React.CSSProperties = { borderBottom: '1px solid #f0f0f0', padding: '6px 8px' }
+const scenarioCard: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  gap: 4,
+  flex: '1 1 260px',
+  maxWidth: 360,
+  padding: '10px 12px',
+  background: 'white',
+  border: '1px solid #d1d5db',
+  borderRadius: 8,
+  textAlign: 'left',
+  cursor: 'pointer',
+}

@@ -5,18 +5,20 @@ from ...core.engine.models_base import WorldLabParams
 
 
 class CellularAutomatonParams(WorldLabParams):
-    width: int = Field(default=32, ge=5, le=256)
-    height: int = Field(default=32, ge=5, le=256)
+    width: int = Field(default=32, ge=5, le=256, title="网格宽度")
+    height: int = Field(default=32, ge=5, le=256, title="网格高度")
     rule_string: str = Field(
         default="B3/S23",
         pattern=r"^B[0-8]*/S[0-8]*$",
-        description="birth/survival neighbor counts, e.g. B3/S23 (Conway Life)",
+        title="演化规则（B/S 串）",
+        description="B=出生所需邻居数，S=存活所需邻居数，如 B3/S23 即生命游戏",
     )
-    toroidal: bool = Field(default=True, description="wrap at edges; otherwise outside = dead")
-    initial_density: float = Field(default=0.25, ge=0.0, le=1.0)
+    toroidal: bool = Field(default=True, title="环形边界", description="开启后网格首尾相接；关闭则边界外视为死细胞")
+    initial_density: float = Field(default=0.25, ge=0.0, le=1.0, title="初始随机密度")
     initial_grid: Optional[list[list[int]]] = Field(
         default=None,
-        description="explicit initial state (0/1 cells, exact width x height)",
+        title="指定初始图案",
+        description="给出 0/1 矩阵（行数=高度，列数=宽度）；留空则按随机密度生成",
     )
 
     @model_validator(mode="after")

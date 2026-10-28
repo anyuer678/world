@@ -16,11 +16,11 @@ from .params import CacheParams
 
 class CacheModel(TimeSteppedModel):
     model_id: ClassVar[str] = "cache_sim"
-    display_name: ClassVar[str] = "Cache Replacement Policies"
+    display_name: ClassVar[str] = "缓存替换策略"
     description: ClassVar[str] = (
-        "Fixed-capacity cache with LRU/FIFO/LFU/random replacement over an "
-        "explicit or Zipf-generated access sequence; reports hit/miss rates "
-        "and access cost."
+        "固定容量的缓存按 LRU/FIFO/LFU/随机策略逐次处理访问请求；"
+        "访问序列可手工给出，也可用 Zipf 分布生成（模拟少数热门键占据多数访问）。"
+        "输出命中率、缺失率与平均访问成本。"
     )
     model_type: ClassVar[str] = "time_stepped"
     version: ClassVar[str] = "1.0.0"
@@ -30,6 +30,41 @@ class CacheModel(TimeSteppedModel):
         "series": ["hit_rate", "hits", "misses"],
     }
     param_model: ClassVar[type] = CacheParams
+    scenarios: ClassVar[list[dict[str, Any]]] = [
+        {
+            "id": "zipf-hit-ceiling",
+            "title": "热门数据带来高命中率",
+            "description": (
+                "100 个键、访问偏好 α=1.2（少数热门键被反复访问），缓存 8 槽 + LRU："
+                "即使容量只装得下一小部分键，命中率也能相当高。"
+            ),
+            "params": {"capacity": 8, "policy": "lru", "num_keys": 100, "zipf_exponent": 1.2},
+            "seed": 3,
+            "stop_condition": {"type": "steps", "value": 5000},
+        },
+        {
+            "id": "cache-too-small",
+            "title": "访问均匀时缓存还能救你吗",
+            "description": (
+                "把偏好改为 0（所有键同样热门）：热门不再存在，同样 8 槽的命中率大幅回落——"
+                "缓存的有效性取决于访问是否集中。"
+            ),
+            "params": {"capacity": 8, "policy": "lru", "num_keys": 100, "zipf_exponent": 0.0},
+            "seed": 3,
+            "stop_condition": {"type": "steps", "value": 5000},
+        },
+        {
+            "id": "lru-vs-fifo",
+            "title": "LRU 和 FIFO 差在哪",
+            "description": (
+                "与「热门数据」场景同样的访问流（同种子），只把策略换成 FIFO："
+                "对比命中率，看「最近用过」和「最早进来」这两条规则的区别。"
+            ),
+            "params": {"capacity": 8, "policy": "fifo", "num_keys": 100, "zipf_exponent": 1.2},
+            "seed": 3,
+            "stop_condition": {"type": "steps", "value": 5000},
+        },
+    ]
 
     def _build_stream(self) -> None:
         """Access stream is fully derived from params; rebuilt on initialize

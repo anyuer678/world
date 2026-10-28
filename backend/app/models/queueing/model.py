@@ -16,10 +16,10 @@ from .params import QueueingParams
 
 class QueueingModel(DiscreteEventModel):
     model_id: ClassVar[str] = "queueing"
-    display_name: ClassVar[str] = "Queueing System (G/G/c/K)"
+    display_name: ClassVar[str] = "排队系统（G/G/c/K）"
     description: ClassVar[str] = (
-        "Discrete-event queue with configurable arrival process, service time "
-        "distribution, number of servers, system capacity and queue discipline."
+        "离散事件排队：可配置到达过程（泊松/确定性）、服务时间分布（指数/确定性/均匀）、"
+        "服务台数、系统容量与排队规则。适合观察拥堵如何随利用率变化、容量与丢弃的关系。"
     )
     model_type: ClassVar[str] = "discrete_event"
     version: ClassVar[str] = "1.0.0"
@@ -28,6 +28,45 @@ class QueueingModel(DiscreteEventModel):
         "series": ["queue_length", "busy_servers", "in_system"],
     }
     param_model: ClassVar[type] = QueueingParams
+    scenarios: ClassVar[list[dict[str, Any]]] = [
+        {
+            "id": "rush-hour",
+            "title": "高峰期为什么突然堵死",
+            "description": "到达率 0.9、单窗口、平均服务 1.0：利用率 ρ=0.9 贴近极限——队伍越排越长且几乎不再消散。",
+            "params": {
+                "arrival": {"kind": "poisson", "rate": 0.9},
+                "service": {"kind": "exponential", "mean": 1.0},
+                "servers": 1,
+            },
+            "seed": 7,
+            "stop_condition": {"type": "steps", "value": 30000},
+        },
+        {
+            "id": "overload-drop",
+            "title": "超载的临界点：顾客被丢弃",
+            "description": "到达率 1.5 已超过服务能力，且系统容量只有 5：看队伍顶满后，新到的顾客如何被拒之门外。",
+            "params": {
+                "arrival": {"kind": "poisson", "rate": 1.5},
+                "service": {"kind": "exponential", "mean": 1.0},
+                "servers": 1,
+                "capacity": 5,
+            },
+            "seed": 11,
+            "stop_condition": {"type": "steps", "value": 30000},
+        },
+        {
+            "id": "add-window",
+            "title": "多开两个窗口值不值",
+            "description": "与「高峰期堵死」同样的到达率 0.9，但开 3 个窗口（ρ=0.3）：对比两者的等待时间，体会利用率对排队的非线性影响。",
+            "params": {
+                "arrival": {"kind": "poisson", "rate": 0.9},
+                "service": {"kind": "exponential", "mean": 1.0},
+                "servers": 3,
+            },
+            "seed": 7,
+            "stop_condition": {"type": "steps", "value": 30000},
+        },
+    ]
 
     def initialize(self, ctx: Any) -> None:
         self._s = self._fresh_counters()

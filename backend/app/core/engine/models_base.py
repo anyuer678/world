@@ -71,6 +71,9 @@ class BaseWorldModel(ABC):
     version: ClassVar[str] = "1.0.0"
     visualizer: ClassVar[dict[str, Any]] = {"kind": "none"}
     param_model: ClassVar[type[WorldLabParams]]
+    # Preset stories shown on the workbench: each is
+    # {"id", "title", "description", "params", "seed", "stop_condition"}.
+    scenarios: ClassVar[list[dict[str, Any]]] = []
 
     def __init__(self, params: dict[str, Any] | WorldLabParams, rng_seed: int | None):
         if isinstance(params, dict):

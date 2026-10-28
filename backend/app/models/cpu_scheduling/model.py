@@ -25,11 +25,11 @@ _SELECT_KEY = {
 
 class CpuSchedulingModel(DiscreteEventModel):
     model_id: ClassVar[str] = "cpu_scheduling"
-    display_name: ClassVar[str] = "CPU Scheduling"
+    display_name: ClassVar[str] = "CPU 调度"
     description: ClassVar[str] = (
-        "Single-CPU scheduling of a job workload with FCFS, SJF, priority and "
-        "Round Robin strategies; reports waiting/turnaround/response times "
-        "and CPU utilization."
+        "单 CPU 上调度一批作业：先来先服务（FCFS）、短作业优先（SJF）、优先级、"
+        "时间片轮转（RR）。输出平均等待/周转/响应时间与 CPU 利用率，"
+        "适合观察调度策略与时间片长短对排队时间的影响。"
     )
     model_type: ClassVar[str] = "discrete_event"
     version: ClassVar[str] = "1.0.0"
@@ -38,6 +38,41 @@ class CpuSchedulingModel(DiscreteEventModel):
         "series": ["ready_count", "completed", "cpu_utilization"],
     }
     param_model: ClassVar[type] = CpuSchedulingParams
+    scenarios: ClassVar[list[dict[str, Any]]] = [
+        {
+            "id": "rr-quantum-too-small",
+            "title": "时间片切得太碎会怎样",
+            "description": (
+                "Round Robin 的时间片设为 0.1，作业几乎刚开跑就被打断，"
+                "来回切换把周转时间拉得很长——时间片不是越小越公平。"
+            ),
+            "params": {"strategy": "rr", "quantum": 0.1, "num_jobs": 30},
+            "seed": 5,
+            "stop_condition": {"type": "steps", "value": 20000},
+        },
+        {
+            "id": "rr-quantum-larger",
+            "title": "把时间片放大 5 倍",
+            "description": (
+                "同样的作业（同随机种子），时间片改为 0.5：切换少了，"
+                "周转时间明显缩短。对比上一个场景，找到合适的时间片。"
+            ),
+            "params": {"strategy": "rr", "quantum": 0.5, "num_jobs": 30},
+            "seed": 5,
+            "stop_condition": {"type": "steps", "value": 20000},
+        },
+        {
+            "id": "sjf-vs-others",
+            "title": "短作业优先为什么省时间",
+            "description": (
+                "同样的作业换成 SJF 策略：让短作业先跑完，平均等待时间通常最低——"
+                "代价是长作业可能一直被插队（饥饿）。"
+            ),
+            "params": {"strategy": "sjf", "num_jobs": 30},
+            "seed": 5,
+            "stop_condition": {"type": "steps", "value": 20000},
+        },
+    ]
 
     def initialize(self, ctx: Any) -> None:
         self._s = self._fresh_state()

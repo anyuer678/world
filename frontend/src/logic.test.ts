@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { statusLabel } from './App'
+import { modelTypeLabel, scenarioSpec, statusLabel } from './App'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
 import { resolve } from './ParamForm'
 import { computeBounds, edgeCells, parseNetwork } from './trafficRender'
 import type { JSONSchema } from './schema'
+import type { ScenarioInfo } from './types'
 
 describe('trafficRender', () => {
   const net = {
@@ -127,5 +128,37 @@ describe('resolve (param schema ref resolution)', () => {
   it('returns plain schemas untouched', () => {
     const s: JSONSchema = { type: 'string', enum: ['fcfs', 'sjf'] }
     expect(resolve(root, s)).toEqual(s)
+  })
+})
+
+describe('modelTypeLabel', () => {
+  it('translates both model types and passes others through', () => {
+    expect(modelTypeLabel('discrete_event')).toBe('离散事件')
+    expect(modelTypeLabel('time_stepped')).toBe('时间步进')
+    expect(modelTypeLabel('other')).toBe('other')
+  })
+})
+
+describe('scenarioSpec', () => {
+  const scenario: ScenarioInfo = {
+    id: 'rush-hour',
+    title: '高峰期为什么突然堵死',
+    description: '……',
+    params: { servers: 1 },
+    seed: 7,
+    stop_condition: { type: 'steps', value: 30000 },
+  }
+
+  it('builds a complete spec from a scenario without mutating it', () => {
+    const spec = scenarioSpec('queueing', scenario)
+    expect(spec).toEqual({
+      schema_version: 1,
+      model_id: 'queueing',
+      params: { servers: 1 },
+      stop_condition: { type: 'steps', value: 30000 },
+      seed: 7,
+    })
+    spec.params.servers = 99
+    expect(scenario.params.servers).toBe(1)
   })
 })
