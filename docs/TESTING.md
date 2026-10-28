@@ -50,6 +50,15 @@
     - 浏览器环境注意：内嵌离屏浏览器中 `requestAnimationFrame` 永不触发、
       `behavior:'smooth'` 平滑滚动不执行——滚动引导必须用瞬时
       `scrollIntoView({block:'start'})`，勿用 rAF 门控。
+11. **结果速读与首屏**（R3-P1，summary.ts + App.tsx）：summarizeMetrics 按
+   visualizer.kind 分派（queue/cache/ca/traffic/cpu_schedule）把 metrics 翻译成
+   2-3 句中文判断（利用率分级、命中率分级、种群峰值/萎缩、完成率判拥堵、
+   CPU 等待/周转），未知 kind 与缺失指标安全降级（返回空/“-”）；26 项前端
+   单测覆盖全部分支。浏览器实测：排队超载场景速读「利用率 95.0% 贴近极限 +
+   丢弃率 37.2% 容量不足」，交通高峰消散场景「152 发 152 完 整体畅通」。
+   首屏重构（模拟视图置顶、模型/场景/运行控制在左、参数在右、批量与比较
+   折叠进「高级」details 默认收起）经 DOM 探针验证：标题顺序、details 默认
+   关闭、展开后批量面板可用、下方卡片点击后向上滚动到位并完成运行。
 
 ## 已知环境噪声
 - Windows + CPython 3.11 下 pytest 偶发打印

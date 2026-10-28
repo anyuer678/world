@@ -3,6 +3,7 @@ import { modelTypeLabel, scenarioSpec, statusLabel } from './App'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
 import { resolve } from './ParamForm'
+import { summarizeMetrics } from './summary'
 import { computeBounds, edgeCells, parseNetwork } from './trafficRender'
 import type { JSONSchema } from './schema'
 import type { ScenarioInfo } from './types'
@@ -160,5 +161,80 @@ describe('scenarioSpec', () => {
     })
     spec.params.servers = 99
     expect(scenario.params.servers).toBe(1)
+  })
+})
+
+describe('summarizeMetrics', () => {
+  it('judges queue load by utilization and reports drops', () => {
+    const high = summarizeMetrics('queue', {
+      utilization: 0.9039,
+      avg_waiting_time: 9.59,
+      avg_response_time: 10.58,
+      drop_rate: 0,
+    })
+    expect(high[0]).toContain('90.4%')
+    expect(high[0]).toContain('极限')
+    expect(high[1]).toContain('9.59')
+    expect(high.some((s) => s.includes('丢弃'))).toBe(false)
+
+    const drop = summarizeMetrics('queue', { utilization: 1.5, avg_waiting_time: 3, drop_rate: 0.21 })
+    expect(drop.some((s) => s.includes('21.0%') && s.includes('拒之门外'))).toBe(true)
+  })
+
+  it('summarizes cache hit quality', () => {
+    const out = summarizeMetrics('cache', { hit_rate: 0.5004, avg_cost_per_access: 5.5 })
+    expect(out[0]).toContain('50.0%')
+    expect(out[0]).toContain('一定作用')
+    expect(out[1]).toContain('5.50')
+  })
+
+  it('summarizes cellular automaton population trend', () => {
+    const peak = summarizeMetrics('ca', {
+      generation: 300,
+      population: 380,
+      population_max: 400,
+      population_min: 100,
+      births_total: 2000,
+      deaths_total: 1620,
+    })
+    expect(peak[0]).toContain('300')
+    expect(peak[0]).toContain('峰值')
+    const shrunk = summarizeMetrics('ca', {
+      generation: 300,
+      population: 40,
+      population_max: 400,
+      births_total: 2000,
+      deaths_total: 1960,
+    })
+    expect(shrunk[0]).toContain('萎缩')
+  })
+
+  it('summarizes traffic congestion by completion ratio', () => {
+    const jam = summarizeMetrics('traffic', {
+      spawned: 698,
+      completed: 300,
+      avg_travel_time: 52.74,
+      avg_wait_ticks: 25.47,
+    })
+    expect(jam[0]).toContain('698')
+    expect(jam[0]).toContain('滞留')
+    expect(jam[1]).toContain('25.47')
+    const clear = summarizeMetrics('traffic', { spawned: 100, completed: 95 })
+    expect(clear[0]).toContain('畅通')
+  })
+
+  it('summarizes cpu scheduling and unknown kinds yield nothing', () => {
+    const out = summarizeMetrics('cpu_schedule', {
+      avg_waiting_time: 2.5,
+      avg_turnaround_time: 4.2,
+      cpu_utilization: 0.87,
+      arrived: 200,
+      completed: 150,
+    })
+    expect(out[0]).toContain('2.50')
+    expect(out.some((s) => s.includes('87.0%'))).toBe(true)
+    expect(out.some((s) => s.includes('50 个未完成'))).toBe(true)
+    expect(summarizeMetrics('mystery_kind', { a: 1 })).toEqual([])
+    expect(summarizeMetrics('queue', {})).toEqual([])
   })
 })

@@ -6,6 +6,7 @@ import TrafficPanel from './TrafficPanel'
 import SimView from './SimView'
 import BatchPanel from './BatchPanel'
 import ComparePanel from './ComparePanel'
+import { summarizeMetrics } from './summary'
 
 type StopType = 'steps' | 'sim_time' | 'until_empty'
 
@@ -140,6 +141,7 @@ export default function App() {
   const simTime = session?.snapshot.time ?? 0
   const metrics = session?.snapshot.metrics ?? {}
   const events = session?.events ?? []
+  const summary = session ? summarizeMetrics(session.visualizer.kind, metrics) : []
 
   const stop = session?.spec.stop_condition
   const progress =
@@ -192,98 +194,12 @@ export default function App() {
       )}
       {notice && <p style={{ color: '#166534', background: '#f0fdf4', padding: '8px 12px', borderRadius: 6 }}>{notice}</p>}
 
-      <section style={card}>
-        <h2>1. 模型与参数</h2>
-        <label style={rowFlex}>
-          模型：
-          <select
-            value={selected}
-            onChange={(e) => applyModel(models.find((m) => m.model_id === e.target.value)!)}
-            style={control}
-          >
-            {models.map((m) => (
-              <option key={m.model_id} value={m.model_id}>
-                {m.display_name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {model && (
-          <p style={{ color: '#9ca3af', fontSize: 12, margin: '2px 0 6px' }}>
-            内部标识 {model.model_id} · v{model.version} · {modelTypeLabel(model.model_type)}
-          </p>
-        )}
-        {model?.description && <p style={{ color: '#666', fontSize: 13 }}>{model.description}</p>}
-        {model && model.scenarios?.length > 0 && (
-          <div style={{ margin: '8px 0 4px' }}>
-            <h3 style={{ fontSize: 14, marginBottom: 6 }}>一键场景</h3>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {model.scenarios.map((sc) => (
-                <button
-                  key={sc.id}
-                  onClick={() => runScenario(model.model_id, sc)}
-                  disabled={busy}
-                  aria-label={`一键运行场景：${sc.title}`}
-                  style={scenarioCard}
-                >
-                  <strong style={{ fontSize: 13 }}>{sc.title}</strong>
-                  <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 400 }}>{sc.description}</span>
-                  <span style={{ fontSize: 12, color: '#2563eb', fontWeight: 600 }}>▶ 一键运行</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <div style={{ flex: 2, minWidth: 320 }}>
-            <h3 style={{ fontSize: 14 }}>
-              {selected === 'traffic_network' ? '路网配置（预设 + JSON 编辑 + 预览）' : '参数配置（结构化编辑器，由 params_schema 生成）'}
-            </h3>
-            {model ? (
-              selected === 'traffic_network' ? (
-                <TrafficPanel params={params} onChange={setParams} />
-              ) : (
-                <ParamForm schema={model.params_schema as never} value={params} onChange={setParams} />
-              )
-            ) : (
-              <p style={{ color: '#888' }}>加载中…</p>
-            )}
-          </div>
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <h3 style={{ fontSize: 14 }}>运行控制</h3>
-            <label style={rowFlex}>
-              随机种子：
-              <input value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="留空 = 随机" style={control} />
-            </label>
-            <label style={rowFlex}>
-              停止条件：
-              <select value={stopType} onChange={(e) => setStopType(e.target.value as StopType)} style={control}>
-                <option value="steps">按步数</option>
-                <option value="sim_time">按模拟时间</option>
-                <option value="until_empty">直到事件队列为空</option>
-              </select>
-            </label>
-            {stopType !== 'until_empty' && (
-              <label style={rowFlex}>
-                停止值：
-                <input value={stopValue} onChange={(e) => setStopValue(e.target.value)} style={control} />
-              </label>
-            )}
-            <label style={rowFlex}>
-              实验名称：
-              <input value={name} onChange={(e) => setName(e.target.value)} style={control} />
-            </label>
-            <button onClick={() => act(() => api.createSession(buildSpec()))} disabled={busy || !selected} style={primaryBtn}>
-              开始实时模拟
-            </button>
-          </div>
-        </div>
-      </section>
-
       <section style={card} ref={simSectionRef}>
-        <h2>2. 实时模拟视图</h2>
+        <h2>1. 实时模拟视图</h2>
         {session === null ? (
-          <p style={{ color: '#888' }}>尚未开始模拟。点上方「一键场景」直接看结果，或配置好参数后点「开始实时模拟」。</p>
+          <p style={{ color: '#888' }}>
+            尚未开始模拟。到下方「模型与参数」点「一键场景」立即看结果，或配置参数后点「开始实时模拟」。↓
+          </p>
         ) : (
           <>
             <p style={{ fontSize: 13, color: '#374151' }}>
@@ -344,6 +260,25 @@ export default function App() {
             <h3 style={{ fontSize: 14, marginTop: 14 }}>模拟状态（来自真实快照）</h3>
             <SimView session={session} />
 
+            {summary.length > 0 && (
+              <div
+                style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: 8,
+                  padding: '10px 12px',
+                  fontSize: 13,
+                  color: '#1e3a8a',
+                  margin: '12px 0 4px',
+                }}
+              >
+                <strong style={{ display: 'block', marginBottom: 4 }}>结果速读</strong>
+                {summary.map((s, i) => (
+                  <div key={i}>{s}</div>
+                ))}
+              </div>
+            )}
+
             <h3 style={{ fontSize: 14 }}>指标面板</h3>
             <table style={table}>
               <tbody>
@@ -364,6 +299,94 @@ export default function App() {
             </table>
           </>
         )}
+      </section>
+
+      <section style={card}>
+        <h2>2. 模型与参数</h2>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 300 }}>
+            <label style={rowFlex}>
+              模型：
+              <select
+                value={selected}
+                onChange={(e) => applyModel(models.find((m) => m.model_id === e.target.value)!)}
+                style={control}
+              >
+                {models.map((m) => (
+                  <option key={m.model_id} value={m.model_id}>
+                    {m.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {model && (
+              <p style={{ color: '#9ca3af', fontSize: 12, margin: '2px 0 6px' }}>
+                内部标识 {model.model_id} · v{model.version} · {modelTypeLabel(model.model_type)}
+              </p>
+            )}
+            {model?.description && <p style={{ color: '#666', fontSize: 13 }}>{model.description}</p>}
+            {model && model.scenarios?.length > 0 && (
+              <div style={{ margin: '8px 0 4px' }}>
+                <h3 style={{ fontSize: 14, marginBottom: 6 }}>一键场景</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {model.scenarios.map((sc) => (
+                    <button
+                      key={sc.id}
+                      onClick={() => runScenario(model.model_id, sc)}
+                      disabled={busy}
+                      aria-label={`一键运行场景：${sc.title}`}
+                      style={scenarioCard}
+                    >
+                      <strong style={{ fontSize: 13 }}>{sc.title}</strong>
+                      <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 400 }}>{sc.description}</span>
+                      <span style={{ fontSize: 12, color: '#2563eb', fontWeight: 600 }}>▶ 一键运行</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <h3 style={{ fontSize: 14 }}>运行控制</h3>
+            <label style={rowFlex}>
+              随机种子：
+              <input value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="留空 = 随机" style={control} />
+            </label>
+            <label style={rowFlex}>
+              停止条件：
+              <select value={stopType} onChange={(e) => setStopType(e.target.value as StopType)} style={control}>
+                <option value="steps">按步数</option>
+                <option value="sim_time">按模拟时间</option>
+                <option value="until_empty">直到事件队列为空</option>
+              </select>
+            </label>
+            {stopType !== 'until_empty' && (
+              <label style={rowFlex}>
+                停止值：
+                <input value={stopValue} onChange={(e) => setStopValue(e.target.value)} style={control} />
+              </label>
+            )}
+            <label style={rowFlex}>
+              实验名称：
+              <input value={name} onChange={(e) => setName(e.target.value)} style={control} />
+            </label>
+            <button onClick={() => act(() => api.createSession(buildSpec()))} disabled={busy || !selected} style={primaryBtn}>
+              开始实时模拟
+            </button>
+          </div>
+          <div style={{ flex: 2, minWidth: 380 }}>
+            <h3 style={{ fontSize: 14 }}>
+              {selected === 'traffic_network' ? '路网配置（预设 + JSON 编辑 + 预览）' : '参数配置（结构化编辑器，由 params_schema 生成）'}
+            </h3>
+            {model ? (
+              selected === 'traffic_network' ? (
+                <TrafficPanel params={params} onChange={setParams} />
+              ) : (
+                <ParamForm schema={model.params_schema as never} value={params} onChange={setParams} />
+              )
+            ) : (
+              <p style={{ color: '#888' }}>加载中…</p>
+            )}
+          </div>
+        </div>
       </section>
 
       {session !== null && events.length > 0 && (
@@ -428,15 +451,17 @@ export default function App() {
           </table>
         )}
       </section>
-      <section style={card}>
-        <h2>5. 批量实验与参数搜索</h2>
-        <BatchPanel spec={buildSpec()} />
-      </section>
-
-      <section style={card}>
-        <h2>6. 结果比较</h2>
-        <ComparePanel history={history} />
-      </section>
+      <details style={{ ...card, padding: 0 }}>
+        <summary style={{ padding: '12px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 15 }}>
+          高级：批量实验与结果比较
+        </summary>
+        <div style={{ padding: '0 16px 12px' }}>
+          <h3 style={{ fontSize: 14 }}>批量实验与参数搜索</h3>
+          <BatchPanel spec={buildSpec()} />
+          <h3 style={{ fontSize: 14, marginTop: 16 }}>结果比较</h3>
+          <ComparePanel history={history} />
+        </div>
+      </details>
     </div>
   )
 }
@@ -502,8 +527,6 @@ const scenarioCard: React.CSSProperties = {
   flexDirection: 'column',
   alignItems: 'flex-start',
   gap: 4,
-  flex: '1 1 260px',
-  maxWidth: 360,
   padding: '10px 12px',
   background: 'white',
   border: '1px solid #d1d5db',
