@@ -234,3 +234,15 @@
    recent 历史 / metrics）；⑨ 恢复后重跑——停止条件已达成时 run 返回
    200 并优雅再次完成（无悬挂）。回归：后端 227/227、前端 43/43、
    tsc/build 干净。
+23. **R15 巡检轮：停止条件两型实测 + Docker 生产形态复验（R7 后首次）**（决策见
+   DECISIONS D39）。①「按模拟时间」停止条件——queueing 会话停止值 50，
+   运行至 sim_time 49.8152（step 89）状态已完成（completed），语义正确
+   （越过阈值即停）；②「直到事件队列为空」——cpu_scheduling（作业数量
+   200，到达率 1）运行至 sim_time 227.6721 全部作业完成，UI 正确隐藏
+   「停止值」输入框；③ Docker 复验——docker compose build 重建两镜像
+   （依赖层缓存命中，仅源码层重建），up 后 api 健康检查通过，/api/models
+   返回全部 7 个内置模型（含 R9 新增 sir），容器内 SIR 会话创建→运行→
+   300/300 完成（attack_rate 0.941、峰值 3008 @ 38 天）→checkpoint 200，
+   nginx 产线前端首页渲染 + /api 代理 200 + 快速入口一键运行 SIR 会话
+   跑完；down 后数据卷 world_worldlab-data 保留。本轮零代码改动。回归：
+   后端 227/227、前端 43/43、tsc/build 干净。
