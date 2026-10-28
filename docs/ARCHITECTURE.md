@@ -4,9 +4,9 @@
 
 ```
 ┌──────────────────────────────────────────────┐
-│ frontend (React+TS+Vite)  实验工作台/可视化     │  只依赖 REST/WS 契约
+│ frontend (React+TS+Vite)  实验工作台/可视化     │  只依赖 REST 契约（进度轮询）
 ├──────────────────────────────────────────────┤
-│ api (FastAPI)  REST + WebSocket, 后台任务编排   │
+│ api (FastAPI)  REST, 后台任务编排               │
 ├──────────────────────────────────────────────┤
 │ services  实验管理 / 运行器 / 批量任务(阶段4)    │
 ├──────────────────────────────────────────────┤
@@ -40,7 +40,7 @@ backend/
     models/                每个子目录 = 一个模型插件（__init__.py 加一行 import 即接入）
       queueing/ cpu_scheduling/ cache_sim/ cellular_automaton/
       schelling/ traffic_network/ sir/
-    api/routes.py          全部 REST/WebSocket 路由
+    api/routes.py          全部 REST 路由（会话/批量进度由前端轮询）
     services/ (experiment_service.py session_service.py batch_service.py
                analysis_service.py reporting.py benchmarks.py)
   tests/

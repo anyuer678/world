@@ -24,7 +24,10 @@ R8 完成批量扫描曲线——从 summary 就地重建发现切片画「指�
 `docs/BENCHMARKS.md`），首页「一键运行」快速入口补全至 7 模型；R11
 无障碍审计清零——axe-core 全页扫描修前 4 类违规（次要文字对比度
 2.4–2.7:1、滚动区无键盘访问、无 main 地标），修后空态/会话态均 0 违规，
-架构文档目录树同步对账，index.html 补 meta description。
+架构文档目录树同步对账，index.html 补 meta description；R12 续对账——
+删除架构文档三处失实的 WebSocket 声明（实际为 REST + 轮询），批量 CSV
+导出与取消批量首次浏览器实测通过（9 项 schelling 批次 5 秒取消，
+cancelled: 9）。
 
 ## 内置模型
 

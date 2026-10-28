@@ -185,3 +185,14 @@
    schelling/traffic/sir 三包且旧目录名拼写错误、engine/services/前端文件
    按实际重列）、index.html 补 meta description（lang/title 原本就在）。
    回归：后端 226/226、前端 43/43、tsc/build 干净。
+20. **R12 巡检轮：WebSocket 声明对账 + 批量操作按钮首次实测**（决策见 DECISIONS
+   D36）。grep 证实 routes.py/api.ts 零 WebSocket 实现，ARCHITECTURE.md 三处
+   「REST + WebSocket / REST/WS 契约 / REST/WebSocket 路由」均为失实描述，
+   已改为 REST + 轮询并保持框图风格。浏览器实测两个此前只有 pytest 覆盖的
+   操作：① CSV 导出——GET /api/batches/4/export.csv 返回 200
+   text/csv，头三行 # 元信息 + 列名行齐全，前端为同一 URL 的 <a download>；
+   ② 取消批量——新建 schelling 批次 #5（tolerance 0.1/0.3/0.5 × 3 重复 =
+   9 项，单项最高 10000 步 ≈54 s），启动 5 秒后点「取消批量」→ UI 状态行
+   「状态 cancelled」、API counts {cancelled: 9}，无悬挂 running 项。控制台
+   0 错误（仅 vite/React DevTools debug 信息）。本轮零代码改动（仅文档），
+   后端链路经实跑覆盖（创建/轮询/取消/导出均真请求）。
