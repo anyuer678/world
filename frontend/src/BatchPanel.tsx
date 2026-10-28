@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
 import type { BatchDetail, BatchItem, BatchListItem, ModelSpec } from './types'
 import { formatFinding, type FindingsResponse } from './findings'
+import { buildSweep, defaultSweepSelection, sweepMetricOptions, sweepParamOptions, type SweepSelection } from './sweepChart'
+import { drawLineChart } from './chartRender'
+import { useCanvas } from './SimView'
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled'])
 const BATCH_ITEM_CAP = 2000
@@ -29,6 +32,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const [batch, setBatch] = useState<BatchDetail | null>(null)
   const [items, setItems] = useState<BatchItem[]>([])
   const [findings, setFindings] = useState<FindingsResponse | null>(null)
+  const [sweepSel, setSweepSel] = useState<{ param: string; metric: string } | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
@@ -60,6 +64,15 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     }, 700)
     return () => clearInterval(t)
   }, [batch, refreshBatches])
+
+  // 打开的批量到达终态且用户未手动选过切片时，从自动发现取默认扫描曲线；
+  // findings 未返回（null）时先等它，避免默认到字母序第一个指标
+  useEffect(() => {
+    if (!batch?.summary || !TERMINAL.has(batch.status) || sweepSel !== null) return
+    if (findings === null) return
+    const auto = defaultSweepSelection(batch.summary, batch.grid, findings.findings)
+    if (auto) setSweepSel({ param: auto.param, metric: auto.metric })
+  }, [batch, findings, sweepSel])
 
   function buildGrid(): Record<string, unknown[]> {
     const grid: Record<string, unknown[]> = {}
@@ -105,6 +118,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     setBusy(true)
     setError('')
     setNotice('')
+    setSweepSel(null)
     try {
       const b = await api.getBatch(id)
       setBatch(b)
@@ -139,6 +153,10 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     ? Object.entries(batch.counts).reduce((a, [k, v]) => a + (TERMINAL.has(k) ? v : 0), 0)
     : 0
   const active = batch !== null && !TERMINAL.has(batch.status)
+  const sweepParams = batch ? sweepParamOptions(batch.summary, batch.grid) : []
+  const sweepMetrics = batch && sweepSel ? sweepMetricOptions(batch.summary, sweepSel.param) : []
+  const sweep =
+    batch?.summary && sweepSel ? buildSweep(batch.summary, batch.grid, sweepSel.param, sweepSel.metric) : null
 
   return (
     <>
@@ -360,11 +378,74 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
                   ) : (
                     <ul style={{ fontSize: 13, margin: '4px 0', paddingLeft: 20 }}>
                       {findings.findings.map((f, i) => (
-                        <li key={i}>{formatFinding(f)}</li>
+                        <li key={i}>
+                          {f.type === 'jump' ? (
+                            <button
+                              style={linkBtn}
+                              title="点击查看该跳变的扫描曲线"
+                              onClick={() => setSweepSel({ param: f.param, metric: f.metric })}
+                            >
+                              {formatFinding(f)}
+                            </button>
+                          ) : (
+                            formatFinding(f)
+                          )}
+                        </li>
                       ))}
                     </ul>
                   )}
                   <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 8px' }}>{findings.note}</p>
+                </>
+              )}
+              {sweepParams.length > 0 && (
+                <>
+                  <h4 style={{ fontSize: 14, marginBottom: 4 }}>扫描曲线（指标均值 vs 参数）</h4>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '6px 0', flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: 13 }}>
+                      参数{' '}
+                      <select
+                        aria-label="扫描参数"
+                        value={sweepSel?.param ?? ''}
+                        onChange={(e) => {
+                          const p = e.target.value
+                          const ms = sweepMetricOptions(batch!.summary, p)
+                          setSweepSel({ param: p, metric: ms[0] ?? '' })
+                        }}
+                        style={control}
+                      >
+                        {sweepParams.map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label style={{ fontSize: 13 }}>
+                      指标{' '}
+                      <select
+                        aria-label="扫描指标"
+                        value={sweepSel?.metric ?? ''}
+                        onChange={(e) => sweepSel && setSweepSel({ ...sweepSel, metric: e.target.value })}
+                        style={control}
+                      >
+                        {sweepMetrics.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {sweep && Object.keys(sweep.others).length > 0 && (
+                      <span style={{ fontSize: 12, color: '#6b7280' }}>
+                        其余参数固定 {JSON.stringify(sweep.others)}
+                      </span>
+                    )}
+                  </div>
+                  {sweep ? (
+                    <SweepChart sweep={sweep} />
+                  ) : (
+                    <p style={{ fontSize: 13, color: '#6b7280' }}>当前切片可用数据点不足，无法画曲线。</p>
+                  )}
                 </>
               )}
             </>
@@ -412,6 +493,35 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
 }
 
 const rowFlex: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }
+const linkBtn: React.CSSProperties = {
+  border: 'none',
+  background: 'none',
+  padding: 0,
+  font: 'inherit',
+  color: '#1d4ed8',
+  cursor: 'pointer',
+  textAlign: 'left',
+  textDecoration: 'underline',
+  textUnderlineOffset: 3,
+}
+
+function SweepChart({ sweep }: { sweep: SweepSelection }) {
+  const width = 640
+  const height = 180
+  const canvasRef = useCanvas(
+    (ctx, w, h) => drawLineChart(ctx, { width: w, height: h, series: [sweep.series] }),
+    width,
+    height,
+  )
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 4 }}
+      role="img"
+      aria-label={`${sweep.param} 与 ${sweep.metric} 的扫描曲线`}
+    />
+  )
+}
 const control: React.CSSProperties = { flex: 1, padding: 6, border: '1px solid #d1d5db', borderRadius: 6 }
 const smallBtn: React.CSSProperties = {
   border: '1px solid #d1d5db',

@@ -14,7 +14,7 @@ export default function SimView({ session }: { session: SessionState }) {
   return <StateTable state={snapshot.state} />
 }
 
-function useCanvas(draw: (ctx: CanvasRenderingContext2D, width: number, height: number) => void, width: number, height: number) {
+export function useCanvas(draw: (ctx: CanvasRenderingContext2D, width: number, height: number) => void, width: number, height: number) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   useEffect(() => {
     const canvas = canvasRef.current

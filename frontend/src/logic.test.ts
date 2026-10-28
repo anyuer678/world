@@ -5,10 +5,11 @@ import { parseValues } from './BatchPanel'
 import { resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
+import { buildSweep, defaultSweepSelection, sweepParamOptions } from './sweepChart'
 import { computeBounds, edgeCells, parseNetwork } from './trafficRender'
 import { fmtTick, ganttExtent, ganttRows, niceMax, runsFromBits, seriesBounds } from './chartRender'
 import type { JSONSchema } from './schema'
-import type { ModelInfo, ScenarioInfo } from './types'
+import type { BatchSummary, ModelInfo, ScenarioInfo } from './types'
 
 describe('trafficRender', () => {
   const net = {
@@ -335,6 +336,52 @@ describe('findings', () => {
     expect(s).toContain('80%')
     expect(s).toContain('load=0.5')
     expect(s).toContain('重复次数')
+  })
+})
+
+describe('sweepChart', () => {
+  const grid = { servers: [1, 2, 4], load: [0.5, 0.9] }
+  const combos: BatchSummary['combos'] = [
+    { params: { servers: 1, load: 0.5 }, n: 2, metrics: { m: { n: 2, mean: 100, std: 0, p50: 100, p90: 100, ci95_low: 100, ci95_high: 100 } } },
+    { params: { servers: 2, load: 0.5 }, n: 2, metrics: { m: { n: 2, mean: 10, std: 0, p50: 10, p90: 10, ci95_low: 10, ci95_high: 10 } } },
+    { params: { servers: 4, load: 0.5 }, n: 2, metrics: { m: { n: 2, mean: 1, std: 0, p50: 1, p90: 1, ci95_low: 1, ci95_high: 1 } } },
+    { params: { servers: 1, load: 0.9 }, n: 2, metrics: { m: { n: 2, mean: 500, std: 0, p50: 500, p90: 500, ci95_low: 500, ci95_high: 500 } } },
+    { params: { servers: 2, load: 0.9 }, n: 2, metrics: { m: { n: 2, mean: 50, std: 0, p50: 50, p90: 50, ci95_low: 50, ci95_high: 50 } } },
+    { params: { servers: 4, load: 0.9 }, n: 2, metrics: { other: { n: 2, mean: 7, std: 0, p50: 7, p90: 7, ci95_low: 7, ci95_high: 7 } } },
+  ]
+  const summary = { combos, sensitivity: [], sensitivity_note: '', ci_note: '' } as BatchSummary
+
+  it('only offers params with a modal slice of 3+ values', () => {
+    expect(sweepParamOptions(summary, grid)).toEqual(['servers'])
+    expect(sweepParamOptions(undefined, grid)).toEqual([])
+  })
+
+  it('builds sorted mean series holding other numeric params at modal value', () => {
+    const s = buildSweep(summary, grid, 'servers', 'm')
+    expect(s?.others).toEqual({ load: 0.5 })
+    expect(s?.series.data).toEqual([
+      [1, 100],
+      [2, 10],
+      [4, 1],
+    ])
+  })
+
+  it('returns null when the slice has fewer than two points for the metric', () => {
+    expect(buildSweep(summary, grid, 'servers', 'other')).toBeNull()
+    expect(buildSweep(undefined, grid, 'servers', 'm')).toBeNull()
+  })
+
+  it('defaults to the metric named by a jump finding', () => {
+    const combos2 = [
+      { params: { x: 1 }, n: 1, metrics: { a: { n: 1, mean: 1, std: 0, p50: 1, p90: 1, ci95_low: 1, ci95_high: 1 }, b: { n: 1, mean: 2, std: 0, p50: 2, p90: 2, ci95_low: 2, ci95_high: 2 } } },
+      { params: { x: 2 }, n: 1, metrics: { a: { n: 1, mean: 3, std: 0, p50: 3, p90: 3, ci95_low: 3, ci95_high: 3 }, b: { n: 1, mean: 4, std: 0, p50: 4, p90: 4, ci95_low: 4, ci95_high: 4 } } },
+      { params: { x: 3 }, n: 1, metrics: { a: { n: 1, mean: 5, std: 0, p50: 5, p90: 5, ci95_low: 5, ci95_high: 5 }, b: { n: 1, mean: 6, std: 0, p50: 6, p90: 6, ci95_low: 6, ci95_high: 6 } } },
+    ]
+    const sum2 = { combos: combos2, sensitivity: [], sensitivity_note: '', ci_note: '' } as BatchSummary
+    const noHit = defaultSweepSelection(sum2, { x: [1, 2, 3] })
+    expect(noHit?.metric).toBe('a')
+    const hit = defaultSweepSelection(sum2, { x: [1, 2, 3] }, [{ type: 'jump', param: 'x', metric: 'b' }])
+    expect(hit?.metric).toBe('b')
   })
 })
 

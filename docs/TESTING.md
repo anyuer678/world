@@ -131,3 +131,13 @@
    批（servers [1,2,4]）后 GET findings 返回 4 条（final_queue_length
    ratio=null 坍缩 + 3 条有限因子）。阶段 6 已验的会话步进/实验运行/导出
    链路本轮未重复验证。
+16. **批量扫描曲线**（R8，sweepChart.ts + BatchPanel 扫描曲线区）：前端从
+   batch summary 就地重建发现切片（D32 镜像 D31 规则）。4 项单测：仅
+   modal 切片 ≥3 值的参数可选（混合网格 servers 可选、load 两值被排除）、
+   序列按参数排序且其余参数固定在众数（load=0.5）、指标缺数据/切片 <2 点
+   返回 null、默认选中跟随 jump 发现的指标（无发现落字母序首）。42 项前端
+   全过、tsc/build 干净。浏览器 E2E（批「发现验证-服务器数扫描」）：默认
+   选中 servers×avg_queue_length（首条 null-ratio 发现）——实测先修掉一个
+   时序 bug（findings 未返回时默认落到 arrived）；点击 final_queue_length
+   发现 → 指标切换且曲线重绘（#2563eb 蓝像素 148）；指标下拉换
+   avg_waiting_time → 重绘（115 蓝像素）；控制台无错误。
