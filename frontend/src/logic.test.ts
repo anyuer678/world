@@ -277,13 +277,15 @@ describe('quickPicks', () => {
       mkModel('queueing', ['rush-hour', 'other']),
       mkModel('cellular_automaton', ['game-of-life']),
       mkModel('traffic_network', ['no-signal']),
+      mkModel('schelling', ['mild-preference']),
     ]
     expect(quickPicks(models).map((p) => p.model.model_id)).toEqual([
+      'schelling',
       'cellular_automaton',
       'queueing',
       'traffic_network',
     ])
-    expect(quickPicks(models)[0].scenario.id).toBe('game-of-life')
+    expect(quickPicks(models)[0].scenario.id).toBe('mild-preference')
   })
 
   it('skips missing models or scenarios instead of throwing', () => {
