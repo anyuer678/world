@@ -196,3 +196,18 @@
    「状态 cancelled」、API counts {cancelled: 9}，无悬挂 running 项。控制台
    0 错误（仅 vite/React DevTools debug 信息）。本轮零代码改动（仅文档），
    后端链路经实跑覆盖（创建/轮询/取消/导出均真请求）。
+21. **R13 巡检轮：暂停/恢复 E2E + 运行中重置死锁修复**（决策见 DECISIONS D37）。
+   浏览器实测暂停语义：schelling 会话运行至 step 1536 点「⏸ 暂停」→ 第一次
+   读数仍在推进（1280→1536）属 D15 分片语义（256 步一片，≈1.4 s 到边界），
+   边界后连续 4 s 读数定格 1536、状态「已暂停」，「⏵ 恢复」继续推进——行为
+   符合设计非缺陷。同轮发现真缺陷：运行中点「↺ 重置」→ step 归 0 但状态
+   卡「已取消」，此后 run/step 409，需二次 reset。根因：reset() 持锁 join
+   运行线程，线程退出要拿同锁写 "cancelled"，互等至 join 超时后线程覆写
+   "idle"。修复：join 移到锁外（与 pause() 一致）。回归测试
+   test_session_reset_while_running（新增 toy_slow_step 测试模型，每步
+   sleep 0.5 ms 保证 reset 落在分片中途）：临时还原修复实证失败
+   （status=cancelled），复用修复后 13/13 通过。浏览器修复后复验：重置 →
+   「就绪」step 0 → 重跑推进至 1024 正常。错误路径实测：占用率填 1.5
+   （上限 0.98）提交 → UI 错误横幅「spec validation failed:
+   params.occupancy Input should be less than or equal to 0.98」，控制台
+   仅该预期 422。回归：后端 227/227（+1）、前端 43/43、tsc/build 干净。

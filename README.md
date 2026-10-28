@@ -27,7 +27,9 @@ R8 完成批量扫描曲线——从 summary 就地重建发现切片画「指�
 架构文档目录树同步对账，index.html 补 meta description；R12 续对账——
 删除架构文档三处失实的 WebSocket 声明（实际为 REST + 轮询），批量 CSV
 导出与取消批量首次浏览器实测通过（9 项 schelling 批次 5 秒取消，
-cancelled: 9）。
+cancelled: 9）；R13 修复运行中重置的锁序死锁（reset 持锁 join 运行线程
+致状态卡「已取消」，join 移到锁外，附修前实证失败的回归测试），暂停/
+恢复分片语义、错误参数 422 横幅均浏览器实测通过。
 
 ## 内置模型
 

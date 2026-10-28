@@ -236,8 +236,12 @@ class SessionService:
 
     def reset(self, session_id: str) -> dict[str, Any]:
         s = self._get(session_id)
+        # Join the run thread BEFORE taking the lock: the thread's exit path
+        # writes s.status under s.lock, so holding the lock during join would
+        # deadlock until the join timeout and let the thread's "cancelled"
+        # write land after reset's "idle" (the stuck state seen in R13).
+        self._stop_thread(s)
         with s.lock:
-            self._stop_thread(s)
             s.engine.reset()
             s.status = "idle"
             s.stop_reason = None

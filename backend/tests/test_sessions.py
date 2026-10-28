@@ -142,6 +142,36 @@ def test_session_reset(client):
     assert r.json()["snapshot"]["step"] == 1
 
 
+def test_session_reset_while_running(client):
+    # R13 regression: reset used to join the run thread while holding the
+    # session lock; the thread's exit write ("cancelled") then landed after
+    # reset's "idle", leaving the session stuck (run/step 409, reset twice
+    # needed). toy_slow_step chunks (~0.5 ms/step) guarantee the thread is
+    # mid-chunk when reset arrives.
+    spec = _spec(
+        model_id="toy_slow_step",
+        params={},
+        stop_condition={"type": "steps", "value": 200_000},
+    )
+    sid = _create(client, spec)["session_id"]
+    client.post(f"/api/sessions/{sid}/run")
+    _wait_status(client, sid, ["running"])
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        if client.get(f"/api/sessions/{sid}").json()["snapshot"]["step"] >= 100:
+            break
+        time.sleep(0.02)
+    r = client.post(f"/api/sessions/{sid}/reset")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "idle", body["status"]
+    assert body["snapshot"]["step"] == 0
+    r = client.post(f"/api/sessions/{sid}/run")
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "running"
+    client.delete(f"/api/sessions/{sid}")
+
+
 def test_session_step_after_completion_conflict(client):
     spec = _spec(stop_condition={"type": "steps", "value": 5})
     sid = _create(client, spec)["session_id"]

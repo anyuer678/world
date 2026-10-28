@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -123,9 +124,46 @@ class ZeroDelayLoopModel(DiscreteEventModel):
         return {}
 
 
+class SlowStepParams(WorldLabParams):
+    pass
+
+
+class SlowStepModel(TimeSteppedModel):
+    """Sleeps per step so a 256-step run chunk lasts ~130 ms — long-lived
+    sessions for reset/pause-during-running tests."""
+
+    model_id = "toy_slow_step"
+    display_name = "Slow toy time-stepped"
+    description = "Toy time-stepped model that sleeps per step."
+    model_type = "time_stepped"
+    version = "1.0.0"
+    dt = 1.0
+    param_model = SlowStepParams
+
+    def initialize(self, ctx=None) -> None:
+        self.value = 0.0
+
+    def step(self) -> None:
+        time.sleep(0.0005)
+        self.value += 1.0
+
+    def dump_state(self):
+        return {"value": self.value}
+
+    def load_state(self, state):
+        self.value = state["value"]
+
+    def snapshot(self):
+        return {"value": self.value}
+
+    def finalize_metrics(self):
+        return {"value": float(self.value)}
+
+
 registry.register(ToyDesModel)
 registry.register(ToyStepModel)
 registry.register(ZeroDelayLoopModel)
+registry.register(SlowStepModel)
 
 
 @pytest.fixture()
