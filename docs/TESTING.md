@@ -279,3 +279,19 @@
    clone → 新实验（含 spec 复制）；PUT tags 生效；DELETE ×2 → 204，
    列表还原至 1–6（探针数据清理干净）。回归：后端 227/227、前端 49/49
    （新增 parseArrayText 5 条）、tsc/build 干净。
+26. **R18 巡检轮：ArrayField JSON 分支 + TrafficPanel 全链路实测**（决策见
+   DECISIONS D42）。① CA 指定初始图案（嵌套数组 JSON 分支）浏览器 E2E：
+   5×5 initial_grid 水平闪光灯 + 停止 1 步 → completed，API 快照断言终局
+   rows=["00000","00100","00100","00100","00000"]（横→竖精确符合 B3/S23，
+   出生 2/死亡 2/存活 3/密度 0.12）；非法 JSON（"1,2"）出红字「需为合法
+   JSON 数组」，尺寸不匹配（2×2 配 5×5）出 422 横幅「initial_grid must be
+   exactly height rows of width cells」。② 顺带修复 resolve() 折叠 anyOf
+   时丢弃外层 title/description——可空字段（accesses/initial_grid 等）的
+   中文描述自阶段 3 起从未渲染，修后「给出 0/1 矩阵…」正常显示，新增
+   单测（49→50）。③ TrafficPanel 首次全链路：预设单向环线（6 节点 6 边）、
+   非法 JSON role=alert「JSON 解析失败…」、手工加 n6 节点后失焦提交——
+   脚本化 focus/blur 得到「UI 显示 7 节点但 POST 6 节点」的假象，改用真实
+   Tab 键事件 + 捕获请求体证实 n0–n6 全部到达 POST body（自动化伪影而非
+   产品缺陷）；环线 300 tick 跑完（发车 241/完成 82）、自定义 7 节点
+   300 tick 跑完（发车 289/完成 48）。回归：后端 227/227、前端 50/50、
+   tsc/build 干净。

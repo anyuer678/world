@@ -125,6 +125,21 @@ describe('resolve (param schema ref resolution)', () => {
     expect(out).toEqual({ type: 'number', minimum: 0, nullable: true })
   })
 
+  it('keeps outer title and description when collapsing anyOf', () => {
+    const out = resolve(root, {
+      title: '指定初始图案',
+      description: '给出 0/1 矩阵',
+      anyOf: [{ type: 'array', items: { type: 'array' } }, { type: 'null' }],
+    })
+    expect(out).toEqual({
+      type: 'array',
+      items: { type: 'array' },
+      nullable: true,
+      title: '指定初始图案',
+      description: '给出 0/1 矩阵',
+    })
+  })
+
   it('unwraps allOf to its first branch', () => {
     expect(resolve(root, { allOf: [{ type: 'boolean' }, { title: 'x' }] })).toEqual({ type: 'boolean' })
   })

@@ -91,7 +91,15 @@ export function resolve(root: JSONSchema, s: JSONSchema): JSONSchema {
   if (s.allOf && s.allOf.length > 0) return resolve(root, s.allOf[0])
   if (s.anyOf) {
     const nonNull = s.anyOf.find((x) => x.type !== 'null')
-    if (nonNull) return { ...resolve(root, nonNull), nullable: s.anyOf.some((x) => x.type === 'null') }
+    if (nonNull) {
+      const inner = resolve(root, nonNull)
+      return {
+        ...inner,
+        nullable: s.anyOf.some((x) => x.type === 'null'),
+        title: s.title ?? inner.title,
+        description: s.description ?? inner.description,
+      }
+    }
   }
   return s
 }

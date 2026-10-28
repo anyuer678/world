@@ -40,7 +40,10 @@ nginx 代理与快速入口一键运行，见 D39）；R16 三种种子策略与
 文案的空占位（见 D40）；R17 修复参数表单数组字段缺陷（显式访问序列等
 数组参数在 UI 上从未可用——字符串直传必 422，新增 ArrayField 解析与
 红字提示，浏览器实测与 API 真值逐位一致），实验模块 API-only 端点
-（rerun/cancel/clone/tags/delete）实跑核验保留（见 D41）。
+（rerun/cancel/clone/tags/delete）实跑核验保留（见 D41）；R18 ArrayField
+JSON 分支（CA 指定初始图案）与 TrafficPanel 自定义路网全链路实测收编
+（闪光灯终局逐格断言、7 节点请求体捕获），并修复可空参数字段中文描述
+从未渲染的 resolve 缺陷（见 D42）。
 
 ## 内置模型
 
