@@ -197,9 +197,24 @@ export default function App() {
       <section style={card} ref={simSectionRef}>
         <h2>1. 实时模拟视图</h2>
         {session === null ? (
-          <p style={{ color: '#888' }}>
-            尚未开始模拟。到下方「模型与参数」点「一键场景」立即看结果，或配置参数后点「开始实时模拟」。↓
-          </p>
+          <>
+            <p style={{ color: '#888' }}>
+              尚未开始模拟。点下面任一场景立即看结果，或到下方「模型与参数」配置后运行。↓
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {quickPicks(models).map(({ model, scenario }) => (
+                <button
+                  key={scenario.id}
+                  onClick={() => runScenario(model.model_id, scenario)}
+                  disabled={busy}
+                  aria-label={`一键运行场景：${scenario.title}`}
+                  style={{ ...btn, color: '#2563eb', borderColor: '#bfdbfe' }}
+                >
+                  ▶ {scenario.title}
+                </button>
+              ))}
+            </div>
+          </>
         ) : (
           <>
             <p style={{ fontSize: 13, color: '#374151' }}>
@@ -494,6 +509,22 @@ export function scenarioSpec(modelId: string, scenario: ScenarioInfo): ModelSpec
     stop_condition: structuredClone(scenario.stop_condition),
     seed: scenario.seed,
   }
+}
+
+const QUICK_PICKS: { modelId: string; scenarioId: string }[] = [
+  { modelId: 'cellular_automaton', scenarioId: 'game-of-life' },
+  { modelId: 'queueing', scenarioId: 'rush-hour' },
+  { modelId: 'traffic_network', scenarioId: 'no-signal' },
+]
+
+export function quickPicks(models: ModelInfo[]): { model: ModelInfo; scenario: ScenarioInfo }[] {
+  const out: { model: ModelInfo; scenario: ScenarioInfo }[] = []
+  for (const { modelId, scenarioId } of QUICK_PICKS) {
+    const model = models.find((m) => m.model_id === modelId)
+    const scenario = model?.scenarios.find((s) => s.id === scenarioId)
+    if (model && scenario) out.push({ model, scenario })
+  }
+  return out
 }
 
 const card: React.CSSProperties = {

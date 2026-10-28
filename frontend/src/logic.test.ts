@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { modelTypeLabel, scenarioSpec, statusLabel } from './App'
+import { modelTypeLabel, quickPicks, scenarioSpec, statusLabel } from './App'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
 import { resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { computeBounds, edgeCells, parseNetwork } from './trafficRender'
 import type { JSONSchema } from './schema'
-import type { ScenarioInfo } from './types'
+import type { ModelInfo, ScenarioInfo } from './types'
 
 describe('trafficRender', () => {
   const net = {
@@ -236,5 +236,47 @@ describe('summarizeMetrics', () => {
     expect(out.some((s) => s.includes('50 个未完成'))).toBe(true)
     expect(summarizeMetrics('mystery_kind', { a: 1 })).toEqual([])
     expect(summarizeMetrics('queue', {})).toEqual([])
+  })
+})
+
+describe('quickPicks', () => {
+  const mkModel = (id: string, scenarioIds: string[]): ModelInfo => ({
+    model_id: id,
+    version: '1.0.0',
+    display_name: id,
+    description: '',
+    model_type: 'time_stepped',
+    params_schema: {},
+    visualizer: { kind: id },
+    example_spec: { model_id: id, params: {}, stop_condition: { type: 'steps', value: 1 } },
+    scenarios: scenarioIds.map(
+      (sid): ScenarioInfo => ({
+        id: sid,
+        title: `${id}:${sid}`,
+        description: '',
+        params: {},
+        seed: 1,
+        stop_condition: { type: 'steps', value: 1 },
+      }),
+    ),
+  })
+
+  it('resolves curated picks in order when present', () => {
+    const models = [
+      mkModel('queueing', ['rush-hour', 'other']),
+      mkModel('cellular_automaton', ['game-of-life']),
+      mkModel('traffic_network', ['no-signal']),
+    ]
+    expect(quickPicks(models).map((p) => p.model.model_id)).toEqual([
+      'cellular_automaton',
+      'queueing',
+      'traffic_network',
+    ])
+    expect(quickPicks(models)[0].scenario.id).toBe('game-of-life')
+  })
+
+  it('skips missing models or scenarios instead of throwing', () => {
+    expect(quickPicks([])).toEqual([])
+    expect(quickPicks([mkModel('queueing', ['nope'])])).toEqual([])
   })
 })
