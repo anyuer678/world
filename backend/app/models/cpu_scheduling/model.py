@@ -132,9 +132,30 @@ class CpuSchedulingModel(DiscreteEventModel):
             "total_response": 0.0,
             "busy_time": 0.0,
             "last_t": 0.0,
+            "run_log": [],
+            "hist": [],
+            "hist_stride": 1,
+            "hist_n": 0,
         }
 
     # --- helpers ----------------------------------------------------------
+    def _log_run(self, start: float, end: float, seq: int) -> None:
+        log = self._s["run_log"]
+        log.append([start, end, seq])
+        if len(log) > 256:
+            del log[: len(log) - 256]
+
+    def _sample(self, t: float) -> None:
+        """Rolling history [time, ready_count, completed] with log decimation
+        (~128-256 samples over any run length); lives in _s for checkpoints."""
+        st = self._s
+        st["hist_n"] += 1
+        if st["hist_n"] % st["hist_stride"]:
+            return
+        st["hist"].append([t, len(st["ready"]), st["completed"]])
+        if len(st["hist"]) > 256:
+            st["hist"] = st["hist"][::2]
+            st["hist_stride"] *= 2
     def _integrate(self, now: float) -> None:
         st = self._s
         if now > st["last_t"]:
@@ -163,6 +184,7 @@ class CpuSchedulingModel(DiscreteEventModel):
 
     def _finish(self, job: dict[str, Any], now: float) -> None:
         st = self._s
+        self._log_run(st["running_since"], now, job["seq"])
         st["running"] = None
         st["completed"] += 1
         turnaround = now - job["arrival"]
@@ -200,6 +222,7 @@ class CpuSchedulingModel(DiscreteEventModel):
             if job["remaining"] <= _EPS:
                 self._finish(job, event.time)
             else:
+                self._log_run(st["running_since"], event.time, job["seq"])
                 st["running"] = None
                 job["enq"] = st["next_enq"]
                 st["next_enq"] += 1
@@ -209,6 +232,7 @@ class CpuSchedulingModel(DiscreteEventModel):
             self._dispatch(ctx)
         else:  # pragma: no cover
             raise ValueError(f"unknown event kind {event.kind!r}")
+        self._sample(event.time)
 
     # --- state / snapshot / metrics ----------------------------------------
     def dump_state(self) -> dict[str, Any]:
@@ -222,6 +246,8 @@ class CpuSchedulingModel(DiscreteEventModel):
         st["pending"] = list(state.get("pending", []))
         st["ready"] = list(state.get("ready", []))
         st["running"] = dict(state["running"]) if state.get("running") else None
+        for k, v in (("run_log", []), ("hist", []), ("hist_stride", 1), ("hist_n", 0)):
+            st.setdefault(k, v)
         self._s = st
 
     def snapshot(self) -> dict[str, Any]:
@@ -249,6 +275,9 @@ class CpuSchedulingModel(DiscreteEventModel):
                 for j in st["ready"][:50]
             ],
             "cpu_utilization": (st["busy_time"] / st["last_t"]) if st["last_t"] > 0 else 0.0,
+            "sim_time": st["last_t"],
+            "history": st["hist"],
+            "run_log": st["run_log"],
         }
 
     def finalize_metrics(self) -> dict[str, float]:

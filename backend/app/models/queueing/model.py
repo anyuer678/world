@@ -90,6 +90,9 @@ class QueueingModel(DiscreteEventModel):
             "queue_area": 0.0,
             "last_t": 0.0,
             "metrics_on": False,
+            "hist": [],
+            "hist_stride": 1,
+            "hist_n": 0,
         }
 
     # --- stochastic draws -------------------------------------------------
@@ -108,6 +111,19 @@ class QueueingModel(DiscreteEventModel):
         return self.rng.expovariate(1.0 / s.mean)
 
     # --- helpers ----------------------------------------------------------
+    def _sample(self, t: float) -> None:
+        """Rolling history for the workbench chart: [time, queue_len, busy,
+        in_system]. Log decimation keeps ~128-256 samples over any run
+        length; lives in _s so checkpoints carry it."""
+        st = self._s
+        st["hist_n"] += 1
+        if st["hist_n"] % st["hist_stride"]:
+            return
+        st["hist"].append([t, len(st["queue"]), st["busy"], st["in_system"]])
+        if len(st["hist"]) > 256:
+            st["hist"] = st["hist"][::2]
+            st["hist_stride"] *= 2
+
     def _integrate(self, now: float) -> None:
         st = self._s
         dt = now - st["last_t"]
@@ -168,6 +184,7 @@ class QueueingModel(DiscreteEventModel):
                 self._start_service(nxt, ctx)
         else:  # pragma: no cover
             raise ValueError(f"unknown event kind {event.kind!r}")
+        self._sample(event.time)
 
     # --- state / snapshot / metrics ----------------------------------------
     def dump_state(self) -> dict[str, Any]:
@@ -177,6 +194,8 @@ class QueueingModel(DiscreteEventModel):
     def load_state(self, state: dict[str, Any]) -> None:
         st = dict(state)
         st["queue"] = list(state.get("queue", []))
+        for k, v in (("hist", []), ("hist_stride", 1), ("hist_n", 0)):
+            st.setdefault(k, v)
         self._s = st
 
     def snapshot(self) -> dict[str, Any]:
@@ -191,6 +210,8 @@ class QueueingModel(DiscreteEventModel):
             "arrived": st["arrived"],
             "dropped": st["dropped_measured"],
             "served": st["served_total"],
+            "sim_time": st["last_t"],
+            "history": st["hist"][-256:],
         }
 
     def finalize_metrics(self) -> dict[str, float]:

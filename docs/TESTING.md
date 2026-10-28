@@ -76,3 +76,20 @@
 - 所有随机测试用显式种子；理论对照允许统计容差并注明样本量。
 - 每阶段完成先跑全量 pytest 再进下一阶段；失败必须修复而非跳过。
 - 禁止 mock 掉被测的模拟逻辑本身；DB/API 边界可用临时文件库。
+12. **可视化重构**（R4-vis，chartRender.ts + SimView.tsx + 三模型历史数据）：
+   后端 queueing/cpu_scheduling/cache_sim 的 `_s` 增加 log 抽稀历史（新样本计数
+   `hist_n % hist_stride == 0` 才落点，超 256 点整体减半 `hist[::2]` 且
+   `hist_stride *= 2`——任意时长运行都保有约 128-256 个跨全程样本，确定性、
+   进检查点；cpu 另记 `run_log` 最近 256 段 `[start,end,seq]` 甘特记录，cache
+   另记 `recent` 最近 256 次命中位串；load_state 对旧检查点缺键 setdefault
+   兜底）。前端新建 chartRender.ts（drawLineChart/drawGantt/drawAccessStrip +
+   seriesBounds/niceMax/fmtTick/ganttRows/ganttExtent/runsFromBits 纯函数，
+   与 trafficRender 同风格）；SimView 五视图全部接入 canvas 图表：排队三曲线
+   （忙碌服务台/在系统/等待队列，绘制顺序=图层层序，大线后画）、CPU 甘特图
+   （按最近活跃取 ≤16 行）+ 就绪/已完成双曲线、缓存命中条（RLE 连续段着色）
+   + 累计命中率曲线、CA/交通 SVG 折线升级为坐标轴 canvas 曲线。验证：后端
+   180/180、前端 34/34、tsc/vite build 干净；浏览器像素探针逐视图取证——
+   排队三色（amber 2295/blue 142/green 453 px，15002 到达）、CPU 甘特+双曲线
+   （rr 30/30 完成、利用率 73.7%）、缓存命中条（绿 5310/红 4032 px，5000 次
+   命中率 50.0%）、CA（11664 黑像素 = 81 细胞 × 12px² 精确吻合）、交通（400
+   tick、798 发 736 完、车辆蓝 1778 px）；控制台无错误。

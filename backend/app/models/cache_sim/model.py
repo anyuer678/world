@@ -97,6 +97,10 @@ class CacheModel(TimeSteppedModel):
             "last_key": None,
             "last_hit": None,
             "evicted": None,
+            "recent": [],
+            "hist": [],
+            "hist_stride": 1,
+            "hist_n": 0,
         }
         self._build_stream()
 
@@ -150,6 +154,23 @@ class CacheModel(TimeSteppedModel):
         self.emit(self._step_time(), kind, f"access key {key} -> {kind}",
                   {"key": key, "size": len(st["cache"]),
                    "evicted": st["evicted"]})
+        self._record()
+
+    def _record(self) -> None:
+        st = self._s
+        recent = st["recent"]
+        recent.append(1 if st["last_hit"] else 0)
+        if len(recent) > 256:
+            del recent[: len(recent) - 256]
+        st["hist_n"] += 1
+        if st["hist_n"] % st["hist_stride"]:
+            return
+        done = st["accesses_done"]
+        rate = st["hits"] / done if done else 0.0
+        st["hist"].append([done, rate])
+        if len(st["hist"]) > 256:
+            st["hist"] = st["hist"][::2]
+            st["hist_stride"] *= 2
 
     def _step_time(self) -> float:
         return float(self._s["accesses_done"])
@@ -167,6 +188,10 @@ class CacheModel(TimeSteppedModel):
             "last_key": st["last_key"],
             "last_hit": st["last_hit"],
             "evicted": st["evicted"],
+            "recent": list(st["recent"]),
+            "hist": st["hist"],
+            "hist_stride": st["hist_stride"],
+            "hist_n": st["hist_n"],
         }
 
     def load_state(self, state: dict[str, Any]) -> None:
@@ -174,6 +199,10 @@ class CacheModel(TimeSteppedModel):
         st["cache"] = OrderedDict(
             (k, [freq, seq]) for k, freq, seq in state.get("cache", [])
         )
+        st["recent"] = list(state.get("recent", []))
+        st["hist"] = list(state.get("hist", []))
+        st.setdefault("hist_stride", 1)
+        st.setdefault("hist_n", 0)
         self._s = st
         self._build_stream()
 
@@ -192,6 +221,8 @@ class CacheModel(TimeSteppedModel):
             "last_hit": st["last_hit"],
             "evicted": st["evicted"],
             "contents": [k for k, _ in st["cache"].items()][:64],
+            "recent": st["recent"][-256:],
+            "history": st["hist"],
         }
 
     def finalize_metrics(self) -> dict[str, float]:

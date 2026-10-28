@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { SessionState } from './types'
 import { drawNetwork, parseNetwork } from './trafficRender'
+import { drawAccessStrip, drawGantt, drawLineChart, ganttRows, type Series } from './chartRender'
 
 export default function SimView({ session }: { session: SessionState }) {
   const { visualizer, snapshot } = session
@@ -10,6 +11,39 @@ export default function SimView({ session }: { session: SessionState }) {
   if (visualizer.kind === 'ca') return <CaView state={snapshot.state} />
   if (visualizer.kind === 'traffic') return <TrafficView state={snapshot.state} />
   return <StateTable state={snapshot.state} />
+}
+
+function useCanvas(draw: (ctx: CanvasRenderingContext2D, width: number, height: number) => void, width: number, height: number) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    draw(ctx, width, height)
+  })
+  return canvasRef
+}
+
+function SeriesChart({ series, label, height = 160, yMax }: { series: Series[]; label: string; height?: number; yMax?: number }) {
+  const width = 640
+  const canvasRef = useCanvas((ctx, w, h) => drawLineChart(ctx, { width: w, height: h, series, yMax }), width, height)
+  return <canvas ref={canvasRef} style={{ maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 4 }} role="img" aria-label={label} />
+}
+
+function GanttChart({ segments, label }: { segments: [number, number, number][]; label: string }) {
+  const width = 640
+  const rows = ganttRows(segments)
+  const height = Math.max(48, 28 + rows.length * 16)
+  const canvasRef = useCanvas((ctx, w, h) => drawGantt(ctx, { width: w, height: h, segments, rows }), width, height)
+  return <canvas ref={canvasRef} style={{ maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 4 }} role="img" aria-label={label} />
+}
+
+function AccessStrip({ bits, label }: { bits: number[]; label: string }) {
+  const canvasRef = useCanvas((ctx, w, h) => drawAccessStrip(ctx, { width: w, height: h, bits }), 640, 32)
+  return <canvas ref={canvasRef} style={{ maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 4 }} role="img" aria-label={label} />
 }
 
 function TrafficView({ state }: { state: Record<string, unknown> }) {
@@ -39,11 +73,6 @@ function TrafficView({ state }: { state: Record<string, unknown> }) {
 
   if (!net) return <p style={{ color: '#888' }}>等待交通快照…</p>
 
-  const hMax = Math.max(...history, 1)
-  const points = history
-    .map((p, i) => `${(i / Math.max(history.length - 1, 1)) * 300},${60 - (p / hMax) * 56}`)
-    .join(' ')
-
   return (
     <div>
       <canvas
@@ -52,12 +81,10 @@ function TrafficView({ state }: { state: Record<string, unknown> }) {
         role="img"
         aria-label={`交通路网第 ${Number(state.tick ?? 0)} tick，在途车辆 ${Number(state.active ?? 0)} 辆`}
       />
-      <svg width="100%" height={80} viewBox="0 0 320 76" role="img" aria-label="在途车辆数历史曲线">
-        <text x={0} y={12} fontSize={11} fill="#6b7280">
-          在途车辆数（最近 {history.length} tick，峰值 {hMax}）
-        </text>
-        {history.length > 1 && <polyline points={points} fill="none" stroke="#2563eb" strokeWidth={1.5} />}
-      </svg>
+      <SeriesChart
+        series={[{ name: '在途车辆数', color: '#2563eb', data: history.map((v, i) => [i, v] as [number, number]) }]}
+        label="在途车辆数历史曲线"
+      />
       <p style={{ fontSize: 13, color: '#374151', margin: '4px 0' }}>
         第 {Number(state.tick ?? 0)} tick · 在途 {Number(state.active ?? 0)} · 已发车 {Number(state.spawned ?? 0)} · 已完成{' '}
         {Number(state.completed ?? 0)} · 平均行程 {Number(state.avg_travel_time ?? 0).toFixed(1)} tick ·
@@ -73,6 +100,8 @@ function CpuScheduleView({ state }: { state: Record<string, unknown> }) {
   const readyCount = Number(state.ready_count ?? ready.length)
   const shown = ready.length
   const util = Number(state.cpu_utilization ?? 0)
+  const runLog = (state.run_log as [number, number, number][] | undefined) ?? []
+  const history = (state.history as [number, number, number][] | undefined) ?? []
 
   return (
     <div>
@@ -128,6 +157,14 @@ function CpuScheduleView({ state }: { state: Record<string, unknown> }) {
           </text>
         )}
       </svg>
+      <GanttChart segments={runLog} label={`CPU 运行甘特图（最近 ${runLog.length} 段运行记录）`} />
+      <SeriesChart
+        series={[
+          { name: '就绪队列', color: '#f59e0b', data: history.map(([t, r]) => [t, r] as [number, number]) },
+          { name: '已完成', color: '#2563eb', data: history.map(([t, , c]) => [t, c] as [number, number]) },
+        ]}
+        label="就绪队列长度与已完成作业数历史曲线"
+      />
       <p style={{ fontSize: 13, color: '#374151', margin: '4px 0' }}>
         策略 {String(state.strategy ?? '-')} · 已到达 {Number(state.arrived ?? 0)} · 已完成 {Number(state.completed ?? 0)} · 待到达{' '}
         {Number(state.pending_count ?? 0)} · CPU 利用率 {(util * 100).toFixed(1)}%
@@ -143,6 +180,8 @@ function CacheView({ state }: { state: Record<string, unknown> }) {
   const lastKey = state.last_key as number | null | undefined
   const lastHit = state.last_hit as boolean | null | undefined
   const hitRate = Number(state.hit_rate ?? 0)
+  const recent = (state.recent as number[] | undefined) ?? []
+  const history = (state.history as [number, number][] | undefined) ?? []
 
   return (
     <div>
@@ -169,6 +208,13 @@ function CacheView({ state }: { state: Record<string, unknown> }) {
           </text>
         )}
       </svg>
+      <AccessStrip bits={recent} label={`最近 ${recent.length} 次访问命中情况（绿=命中，红=缺失）`} />
+      <SeriesChart
+        series={[{ name: '累计命中率', color: '#2563eb', data: history }]}
+        label="累计命中率变化曲线"
+        height={130}
+        yMax={1}
+      />
       <p style={{ fontSize: 13, color: '#374151', margin: '4px 0' }}>
         访问 {Number(state.accesses ?? 0)} 次 · 命中 {Number(state.hits ?? 0)} · 缺失 {Number(state.misses ?? 0)} · 命中率{' '}
         {(hitRate * 100).toFixed(1)}% · 占用 {Number(state.size ?? 0)}/{capacity}
@@ -205,11 +251,6 @@ function CaView({ state }: { state: Record<string, unknown> }) {
 
   if (rows.length === 0) return <p style={{ color: '#888' }}>尚未初始化（点击「创建会话」后开始模拟）。</p>
 
-  const hMax = Math.max(...history, 1)
-  const points = history
-    .map((p, i) => `${(i / Math.max(history.length - 1, 1)) * 300},${60 - (p / hMax) * 56}`)
-    .join(' ')
-
   return (
     <div>
       <canvas
@@ -218,12 +259,10 @@ function CaView({ state }: { state: Record<string, unknown> }) {
         role="img"
         aria-label={`元胞自动机第 ${Number(state.generation ?? 0)} 代网格，活细胞 ${Number(state.population ?? 0)} 个`}
       />
-      <svg width="100%" height={80} viewBox="0 0 320 76" role="img" aria-label="种群历史曲线">
-        <text x={0} y={12} fontSize={11} fill="#6b7280">
-          种群历史（最近 {history.length} 代，峰值 {hMax}）
-        </text>
-        {history.length > 1 && <polyline points={points} fill="none" stroke="#2563eb" strokeWidth={1.5} />}
-      </svg>
+      <SeriesChart
+        series={[{ name: '活细胞数', color: '#2563eb', data: history.map((p, i) => [i, p] as [number, number]) }]}
+        label="种群历史曲线"
+      />
       <p style={{ fontSize: 13, color: '#374151', margin: '4px 0' }}>
         规则 {String(state.rule ?? '-')} · 第 {Number(state.generation ?? 0)} 代 · 活细胞 {Number(state.population ?? 0)} · 累计出生{' '}
         {Number(state.births_total ?? 0)} · 累计死亡 {Number(state.deaths_total ?? 0)} · 边界
@@ -238,6 +277,7 @@ function QueueView({ state }: { state: Record<string, unknown> }) {
   const busy = Math.min(Number(state.busy_servers ?? 0), servers)
   const qlen = Number(state.queue_length ?? 0)
   const shown = Math.min(qlen, 40)
+  const history = (state.history as [number, number, number, number][] | undefined) ?? []
 
   return (
     <div>
@@ -247,7 +287,7 @@ function QueueView({ state }: { state: Record<string, unknown> }) {
         </text>
         <line x1={70} y1={22} x2={120} y2={22} stroke="#2563eb" strokeWidth={2} markerEnd="url(#arrow)" />
         <defs>
-          <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX={6} refY={3} orient="auto">
             <path d="M0,0 L6,3 L0,6 Z" fill="#2563eb" />
           </marker>
         </defs>
@@ -296,6 +336,14 @@ function QueueView({ state }: { state: Record<string, unknown> }) {
           </text>
         )}
       </svg>
+      <SeriesChart
+        series={[
+          { name: '忙碌服务台', color: '#10b981', data: history.map(([t, , b]) => [t, b] as [number, number]) },
+          { name: '在系统', color: '#2563eb', data: history.map(([t, , , i]) => [t, i] as [number, number]) },
+          { name: '等待队列', color: '#f59e0b', data: history.map(([t, q]) => [t, q] as [number, number]) },
+        ]}
+        label="排队系统历史曲线（在系统人数、等待队列长度、忙碌服务台数）"
+      />
       <p style={{ fontSize: 13, color: '#374151', margin: '4px 0' }}>
         在系统 {Number(state.in_system ?? 0)} · 已到达 {Number(state.arrived ?? 0)} · 已服务{' '}
         {Number(state.served ?? 0)} · 丢弃 {Number(state.dropped ?? 0)}

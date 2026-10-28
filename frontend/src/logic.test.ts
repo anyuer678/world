@@ -5,6 +5,7 @@ import { parseValues } from './BatchPanel'
 import { resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { computeBounds, edgeCells, parseNetwork } from './trafficRender'
+import { fmtTick, ganttExtent, ganttRows, niceMax, runsFromBits, seriesBounds } from './chartRender'
 import type { JSONSchema } from './schema'
 import type { ModelInfo, ScenarioInfo } from './types'
 
@@ -278,5 +279,56 @@ describe('quickPicks', () => {
   it('skips missing models or scenarios instead of throwing', () => {
     expect(quickPicks([])).toEqual([])
     expect(quickPicks([mkModel('queueing', ['nope'])])).toEqual([])
+  })
+})
+
+describe('chartRender', () => {
+  it('bounds degrade for empty series and clamp yMin to zero', () => {
+    expect(seriesBounds([])).toEqual({ xMin: 0, xMax: 1, yMin: 0, yMax: 1 })
+    const b = seriesBounds([{ name: 'a', color: '#000', data: [[2, 4], [6, 10]] }])
+    expect(b).toEqual({ xMin: 2, xMax: 6, yMin: 0, yMax: 10 })
+  })
+
+  it('niceMax rounds up to 1/2/5 magnitudes', () => {
+    expect(niceMax(0)).toBe(1)
+    expect(niceMax(1)).toBe(1)
+    expect(niceMax(3)).toBe(5)
+    expect(niceMax(30)).toBe(50)
+    expect(niceMax(250)).toBe(500)
+    expect(niceMax(100000)).toBe(100000)
+  })
+
+  it('fmtTick keeps integers and compacts thousands', () => {
+    expect(fmtTick(3)).toBe('3')
+    expect(fmtTick(2.5)).toBe('2.5')
+    expect(fmtTick(100000)).toBe('100k')
+    expect(fmtTick(150000)).toBe('150k')
+  })
+
+  it('ganttRows keeps the most recently active jobs, sorted ascending', () => {
+    const segs: [number, number, number][] = [
+      [0, 1, 1],
+      [2, 3, 2],
+      [4, 5, 1],
+      [10, 11, 3],
+    ]
+    expect(ganttRows(segs)).toEqual([1, 2, 3])
+    expect(ganttRows(segs, 2)).toEqual([1, 3])
+    expect(ganttRows([])).toEqual([])
+  })
+
+  it('ganttExtent degrades degenerate ranges', () => {
+    expect(ganttExtent([])).toEqual({ tMin: 0, tMax: 1 })
+    expect(ganttExtent([[2, 5, 0], [1, 3, 0]] as [number, number, number][])).toEqual({ tMin: 1, tMax: 5 })
+    expect(ganttExtent([[2, 2, 1]] as [number, number, number][])).toEqual({ tMin: 2, tMax: 3 })
+  })
+
+  it('runsFromBits run-length encodes hit/miss stretches', () => {
+    expect(runsFromBits([])).toEqual([])
+    expect(runsFromBits([1, 1, 0, 1, 1, 1])).toEqual([
+      { hit: true, count: 2 },
+      { hit: false, count: 1 },
+      { hit: true, count: 3 },
+    ])
   })
 })
