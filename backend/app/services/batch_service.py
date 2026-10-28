@@ -4,8 +4,11 @@ statistics (per-combo summarize + Pearson sensitivity).
 
 Design notes (docs/DECISIONS.md D20):
 - Items run on a dedicated bounded ThreadPoolExecutor (max_workers =
-  settings.max_workers); a per-batch semaphore additionally caps effective
-  concurrency at min(concurrency, max_workers).
+  settings.max_workers); the orchestrator keeps at most
+  min(concurrency, max_workers) items outstanding per batch, submitting the
+  next item only when one finishes.
+- The grid combo count is checked against MAX_BATCH_ITEMS before any combo
+  is materialized.
 - Each item re-validates its spec and runs an unbounded engine.run() under
   per-item Limits (D19 semantics: the absolute step cap applies to unbounded
   runs, while wall-clock bounds every run).
@@ -19,7 +22,13 @@ import json
 import secrets
 import threading
 import time
-from concurrent.futures import CancelledError, ThreadPoolExecutor
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    CancelledError,
+    Future,
+    ThreadPoolExecutor,
+    wait,
+)
 from typing import Any
 
 from pydantic import ValidationError
@@ -111,13 +120,18 @@ class BatchService:
             raise SpecValidationError.single(
                 "grid", f"unknown parameters for model {spec.model_id}: {unknown}"
             )
-        combos = [dict(zip(grid, values)) for values in itertools.product(*grid.values())]
-        total = len(combos) * repeats
+        # Count the cartesian product before materializing anything: a huge
+        # grid must be rejected, not expanded (D25).
+        combo_count = 1
+        for values in grid.values():
+            combo_count *= len(values)
+        total = combo_count * repeats
         if total > MAX_BATCH_ITEMS:
             raise SpecValidationError.single(
                 "grid",
-                f"total items {total} exceeds cap {MAX_BATCH_ITEMS} (combos {len(combos)} x repeats {repeats})",
+                f"total items {total} exceeds cap {MAX_BATCH_ITEMS} (combos {combo_count} x repeats {repeats})",
             )
+        combos = [dict(zip(grid, values)) for values in itertools.product(*grid.values())]
         for combo in combos:
             try:
                 model_cls.param_model(**{**spec.params, **combo})
@@ -204,10 +218,14 @@ class BatchService:
                 "SELECT id, combo_json, seed FROM batch_items WHERE batch_id=? ORDER BY item_index",
                 (batch_id,),
             ).fetchall()
-            futures = []
-            for item in items:
-                if flag.is_set():
-                    break
+            max_inflight = max(1, int(row["concurrency"]))
+            item_iter = iter(items)
+            outstanding: set[Future] = set()
+
+            def submit_next() -> bool:
+                item = next(item_iter, None)
+                if item is None or flag.is_set():
+                    return False
                 combo = json.loads(item["combo_json"])
                 item_spec = {
                     **spec_raw,
@@ -220,15 +238,24 @@ class BatchService:
                     zero_delay_chain_limit=self.settings.zero_delay_chain_limit,
                     cancel_poll_interval=self.settings.cancel_poll_interval,
                 )
-                futures.append(
+                outstanding.add(
                     self._executor.submit(
                         self._execute_item, item["id"], item_spec, limits, flag, int(row["max_retries"])
                     )
                 )
-            for f in futures:
-                try:
-                    f.result()
-                except CancelledError:
+                return True
+
+            while len(outstanding) < max_inflight and submit_next():
+                pass
+            while outstanding:
+                done, _ = wait(outstanding, return_when=FIRST_COMPLETED)
+                for f in done:
+                    outstanding.discard(f)
+                    try:
+                        f.result()
+                    except CancelledError:
+                        pass
+                while len(outstanding) < max_inflight and submit_next():
                     pass
             self._finalize(batch_id, flag, t0)
         except Exception as exc:  # noqa: BLE001 - orchestrator boundary
@@ -422,7 +449,8 @@ class BatchService:
             "ci_note": "ci95 为正态近似 95% 置信区间，样本量小或方差大时仅供参考。",
         }
         rows = conn.execute(
-            "SELECT combo_json, metrics_json FROM batch_items WHERE batch_id=? AND metrics_json IS NOT NULL",
+            "SELECT combo_json, metrics_json FROM batch_items"
+            " WHERE batch_id=? AND status='completed' AND metrics_json IS NOT NULL",
             (batch_id,),
         ).fetchall()
         if not rows:

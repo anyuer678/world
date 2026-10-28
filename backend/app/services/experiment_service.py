@@ -340,6 +340,11 @@ class ExperimentService:
         try:
             exp_row = self._get_experiment_row(conn, exp_id)
             spec_raw = json.loads(exp_row["spec_json"])
+            # Execute with the seed recorded on the run row (not spec.seed),
+            # so a run with seed=None is reproducible from the stored seed.
+            run_seed = conn.execute(
+                "SELECT seed FROM experiment_runs WHERE id=?", (run_id,)
+            ).fetchone()["seed"]
             try:
                 conn.execute(
                     "UPDATE experiment_runs SET status='running', started_at=datetime('now') WHERE id=?",
@@ -347,7 +352,7 @@ class ExperimentService:
                 )
                 conn.commit()
                 spec, model_cls = validate_spec(spec_raw, self.registry)
-                model = model_cls(spec.params, spec.seed)
+                model = model_cls(spec.params, run_seed)
                 limits = Limits(
                     max_steps=self.settings.default_max_steps,
                     max_wall_seconds=self.settings.max_wall_seconds,
@@ -416,7 +421,9 @@ class ExperimentService:
                 d["summary"] = json.loads(d.pop("summary_json")) if d.get("summary_json") else None
                 d.pop("events_json", None)
                 runs.append(d)
-            completed = [r for r in runs if r["metrics"]]
+            # Truncated/failed/cancelled runs may still carry metrics; only
+            # completed runs are comparable, so the aggregate excludes the rest.
+            completed = [r for r in runs if r["status"] == "completed" and r["metrics"]]
             aggregate = None
             if completed:
                 keys = completed[0]["metrics"].keys()

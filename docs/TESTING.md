@@ -25,6 +25,19 @@
 7. **阶段 6 专项**：test_performance.py（吞吐/API 延迟/批量回归阈值）、
    test_recovery.py（进程重启恢复/中断续跑/损坏 spec 拒绝）、test_e2e.py
    （建实验→运行→比较→导出→批量全链路）。
+8. **完整性专项**（test_integrity.py，R1）：run 行种子可复现（seed=None 运行后
+   用落库种子重放 sha256 一致）、聚合只计 completed（截断运行带 metrics 不污染
+   均值）、巨型网格先计数后展开（10^12 组合直接 422 且不物化）、批量在途并发
+   逐批封顶（_TrackingExecutor 实测 concurrency=1/2 下峰值在途数）、检查点绑定
+   model_version+params 摘要（跨版本/跨参数恢复拒绝）。
+
+## 已知环境噪声
+- Windows + CPython 3.11 下 pytest 偶发打印
+  `Windows fatal exception: access violation` + 线程栈（栈顶多为
+  `_pytest/tmpdir make_numbered_dir` 或 pathlib `stat/mkdir` 文件探测）。
+  这是 faulthandler 对 first-chance 异常的良性上报：改动前基线 3/3 复现同一
+  签名、进程不退出、exit=0、junitxml 136/136 全过，与平台代码无关。判据：
+  只看 exit code 与 junitxml 计数，不把该噪声当测试失败。
 
 ## 原则
 - 所有随机测试用显式种子；理论对照允许统计容差并注明样本量。

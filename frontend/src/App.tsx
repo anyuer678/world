@@ -131,7 +131,7 @@ export default function App() {
     try {
       const { id } = await api.createExperiment(name, buildSpec())
       await api.runExperiment(id, true)
-      setNotice(`实验 #${id} 已保存并完成运行，可在下方历史中查看。`)
+      setNotice(`已保存为新实验 #${id}，并按当前表单配置完成一次全新运行（非存档本次会话结果）。`)
       refreshHistory()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -260,7 +260,7 @@ export default function App() {
                 ↺ 重置
               </button>
               <button onClick={saveAndRunExperiment} disabled={busy || !selected} style={btn}>
-                💾 保存为实验并运行
+                💾 存配置为新实验并运行
               </button>
             </div>
 

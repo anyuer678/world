@@ -7,6 +7,7 @@ Time semantics are strictly separated:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import time as _time
 from dataclasses import dataclass
@@ -56,6 +57,12 @@ class RunResult:
 
 
 Checkpoint = dict[str, Any]
+
+
+def _params_digest(params: Any) -> str:
+    payload = params.model_dump() if hasattr(params, "model_dump") else params
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 class EmptyQueueError(SimulationError):
@@ -111,7 +118,9 @@ class _BaseEngine:
         cp = {
             "engine_version": ENGINE_VERSION,
             "model_id": self.model.model_id,
+            "model_version": self.model.version,
             "model_type": self.model.model_type,
+            "params_digest": _params_digest(self.model.params),
             "step": self.steps,
             "clock": self.clock,
             "status": self.status,
@@ -132,6 +141,12 @@ class _BaseEngine:
             )
         if cp.get("engine_version") != ENGINE_VERSION:
             raise SimulationError("checkpoint engine version mismatch")
+        if cp.get("model_version") != self.model.version:
+            raise SimulationError(
+                f"checkpoint model_version {cp.get('model_version')!r} != {self.model.version!r}"
+            )
+        if cp.get("params_digest") != _params_digest(self.model.params):
+            raise SimulationError("checkpoint params digest mismatch with target model")
         self.steps = int(cp["step"])
         self.clock = float(cp["clock"])
         self.status = str(cp.get("status", "running"))
