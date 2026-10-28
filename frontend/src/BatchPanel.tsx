@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
 import type { BatchDetail, BatchItem, BatchListItem, ModelSpec } from './types'
+import { formatFinding, type FindingsResponse } from './findings'
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled'])
 const BATCH_ITEM_CAP = 2000
@@ -27,6 +28,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const [batches, setBatches] = useState<BatchListItem[]>([])
   const [batch, setBatch] = useState<BatchDetail | null>(null)
   const [items, setItems] = useState<BatchItem[]>([])
+  const [findings, setFindings] = useState<FindingsResponse | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
@@ -39,7 +41,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     refreshBatches()
   }, [refreshBatches])
 
-  // 选中的批量未到终态时轮询；结束后拉取 items（summary 随详情返回）
+  // 选中的批量未到终态时轮询；结束后拉取 items 与自动发现（summary 随详情返回）
   useEffect(() => {
     if (batch === null || TERMINAL.has(batch.status)) return
     const id = batch.id
@@ -49,6 +51,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
         setBatch(b)
         if (TERMINAL.has(b.status)) {
           setItems((await api.listBatchItems(id, 50)).items)
+          api.getBatchFindings(id).then(setFindings).catch(() => {})
           refreshBatches()
         }
       } catch {
@@ -105,7 +108,13 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     try {
       const b = await api.getBatch(id)
       setBatch(b)
-      setItems(b.status === 'queued' || b.status === 'running' ? [] : (await api.listBatchItems(id, 50)).items)
+      setFindings(null)
+      if (TERMINAL.has(b.status)) {
+        setItems((await api.listBatchItems(id, 50)).items)
+        api.getBatchFindings(id).then(setFindings).catch(() => {})
+      } else {
+        setItems([])
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -341,6 +350,23 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
               <p style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', padding: '6px 10px', borderRadius: 6 }}>
                 {batch.summary.sensitivity_note}
               </p>
+              {findings && (
+                <>
+                  <h4 style={{ fontSize: 14, marginBottom: 4 }}>自动发现（临界点与离散异常）</h4>
+                  {findings.findings.length === 0 ? (
+                    <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0' }}>
+                      这批结果里没有发现显著跳变或离散异常。
+                    </p>
+                  ) : (
+                    <ul style={{ fontSize: 13, margin: '4px 0', paddingLeft: 20 }}>
+                      {findings.findings.map((f, i) => (
+                        <li key={i}>{formatFinding(f)}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 8px' }}>{findings.note}</p>
+                </>
+              )}
             </>
           )}
 

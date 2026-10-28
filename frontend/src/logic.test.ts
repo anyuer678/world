@@ -4,6 +4,7 @@ import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
 import { resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
+import { formatFinding } from './findings'
 import { computeBounds, edgeCells, parseNetwork } from './trafficRender'
 import { fmtTick, ganttExtent, ganttRows, niceMax, runsFromBits, seriesBounds } from './chartRender'
 import type { JSONSchema } from './schema'
@@ -291,6 +292,49 @@ describe('quickPicks', () => {
   it('skips missing models or scenarios instead of throwing', () => {
     expect(quickPicks([])).toEqual([])
     expect(quickPicks([mkModel('queueing', ['nope'])])).toEqual([])
+  })
+})
+
+describe('findings', () => {
+  it('formats jump findings with direction and factor', () => {
+    const up = formatFinding({
+      type: 'jump', param: 'load', from: 0.8, to: 0.9, metric: 'avg_waiting_time',
+      value_from: 2.6, value_to: 26, ratio: 10,
+    })
+    expect(up).toContain('跳升')
+    expect(up).toContain('10 倍')
+    expect(up).toContain('临界点')
+    const down = formatFinding({
+      type: 'jump', param: 'x', from: 1, to: 2, metric: 'm',
+      value_from: 30, value_to: 3, ratio: 10,
+    })
+    expect(down).toContain('坍缩')
+  })
+
+  it('formats collapse-to-zero jumps without a factor', () => {
+    const gone = formatFinding({
+      type: 'jump', param: 'servers', from: 1, to: 2, metric: 'final_queue_length',
+      value_from: 9311, value_to: 0, ratio: null,
+    })
+    expect(gone).toContain('完全消失')
+    expect(gone).toContain('9311')
+    expect(gone).toContain('临界点')
+    expect(gone).not.toContain('倍')
+    const born = formatFinding({
+      type: 'jump', param: 'load', from: 0.8, to: 0.9, metric: 'm',
+      value_from: 0, value_to: 12, ratio: null,
+    })
+    expect(born).toContain('从无到有')
+    expect(born).not.toContain('坍缩')
+  })
+
+  it('formats dispersion findings with cv and params', () => {
+    const s = formatFinding({
+      type: 'dispersion', params: { load: 0.5 }, metric: 'm', cv: 0.8, n: 4, mean: 1, std: 0.8,
+    })
+    expect(s).toContain('80%')
+    expect(s).toContain('load=0.5')
+    expect(s).toContain('重复次数')
   })
 })
 

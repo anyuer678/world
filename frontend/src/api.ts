@@ -7,6 +7,7 @@ import type {
   RunDetail,
   SessionState,
 } from './types'
+import type { FindingsResponse } from './findings'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -67,6 +68,7 @@ export const api = {
   listBatches: () =>
     request<{ total: number; batches: BatchListItem[] }>('/api/batches?limit=10'),
   getBatch: (id: number) => request<BatchDetail>(`/api/batches/${id}`),
+  getBatchFindings: (id: number) => request<FindingsResponse>(`/api/batches/${id}/findings`),
   listBatchItems: (id: number, limit = 50) =>
     request<{ total: number; items: BatchItem[] }>(`/api/batches/${id}/items?limit=${limit}`),
   cancelBatch: (id: number) =>

@@ -9,6 +9,7 @@ from .. import APP_VERSION
 from ..core.engine.base import ENGINE_VERSION
 from ..core.schema.spec import SpecValidationError
 from ..services import reporting
+from ..services.analysis_service import analyze_summary
 from ..services.experiment_service import ConflictError, NotFoundError
 
 
@@ -260,6 +261,12 @@ def list_batches(request: Request, limit: int = 50, offset: int = 0) -> dict[str
 @router.get("/batches/{batch_id}")
 def get_batch(batch_id: int, request: Request) -> dict[str, Any]:
     return _batches(request).get_batch(batch_id)
+
+
+@router.get("/batches/{batch_id}/findings")
+def batch_findings(batch_id: int, request: Request) -> dict[str, Any]:
+    batch = _batches(request).get_batch(batch_id, include_summary=True)
+    return analyze_summary(batch.get("summary", {}), batch.get("grid", {}))
 
 
 @router.get("/batches/{batch_id}/items")
