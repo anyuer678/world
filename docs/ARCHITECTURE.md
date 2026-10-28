@@ -26,22 +26,28 @@
 
 ```
 backend/
-  pyproject.toml
+  pyproject.toml uv.lock
+  scripts/benchmark.py   性能基准（数字见 docs/BENCHMARKS.md）
   migrations/            NNNN_*.sql 顺序迁移文件
   app/
     main.py config.py
     db/ (connection.py migrations.py)
     core/
-      engine/ (base.py event_queue.py time_stepped.py des.py runner.py)
+      engine/ (base.py event_queue.py engines.py models_base.py rng.py)
+      engine/engines.py  SimulationEngine + 时间步进/离散事件两种实现
       schema/ (spec.py migrations.py)   模型描述格式 v1 + 版本迁移
-      registry.py
-    models/                每个子目录 = 一个模型插件
-      queueing/  cpu_scheduler/ cache_sim/ cellular/   (阶段1先 queueing)
-    api/ (routes_*.py)
-    services/ (experiment_service.py run_worker.py)
+      registry.py plugins.py stats.py
+    models/                每个子目录 = 一个模型插件（__init__.py 加一行 import 即接入）
+      queueing/ cpu_scheduling/ cache_sim/ cellular_automaton/
+      schelling/ traffic_network/ sir/
+    api/routes.py          全部 REST/WebSocket 路由
+    services/ (experiment_service.py session_service.py batch_service.py
+               analysis_service.py reporting.py benchmarks.py)
   tests/
 frontend/
-  src/ (api/ workbench/ models/ App.tsx …)
+  src/ (App.tsx SimView.tsx BatchPanel.tsx ComparePanel.tsx ParamForm.tsx
+        TrafficPanel.tsx api.ts chartRender.ts trafficRender.ts
+        findings.ts sweepChart.ts summary.ts schema.ts types.ts logic.test.ts)
 docker-compose.yml
 ```
 

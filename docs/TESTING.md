@@ -171,3 +171,17 @@
    152 发车全完成、CPU 调度 30 作业完成甘特图正常；实验报告导出复验
    （实验 #5 SIR：MD/JSON 均 200，含 spec/运行记录/result_sha256/聚合）。
    后端 226/226（+3 性能回归）、前端 43/43、tsc/build 干净、控制台无错误。
+19. **R11 巡检轮：axe-core 无障碍清零 + 架构文档对账**（决策见 DECISIONS D35）。
+   工具链：Chrome 未装、chrome-devtools MCP 不可用，改用 browser-use 注入
+   axe-core@4.10.2（CDN 实际加载成功）对 dev 页全量扫描。修前空态 4 类
+   违规：color-contrast 5 处（#9ca3af 2.43:1 模型元信息行、#999 2.72:1
+   参数说明 small）、scrollable-region-focusable（事件日志滚动区不可键盘
+   访问，serious）、landmark-one-main / region（无 main 地标，55 节点悬空）。
+   修复：灰阶文字 #888/#999/#9ca3af → #6b7280（App/SimView/ParamForm/
+   ComparePanel，SVG 文字同步，canvas 刻度不动）、日志滚动区
+   tabIndex=0+role=region+aria-label、顶层容器改 <main>。修后空态 0 违规
+   （34 规则过）、跑排队场景后的会话态 0 违规（42 规则过）。
+   另对账两处：ARCHITECTURE.md 目录树（阶段 1 后未更新——models 缺
+   schelling/traffic/sir 三包且旧目录名拼写错误、engine/services/前端文件
+   按实际重列）、index.html 补 meta description（lang/title 原本就在）。
+   回归：后端 226/226、前端 43/43、tsc/build 干净。

@@ -186,7 +186,7 @@ export default function App() {
   const model = models.find((m) => m.model_id === selected)
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 1100, margin: '0 auto', padding: 24 }}>
+    <main style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 1100, margin: '0 auto', padding: 24 }}>
       <h1 style={{ borderBottom: '2px solid #2563eb', paddingBottom: 8 }}>WorldLab 模拟工作台</h1>
 
       {error && (
@@ -198,7 +198,7 @@ export default function App() {
         <h2>1. 实时模拟视图</h2>
         {session === null ? (
           <>
-            <p style={{ color: '#888' }}>
+            <p style={{ color: '#6b7280' }}>
               尚未开始模拟。点下面任一场景立即看结果，或到下方「模型与参数」配置后运行。↓
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -335,7 +335,7 @@ export default function App() {
               </select>
             </label>
             {model && (
-              <p style={{ color: '#9ca3af', fontSize: 12, margin: '2px 0 6px' }}>
+              <p style={{ color: '#6b7280', fontSize: 12, margin: '2px 0 6px' }}>
                 内部标识 {model.model_id} · v{model.version} · {modelTypeLabel(model.model_type)}
               </p>
             )}
@@ -398,7 +398,7 @@ export default function App() {
                 <ParamForm schema={model.params_schema as never} value={params} onChange={setParams} />
               )
             ) : (
-              <p style={{ color: '#888' }}>加载中…</p>
+              <p style={{ color: '#6b7280' }}>加载中…</p>
             )}
           </div>
         </div>
@@ -407,7 +407,12 @@ export default function App() {
       {session !== null && events.length > 0 && (
         <section style={card}>
           <h2>3. 事件日志（最近 {events.length} 条，来自真实运行）</h2>
-          <div style={{ maxHeight: 240, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12 }}>
+          <div
+            style={{ maxHeight: 240, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12 }}
+            role="region"
+            aria-label="事件日志滚动区"
+            tabIndex={0}
+          >
             {events.map((e) => (
               <div key={e.seq}>
                 t={e.time.toFixed(4)} [{e.kind}] {e.message}
@@ -420,7 +425,7 @@ export default function App() {
       <section style={card}>
         <h2>4. 实验历史</h2>
         {history.length === 0 ? (
-          <p style={{ color: '#888' }}>暂无实验。在上方保存会话配置为实验。</p>
+          <p style={{ color: '#6b7280' }}>暂无实验。在上方保存会话配置为实验。</p>
         ) : (
           <table style={table}>
             <thead>
@@ -477,7 +482,7 @@ export default function App() {
           <ComparePanel history={history} />
         </div>
       </details>
-    </div>
+    </main>
   )
 }
 

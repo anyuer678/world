@@ -54,7 +54,7 @@ export default function ComparePanel({ history }: { history: HistoryEntry[] }) {
   return (
     <>
       {history.length === 0 ? (
-        <p style={{ color: '#888' }}>暂无实验可比较。</p>
+        <p style={{ color: '#6b7280' }}>暂无实验可比较。</p>
       ) : (
         <>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>

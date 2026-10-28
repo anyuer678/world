@@ -73,7 +73,7 @@ function TrafficView({ state }: { state: Record<string, unknown> }) {
     })
   })
 
-  if (!net) return <p style={{ color: '#888' }}>等待交通快照…</p>
+  if (!net) return <p style={{ color: '#6b7280' }}>等待交通快照…</p>
 
   return (
     <div>
@@ -135,7 +135,7 @@ function CpuScheduleView({ state }: { state: Record<string, unknown> }) {
           </text>
         )}
         {shown === 0 && (
-          <text x={140} y={46} fontSize={12} fill="#9ca3af">
+          <text x={140} y={46} fontSize={12} fill="#6b7280">
             （空）
           </text>
         )}
@@ -149,7 +149,7 @@ function CpuScheduleView({ state }: { state: Record<string, unknown> }) {
             #{running.seq} 余 {running.remaining.toFixed(2)}
           </text>
         ) : (
-          <text x={185} y={154} fontSize={12} textAnchor="middle" fill="#9ca3af">
+          <text x={185} y={154} fontSize={12} textAnchor="middle" fill="#6b7280">
             idle
           </text>
         )}
@@ -251,7 +251,7 @@ function CaView({ state }: { state: Record<string, unknown> }) {
     })
   })
 
-  if (rows.length === 0) return <p style={{ color: '#888' }}>尚未初始化（点击「创建会话」后开始模拟）。</p>
+  if (rows.length === 0) return <p style={{ color: '#6b7280' }}>尚未初始化（点击「创建会话」后开始模拟）。</p>
 
   return (
     <div>
@@ -319,7 +319,7 @@ function SchellingView({ state }: { state: Record<string, unknown> }) {
     })
   })
 
-  if (rows.length === 0) return <p style={{ color: '#888' }}>尚未初始化（点击「创建会话」后开始模拟）。</p>
+  if (rows.length === 0) return <p style={{ color: '#6b7280' }}>尚未初始化（点击「创建会话」后开始模拟）。</p>
 
   return (
     <div>
@@ -457,7 +457,7 @@ function QueueView({ state }: { state: Record<string, unknown> }) {
 
 function StateTable({ state }: { state: Record<string, unknown> }) {
   const entries = Object.entries(state)
-  if (entries.length === 0) return <p style={{ color: '#888' }}>尚未初始化（点击「创建会话」后开始模拟）。</p>
+  if (entries.length === 0) return <p style={{ color: '#6b7280' }}>尚未初始化（点击「创建会话」后开始模拟）。</p>
   return (
     <table style={{ borderCollapse: 'collapse', fontSize: 13 }}>
       <tbody>

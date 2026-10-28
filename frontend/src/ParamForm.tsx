@@ -115,7 +115,7 @@ export default function ParamForm({
   onChange: (v: Record<string, unknown>) => void
 }) {
   const props = schema.properties ?? {}
-  if (Object.keys(props).length === 0) return <p style={{ color: '#888' }}>该模型没有可配置参数。</p>
+  if (Object.keys(props).length === 0) return <p style={{ color: '#6b7280' }}>该模型没有可配置参数。</p>
   return (
     <div>
       {Object.entries(props).map(([k, v]) => (
@@ -134,7 +134,7 @@ export default function ParamForm({
 
 const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }
 const labelStyle: React.CSSProperties = { minWidth: 130, fontSize: 13, display: 'inline-flex', flexDirection: 'column' }
-const hint: React.CSSProperties = { color: '#999', fontSize: 11 }
+const hint: React.CSSProperties = { color: '#6b7280', fontSize: 11 }
 const control: React.CSSProperties = { flex: 1, padding: 6, border: '1px solid #d1d5db', borderRadius: 6 }
 const fieldset: React.CSSProperties = {
   border: '1px solid #e5e7eb',
