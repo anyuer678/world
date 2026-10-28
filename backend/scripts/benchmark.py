@@ -31,6 +31,9 @@ QUEUE_SPEC_STEPS = 100_000
 CA_SPEC_STEPS = 500
 CACHE_SPEC_STEPS = 100_000
 CPU_SPEC_STEPS = 50_000
+SCHELLING_SPEC_STEPS = 500
+TRAFFIC_SPEC_STEPS = 500
+SIR_SPEC_STEPS = 5_000
 
 
 def build_spec(model_id: str, steps: int) -> dict:
@@ -64,6 +67,9 @@ def main() -> None:
         ("cpu_scheduling", CPU_SPEC_STEPS),
         ("cache_sim", CACHE_SPEC_STEPS),
         ("cellular_automaton", CA_SPEC_STEPS),
+        ("schelling", SCHELLING_SPEC_STEPS),
+        ("traffic_network", TRAFFIC_SPEC_STEPS),
+        ("sir", SIR_SPEC_STEPS),
     ):
         results["engine"].append(
             benchmarks.bench_engine(build_spec(model_id, steps), registry, steps).to_json()

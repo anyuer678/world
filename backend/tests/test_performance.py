@@ -52,6 +52,24 @@ def test_engine_cellular_automaton_speed():
     assert res.seconds < 10.0  # 实测 ~0.13s
 
 
+def test_engine_schelling_speed():
+    res = bench_engine(_spec("schelling", 500), registry, 500)
+    assert res.steps == 500
+    assert res.seconds < 10.0  # 实测 ~2.7s（40×30 网格每步全扫邻居，最贵模型）
+
+
+def test_engine_traffic_network_speed():
+    res = bench_engine(_spec("traffic_network", 500), registry, 500)
+    assert res.steps == 500
+    assert res.seconds < 10.0  # 实测 ~0.08s（信号相位+车辆跟驰）
+
+
+def test_engine_sir_speed():
+    res = bench_engine(_spec("sir", 5_000), registry, 5_000)
+    assert res.steps == 5_000
+    assert res.seconds < 10.0  # 实测 ~0.13s（每步 50 个欧拉子步）
+
+
 def test_api_session_step_latency(client):
     res = bench_session_step_latency(client, _spec("queueing", 1_000_000), calls=20)
     assert res["p95_ms"] < 1000.0  # 实测 ~16ms（TestClient 进程内）

@@ -156,3 +156,18 @@
    attack_rate 13.2 倍断崖、peak_time ratio=null「从无到有」；扫描曲线
    默认 beta×peak_time，点击 attack_rate 发现切换重绘（#2563eb 352 px）；
    后端 223/223、tsc/build 干净、控制台无错误。
+18. **R10 巡检轮：基准覆盖补全 + 快速入口补全**（决策见 DECISIONS D34）。
+   巡检发现两处「加模型欠下的对账债」：性能基准只测 4/7 模型
+   （schelling/traffic_network/sir 无实测数字、无回归保护），首页
+   QUICK_PICKS 只有 4/7 模型。修复：benchmark.py 三模型进基准
+   （schelling 500 步 / traffic 500 步 / sir 5,000 步），test_performance.py
+   加 3 条宽松回归（各 <10 s），BENCHMARKS.md 全表复测刷新（2026-10-28：
+   queueing ≈23.8 万 steps/s、cache ≈35.5 万、CA ≈3,570、schelling ≈186
+   最贵——每步全扫 1200 格邻居、traffic ≈6,410、sir ≈40,000；API p95
+   16 ms、批量 8 项 0.19 s），QUICK_PICKS 补 sir/cpu_scheduling/cache_sim
+   至 7 条且 logic.test.ts 断言同步。浏览器 E2E：刷新后首页快速入口
+   7 模型齐全，点「疫情爆发」快捷按钮实跑 SIR 完成；SIR 曲线三色像素
+   探针（S 蓝 483 / I 红 338 / R 绿 505）；交通 rush-aftermath 400 拍
+   152 发车全完成、CPU 调度 30 作业完成甘特图正常；实验报告导出复验
+   （实验 #5 SIR：MD/JSON 均 200，含 spec/运行记录/result_sha256/聚合）。
+   后端 226/226（+3 性能回归）、前端 43/43、tsc/build 干净、控制台无错误。

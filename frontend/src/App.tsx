@@ -516,6 +516,9 @@ const QUICK_PICKS: { modelId: string; scenarioId: string }[] = [
   { modelId: 'cellular_automaton', scenarioId: 'game-of-life' },
   { modelId: 'queueing', scenarioId: 'rush-hour' },
   { modelId: 'traffic_network', scenarioId: 'no-signal' },
+  { modelId: 'sir', scenarioId: 'outbreak' },
+  { modelId: 'cpu_scheduling', scenarioId: 'rr-quantum-too-small' },
+  { modelId: 'cache_sim', scenarioId: 'zipf-hit-ceiling' },
 ]
 
 export function quickPicks(models: ModelInfo[]): { model: ModelInfo; scenario: ScenarioInfo }[] {

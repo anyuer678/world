@@ -296,12 +296,18 @@ describe('quickPicks', () => {
       mkModel('cellular_automaton', ['game-of-life']),
       mkModel('traffic_network', ['no-signal']),
       mkModel('schelling', ['mild-preference']),
+      mkModel('sir', ['outbreak']),
+      mkModel('cpu_scheduling', ['rr-quantum-too-small']),
+      mkModel('cache_sim', ['zipf-hit-ceiling']),
     ]
     expect(quickPicks(models).map((p) => p.model.model_id)).toEqual([
       'schelling',
       'cellular_automaton',
       'queueing',
       'traffic_network',
+      'sir',
+      'cpu_scheduling',
+      'cache_sim',
     ])
     expect(quickPicks(models)[0].scenario.id).toBe('mild-preference')
   })
