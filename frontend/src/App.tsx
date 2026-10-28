@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from './api'
 import type { ModelInfo, ModelSpec, SessionState } from './types'
 import ParamForm from './ParamForm'
+import TrafficPanel from './TrafficPanel'
 import SimView from './SimView'
 import BatchPanel from './BatchPanel'
 import ComparePanel from './ComparePanel'
@@ -186,9 +187,15 @@ export default function App() {
         {model?.description && <p style={{ color: '#666', fontSize: 13 }}>{model.description}</p>}
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ flex: 2, minWidth: 320 }}>
-            <h3 style={{ fontSize: 14 }}>参数配置（结构化编辑器，由 params_schema 生成）</h3>
+            <h3 style={{ fontSize: 14 }}>
+              {selected === 'traffic_network' ? '路网配置（预设 + JSON 编辑 + 预览）' : '参数配置（结构化编辑器，由 params_schema 生成）'}
+            </h3>
             {model ? (
-              <ParamForm schema={model.params_schema as never} value={params} onChange={setParams} />
+              selected === 'traffic_network' ? (
+                <TrafficPanel params={params} onChange={setParams} />
+              ) : (
+                <ParamForm schema={model.params_schema as never} value={params} onChange={setParams} />
+              )
             ) : (
               <p style={{ color: '#888' }}>加载中…</p>
             )}

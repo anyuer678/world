@@ -4,3 +4,4 @@ from . import cache_sim  # noqa: F401
 from . import cellular_automaton  # noqa: F401
 from . import cpu_scheduling  # noqa: F401
 from . import queueing  # noqa: F401
+from . import traffic_network  # noqa: F401

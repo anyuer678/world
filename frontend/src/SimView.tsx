@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { SessionState } from './types'
+import { drawNetwork, parseNetwork } from './trafficRender'
 
 export default function SimView({ session }: { session: SessionState }) {
   const { visualizer, snapshot } = session
@@ -7,7 +8,63 @@ export default function SimView({ session }: { session: SessionState }) {
   if (visualizer.kind === 'cpu_schedule') return <CpuScheduleView state={snapshot.state} />
   if (visualizer.kind === 'cache') return <CacheView state={snapshot.state} />
   if (visualizer.kind === 'ca') return <CaView state={snapshot.state} />
+  if (visualizer.kind === 'traffic') return <TrafficView state={snapshot.state} />
   return <StateTable state={snapshot.state} />
+}
+
+function TrafficView({ state }: { state: Record<string, unknown> }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const net = parseNetwork(state)
+  const vehicles = (state.vehicles as [number, number, number][] | undefined) ?? []
+  const edgeLoad = (state.edge_load as number[] | undefined) ?? []
+  const signals = (state.signals as { node: string; green_group: number }[] | undefined) ?? []
+  const history = (state.history as number[] | undefined) ?? []
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !net) return
+    canvas.width = 640
+    canvas.height = 420
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    drawNetwork(ctx, net, {
+      width: 640,
+      height: 420,
+      padding: 36,
+      vehicles: vehicles.map(([edge, cell, v]) => ({ edge, cell, v })),
+      edgeLoad,
+      signalNodes: signals.map((s) => ({ id: s.node, green: s.green_group === 0 })),
+    })
+  })
+
+  if (!net) return <p style={{ color: '#888' }}>等待交通快照…</p>
+
+  const hMax = Math.max(...history, 1)
+  const points = history
+    .map((p, i) => `${(i / Math.max(history.length - 1, 1)) * 300},${60 - (p / hMax) * 56}`)
+    .join(' ')
+
+  return (
+    <div>
+      <canvas
+        ref={canvasRef}
+        style={{ maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 4 }}
+        role="img"
+        aria-label={`交通路网第 ${Number(state.tick ?? 0)} tick，在途车辆 ${Number(state.active ?? 0)} 辆`}
+      />
+      <svg width="100%" height={80} viewBox="0 0 320 76" role="img" aria-label="在途车辆数历史曲线">
+        <text x={0} y={12} fontSize={11} fill="#6b7280">
+          在途车辆数（最近 {history.length} tick，峰值 {hMax}）
+        </text>
+        {history.length > 1 && <polyline points={points} fill="none" stroke="#2563eb" strokeWidth={1.5} />}
+      </svg>
+      <p style={{ fontSize: 13, color: '#374151', margin: '4px 0' }}>
+        第 {Number(state.tick ?? 0)} tick · 在途 {Number(state.active ?? 0)} · 已发车 {Number(state.spawned ?? 0)} · 已完成{' '}
+        {Number(state.completed ?? 0)} · 平均行程 {Number(state.avg_travel_time ?? 0).toFixed(1)} tick ·
+        红点=停止车辆 · 灰/黄/红路=占用率低/中/高
+      </p>
+    </div>
+  )
 }
 
 function CpuScheduleView({ state }: { state: Record<string, unknown> }) {

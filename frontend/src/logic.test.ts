@@ -3,7 +3,41 @@ import { statusLabel } from './App'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
 import { resolve } from './ParamForm'
+import { computeBounds, edgeCells, parseNetwork } from './trafficRender'
 import type { JSONSchema } from './schema'
+
+describe('trafficRender', () => {
+  const net = {
+    nodes: [
+      { id: 'a', x: 0, y: 0 },
+      { id: 'b', x: 30, y: 40 },
+    ],
+    edges: [{ src: 'a', dst: 'b' }],
+  }
+
+  it('parses a valid network object', () => {
+    expect(parseNetwork(net)).toEqual(net)
+  })
+
+  it('rejects malformed payloads', () => {
+    expect(parseNetwork(null)).toBeNull()
+    expect(parseNetwork({})).toBeNull()
+    expect(parseNetwork({ nodes: 'x', edges: [] })).toBeNull()
+  })
+
+  it('derives edge cell counts from euclidean distance', () => {
+    expect(edgeCells(net, net.edges[0])).toBe(50)
+    expect(edgeCells(net, { src: 'a', dst: 'zz' })).toBe(1)
+  })
+
+  it('computes bounds and degrades degenerate extents', () => {
+    expect(computeBounds(net)).toEqual({ minX: 0, minY: 0, maxX: 30, maxY: 40 })
+    const point = { nodes: [{ id: 'a', x: 5, y: 5 }], edges: [] }
+    const b = computeBounds(point)
+    expect(b.maxX - b.minX).toBeGreaterThan(0)
+    expect(b.maxY - b.minY).toBeGreaterThan(0)
+  })
+})
 
 describe('statusLabel', () => {
   it('maps known session statuses to Chinese labels', () => {
