@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { modelTypeLabel, quickPicks, scenarioSpec, statusLabel } from './App'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
-import { resolve } from './ParamForm'
+import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
 import { buildSweep, defaultSweepSelection, sweepParamOptions } from './sweepChart'
@@ -464,5 +464,34 @@ describe('chartRender', () => {
       { hit: false, count: 1 },
       { hit: true, count: 3 },
     ])
+  })
+})
+
+describe('parseArrayText', () => {
+  it('parses comma, space and semicolon separated integers', () => {
+    expect(parseArrayText('1,2,3', 'integer')).toEqual([1, 2, 3])
+    expect(parseArrayText('1 2  3', 'integer')).toEqual([1, 2, 3])
+    expect(parseArrayText('1;2,3', 'integer')).toEqual([1, 2, 3])
+  })
+  it('rejects non-integer or non-numeric tokens for numeric lists', () => {
+    expect(parseArrayText('abc', 'integer')).toBeNull()
+    expect(parseArrayText('1,x,3', 'integer')).toBeNull()
+    expect(parseArrayText('1.5', 'integer')).toBeNull()
+    expect(parseArrayText('1.5', 'number')).toEqual([1.5])
+  })
+  it('treats empty text as cleared', () => {
+    expect(parseArrayText('', 'integer')).toBeNull()
+    expect(parseArrayText('  ', 'number')).toBeNull()
+  })
+  it('parses JSON arrays for nested or object items', () => {
+    expect(parseArrayText('[[0,1],[1,0]]', 'array')).toEqual([
+      [0, 1],
+      [1, 0],
+    ])
+    expect(parseArrayText('[{"duration":5}]', undefined)).toEqual([{ duration: 5 }])
+  })
+  it('rejects non-array JSON for complex items', () => {
+    expect(parseArrayText('{"a":1}', 'array')).toBeNull()
+    expect(parseArrayText('not json', undefined)).toBeNull()
   })
 })

@@ -10,6 +10,7 @@ export interface JSONSchema {
   anyOf?: JSONSchema[]
   allOf?: JSONSchema[]
   properties?: Record<string, JSONSchema>
+  items?: JSONSchema
   $defs?: Record<string, JSONSchema>
   nullable?: boolean
 }
