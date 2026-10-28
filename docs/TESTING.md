@@ -246,3 +246,17 @@
    nginx 产线前端首页渲染 + /api 代理 200 + 快速入口一键运行 SIR 会话
    跑完；down 后数据卷 world_worldlab-data 保留。本轮零代码改动。回归：
    后端 227/227、前端 43/43、tsc/build 干净。
+24. **R16 巡检轮：批量超时/种子策略实测 + 发现文案修复**（决策见 DECISIONS
+   D40）。① 三种种子策略 UI 实测（API items 逐项核对）：fixed——6 项全部
+   seed=42（同配置同种子，配对比较语义，亦解释历史实验中重复行指标完全
+   相同）；unique——servers 1/2 × 3 重复 → 42–47 按 item_index 连续递增；
+   per_repeat_increment——单组合 × 5 重复 → 42–46 按 repeat_index 递增。
+   ② wall_timeout 批量语义（默认 60s 墙钟 + schelling 10000 步首次实测）：
+   3 项中 2 项 wall_timeout（7936 步@60s，尝试=1 不触发重试——重试仅为
+   异常保留）+1 项 completed，批量状态 completed（wall_timeout 计为合法
+   终态而非失败）；两项超时项 metrics 完全一致（同种子同分片边界=确定性
+   轨迹的旁证）；详情面板计数行「completed: 1 · wall_timeout: 2」、单项
+   行含尝试数与 steps。③ 修复发现文案缺陷：无网格参数批量的 dispersion
+   类发现渲染为「在 处，指标…」（占位符空白），findings.ts 空参数时去掉
+   位置从句，新增单测（44/44），浏览器复验文案直接以「指标 …」开头。
+   回归：后端 227/227、前端 44/44、tsc/build 干净。

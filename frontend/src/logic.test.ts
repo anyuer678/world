@@ -359,6 +359,15 @@ describe('findings', () => {
     expect(s).toContain('load=0.5')
     expect(s).toContain('重复次数')
   })
+
+  it('drops the location clause for dispersion findings without grid params', () => {
+    const s = formatFinding({
+      type: 'dispersion', params: {}, metric: 'm', cv: 0.8, n: 4, mean: 1, std: 0.8,
+    })
+    expect(s).not.toContain('在')
+    expect(s).not.toContain('处')
+    expect(s).toContain('指标 m 重复间波动很大')
+  })
 })
 
 describe('sweepChart', () => {

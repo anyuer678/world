@@ -45,5 +45,6 @@ export function formatFinding(f: Finding): string {
   const params = Object.entries(f.params)
     .map(([k, v]) => `${k}=${String(v)}`)
     .join(', ')
-  return `在 ${params} 处，指标 ${f.metric} 重复间波动很大（CV ${(f.cv * 100).toFixed(0)}%，n=${f.n}）：结果对随机性敏感，建议增加重复次数或换种子策略`
+  const where = params ? `在 ${params} 处，` : ''
+  return `${where}指标 ${f.metric} 重复间波动很大（CV ${(f.cv * 100).toFixed(0)}%，n=${f.n}）：结果对随机性敏感，建议增加重复次数或换种子策略`
 }
