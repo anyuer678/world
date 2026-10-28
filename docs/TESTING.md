@@ -295,3 +295,18 @@
    产品缺陷）；环线 300 tick 跑完（发车 241/完成 82）、自定义 7 节点
    300 tick 跑完（发车 289/完成 48）。回归：后端 227/227、前端 50/50、
    tsc/build 干净。
+27. **R19 巡检轮：CPU jobs 对象数组 + 谢林初始布局 + sim_time 补矩阵**（决策
+   见 DECISIONS D43，零代码改动验证轮）。① CPU 调度显式作业列表（对象数
+   组，ArrayField JSON 分支第三形态）浏览器实测：表单填
+   `[{"arrival":0,"service":5,"priority":1},{"arrival":1,"service":3,"priority":2},{"arrival":2,"service":2,"priority":0}]`，
+   捕获请求体证实 jobs 为真 JSON 对象数组（非裸字符串）；停止条件
+   until_empty + FCFS → completed，API 快照 run_log=[[0,5,0],[5,8,1],
+   [8,10,2]]、avg_wait=10/3≈3.3333、avg_turnaround=20/3≈6.6667、CPU 利用
+   率 100%、吞吐 0.3，与手算真值逐位一致；同一份 jobs 表单切 SJF 重跑 →
+   run_log=[[0,5,0],[5,7,2],[7,10,1]]（t=5 短作业 #2 插队）、avg_wait=3.0、
+   avg_turnaround=6.333，页面事件日志 dispatch 顺序 #0→#2→#1 与 API 一致。
+   ② 谢林指定初始布局 5×5 全 1（宽高同步改 5）跑 1 步 → API 快照 rows 逐
+   格等于输入（"11111"×5）、unhappy_rate=0、moves_total=0、隔离指数 1.0、
+   population=25（全同网格人人满意不变量）。③ CA 停止条件「按模拟时间」
+   3 → completed、step=3、time=3.0（时间步进模型 sim_time 与按步数等价，
+   停止条件矩阵补齐）。回归：后端 227/227、前端 50/50、tsc/build 干净。
