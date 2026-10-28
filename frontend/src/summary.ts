@@ -59,6 +59,17 @@ export function summarizeMetrics(kind: string, m: Record<string, number>): strin
         s >= 0.75 ? '：同组高度聚集，分区清晰' : s >= 0.55 ? '：出现明显聚类' : '：大体仍然混居'
       }。`)
     }
+  } else if (kind === 'sir') {
+    if (has('attack_rate')) {
+      const ar = m.attack_rate
+      const judge = ar >= 0.6 ? '大流行：绝大多数人口被感染' : ar >= 0.1 ? '疫情扩散：相当比例人口被感染' : '疫情熄灭：感染没能传开'
+      out.push(`累计感染率 ${pct(ar)}，${judge}。`)
+    }
+    if (has('peak_infected') && has('population') && m.population > 0) {
+      const pf = m.peak_infected / m.population
+      const when = has('peak_time') ? `（第 ${m.peak_time.toFixed(0)} 天）` : ''
+      out.push(`感染峰值 ${m.peak_infected.toFixed(0)} 人、占总人口 ${pct(pf)}${when}。`)
+    }
   } else if (kind === 'cpu_schedule') {
     if (has('avg_waiting_time')) {
       out.push(`作业平均等待 ${f2(m.avg_waiting_time)}、平均周转 ${f2(m.avg_turnaround_time)}。`)

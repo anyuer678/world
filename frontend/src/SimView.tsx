@@ -11,6 +11,7 @@ export default function SimView({ session }: { session: SessionState }) {
   if (visualizer.kind === 'ca') return <CaView state={snapshot.state} />
   if (visualizer.kind === 'schelling') return <SchellingView state={snapshot.state} />
   if (visualizer.kind === 'traffic') return <TrafficView state={snapshot.state} />
+  if (visualizer.kind === 'sir') return <SirView state={snapshot.state} />
   return <StateTable state={snapshot.state} />
 }
 
@@ -343,6 +344,31 @@ function SchellingView({ state }: { state: Record<string, unknown> }) {
         {Number(state.population_b ?? 0)} · 不满 {Number(state.unhappy ?? 0)}（
         {(Number(state.unhappy_rate ?? 0) * 100).toFixed(1)}%）· 隔离指数 {Number(state.segregation_index ?? 0).toFixed(2)} · 累计搬家{' '}
         {Number(state.moves_total ?? 0)}
+      </p>
+    </div>
+  )
+}
+
+function SirView({ state }: { state: Record<string, unknown> }) {
+  const history = (state.history as [number, number, number, number][] | undefined) ?? []
+  const peak = Number(state.peak_infected ?? 0)
+  const peakTime = Number(state.peak_time ?? 0)
+  const r0 = Number(state.r0 ?? 0)
+  return (
+    <div>
+      <SeriesChart
+        height={200}
+        series={[
+          { name: '易感 S', color: '#2563eb', data: history.map(([t, s]) => [t, s] as [number, number]) },
+          { name: '感染 I', color: '#dc2626', data: history.map(([t, , i]) => [t, i] as [number, number]) },
+          { name: '康复 R', color: '#16a34a', data: history.map(([t, , , r]) => [t, r] as [number, number]) },
+        ]}
+        label={`SIR 曲线：感染峰值 ${peak.toFixed(0)}（第 ${peakTime.toFixed(0)} 天）`}
+      />
+      <p style={{ fontSize: 13, color: '#374151', margin: '4px 0' }}>
+        第 {Number(state.day ?? 0).toFixed(0)} 天 · R₀ {r0.toFixed(2)} · 易感 {Number(state.susceptible ?? 0).toFixed(0)} ·
+        感染 {Number(state.infected ?? 0).toFixed(0)}（{(Number(state.infected_frac ?? 0) * 100).toFixed(1)}%）· 康复{' '}
+        {Number(state.recovered ?? 0).toFixed(0)} · 峰值感染 {peak.toFixed(0)}（第 {peakTime.toFixed(0)} 天）
       </p>
     </div>
   )

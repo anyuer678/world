@@ -10,7 +10,7 @@ from app.core.registry import registry
 from app.core.schema.spec import validate_spec
 from app.main import create_app
 
-BUILTIN_IDS = ["queueing", "cpu_scheduling", "cache_sim", "cellular_automaton", "traffic_network", "schelling"]
+BUILTIN_IDS = ["queueing", "cpu_scheduling", "cache_sim", "cellular_automaton", "traffic_network", "schelling", "sir"]
 
 LIMITS = Limits(
     max_steps=1_000_000, max_wall_seconds=30, zero_delay_chain_limit=10_000, cancel_poll_interval=1000

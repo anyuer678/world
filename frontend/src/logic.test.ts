@@ -222,6 +222,22 @@ describe('summarizeMetrics', () => {
     expect(shrunk[0]).toContain('萎缩')
   })
 
+  it('summarizes SIR outbreak severity and peak', () => {
+    const big = summarizeMetrics('sir', {
+      tick: 120,
+      population: 10000,
+      attack_rate: 0.893,
+      peak_infected: 4150,
+      peak_time: 34.0,
+    })
+    expect(big[0]).toContain('89.3%')
+    expect(big[0]).toContain('大流行')
+    expect(big[1]).toContain('4150')
+    expect(big[1]).toContain('第 34 天')
+    const out = summarizeMetrics('sir', { population: 10000, attack_rate: 0.0009, peak_infected: 10 })
+    expect(out[0]).toContain('熄灭')
+  })
+
   it('summarizes traffic congestion by completion ratio', () => {
     const jam = summarizeMetrics('traffic', {
       spawned: 698,
