@@ -189,6 +189,16 @@ describe('summarizeMetrics', () => {
     expect(out[1]).toContain('5.50')
   })
 
+  it('judges schelling settlement and segregation level', () => {
+    const zero = summarizeMetrics('schelling', { moves_total: 0, unhappy_rate: 0, segregation_index: 0.503 })
+    expect(zero[0]).toContain('保持混居')
+    const settled = summarizeMetrics('schelling', { moves_total: 382, unhappy_rate: 0, segregation_index: 0.729 })
+    expect(settled.some((s) => s.includes('都已安顿') && s.includes('0.73'))).toBe(true)
+    const churning = summarizeMetrics('schelling', { moves_total: 12202, unhappy_rate: 0.25, segregation_index: 0.994 })
+    expect(churning.some((s) => s.includes('动荡') && s.includes('分区清晰'))).toBe(true)
+    expect(summarizeMetrics('schelling', {})).toEqual([])
+  })
+
   it('summarizes cellular automaton population trend', () => {
     const peak = summarizeMetrics('ca', {
       generation: 300,

@@ -9,6 +9,7 @@ export default function SimView({ session }: { session: SessionState }) {
   if (visualizer.kind === 'cpu_schedule') return <CpuScheduleView state={snapshot.state} />
   if (visualizer.kind === 'cache') return <CacheView state={snapshot.state} />
   if (visualizer.kind === 'ca') return <CaView state={snapshot.state} />
+  if (visualizer.kind === 'schelling') return <SchellingView state={snapshot.state} />
   if (visualizer.kind === 'traffic') return <TrafficView state={snapshot.state} />
   return <StateTable state={snapshot.state} />
 }
@@ -267,6 +268,81 @@ function CaView({ state }: { state: Record<string, unknown> }) {
         规则 {String(state.rule ?? '-')} · 第 {Number(state.generation ?? 0)} 代 · 活细胞 {Number(state.population ?? 0)} · 累计出生{' '}
         {Number(state.births_total ?? 0)} · 累计死亡 {Number(state.deaths_total ?? 0)} · 边界
         {state.toroidal ? '环形' : '固定'}
+      </p>
+    </div>
+  )
+}
+
+function SchellingView({ state }: { state: Record<string, unknown> }) {
+  const rows = (state.rows as string[] | undefined) ?? []
+  const unhappyRows = (state.unhappy_rows as string[] | undefined) ?? []
+  const width = Number(state.width ?? 0)
+  const height = Number(state.height ?? 0)
+  const history = (state.history as [number, number, number][] | undefined) ?? []
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || rows.length === 0 || width === 0) return
+    const cell = Math.max(2, Math.floor(600 / width))
+    canvas.width = width * cell
+    canvas.height = height * cell
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.fillStyle = '#f3f4f6'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    rows.forEach((row, i) => {
+      for (let j = 0; j < row.length; j++) {
+        if (row[j] === '1') {
+          ctx.fillStyle = '#2563eb'
+          ctx.fillRect(j * cell, i * cell, cell, cell)
+        } else if (row[j] === '2') {
+          ctx.fillStyle = '#f59e0b'
+          ctx.fillRect(j * cell, i * cell, cell, cell)
+        }
+      }
+    })
+    const dot = Math.max(1, Math.floor(cell / 3))
+    ctx.fillStyle = '#dc2626'
+    unhappyRows.forEach((row, i) => {
+      for (let j = 0; j < row.length; j++) {
+        if (row[j] === '1') {
+          ctx.fillRect(
+            j * cell + Math.floor((cell - dot) / 2),
+            i * cell + Math.floor((cell - dot) / 2),
+            dot,
+            dot,
+          )
+        }
+      }
+    })
+  })
+
+  if (rows.length === 0) return <p style={{ color: '#888' }}>尚未初始化（点击「创建会话」后开始模拟）。</p>
+
+  return (
+    <div>
+      <canvas
+        ref={canvasRef}
+        style={{ maxWidth: '100%', imageRendering: 'pixelated', border: '1px solid #d1d5db' }}
+        role="img"
+        aria-label={`谢林隔离第 ${Number(state.tick ?? 0)} 步：A 组 ${Number(state.population_a ?? 0)}、B 组 ${
+          Number(state.population_b ?? 0)
+        }、不满 ${Number(state.unhappy ?? 0)} 个`}
+      />
+      <SeriesChart
+        series={[
+          { name: '隔离指数', color: '#2563eb', data: history.map(([t, , s]) => [t, s] as [number, number]) },
+          { name: '不满率', color: '#dc2626', data: history.map(([t, r]) => [t, r] as [number, number]) },
+        ]}
+        label="不满率与隔离指数历史曲线"
+        yMax={1}
+      />
+      <p style={{ fontSize: 13, color: '#374151', margin: '4px 0' }}>
+        容忍阈值 {Number(state.tolerance ?? 0)} · 第 {Number(state.tick ?? 0)} 步 · A 组 {Number(state.population_a ?? 0)} · B 组{' '}
+        {Number(state.population_b ?? 0)} · 不满 {Number(state.unhappy ?? 0)}（
+        {(Number(state.unhappy_rate ?? 0) * 100).toFixed(1)}%）· 隔离指数 {Number(state.segregation_index ?? 0).toFixed(2)} · 累计搬家{' '}
+        {Number(state.moves_total ?? 0)}
       </p>
     </div>
   )

@@ -47,6 +47,18 @@ export function summarizeMetrics(kind: string, m: Record<string, number>): strin
     if (has('avg_travel_time') && has('avg_wait_ticks')) {
       out.push(`平均行程 ${f2(m.avg_travel_time)} 拍，其中平均等待 ${f2(m.avg_wait_ticks)} 拍。`)
     }
+  } else if (kind === 'schelling') {
+    if (has('moves_total') && m.moves_total === 0) {
+      out.push('没有任何智能体搬家：毫无偏好的世界保持混居，隔离不会凭空出现。')
+    }
+    if (has('unhappy_rate') && has('segregation_index')) {
+      const u = m.unhappy_rate
+      const s = m.segregation_index
+      const settle = u <= 0.01 ? '所有智能体都已安顿' : u >= 0.2 ? '仍在持续重排、动荡不休' : '还有少数智能体在搬家'
+      out.push(`不满率 ${pct(u)}（${settle}），隔离指数 ${s.toFixed(2)}${
+        s >= 0.75 ? '：同组高度聚集，分区清晰' : s >= 0.55 ? '：出现明显聚类' : '：大体仍然混居'
+      }。`)
+    }
   } else if (kind === 'cpu_schedule') {
     if (has('avg_waiting_time')) {
       out.push(`作业平均等待 ${f2(m.avg_waiting_time)}、平均周转 ${f2(m.avg_turnaround_time)}。`)
