@@ -46,6 +46,18 @@ const MESSAGE_PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^String should have at most (\d+) characters?$/, (m) => `最多 ${m[1]} 个字符`],
 ]
 
+/** 应用层 spec 错误（R54）：code 形如 `params.width` / `unknown_model`，
+ * message 是 pydantic 的英文短句。能识别的翻译成中文，识别不了返回 null 由调用方回退。 */
+function humanizeSpecError(e: SpecError): string | null {
+  const field = e.code.startsWith('params.') ? e.code.slice('params.'.length) : e.code
+  const label = FIELD_LABELS[field] ?? field
+  for (const [re, fmt] of MESSAGE_PATTERNS) {
+    const m = e.message.match(re)
+    if (m) return `${label ? label + ' ' : ''}${fmt(m)}`
+  }
+  return null
+}
+
 /** 单个 FastAPI 请求体错误 → 中文；识别不了就返回 null，由调用方回退到原文。 */
 function humanizeFastApiError(item: FastApiError): string | null {
   const loc = (item.loc ?? []).filter((p) => p !== 'body' && p !== 'query')
@@ -76,7 +88,11 @@ export function errorDetailMessage(status: number, body: unknown): string {
   }
   const obj = detail as { code?: string; message?: string; errors?: SpecError[] } | undefined
   const message = (obj?.code ? CODE_LABELS[obj.code] : undefined) ?? obj?.message ?? `${status}`
-  return obj?.errors?.length ? `${message}：${obj.errors.map((e) => `${e.code} ${e.message}`).join('; ')}` : message
+  if (!obj?.errors?.length) return message
+  // 与数组形状同一条规则：全部可识别才译，否则整条回退原文（不混排、不丢诊断）
+  const human = obj.errors.map(humanizeSpecError)
+  if (human.every((h): h is string => h !== null)) return `${message}：${human.join('；')}`
+  return `${message}：${obj.errors.map((e) => `${e.code} ${e.message}`).join('; ')}`
 }
 
 /** 404 + 指定路径段才算「该资源已不在」（R50/R51）。

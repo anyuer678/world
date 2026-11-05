@@ -439,3 +439,12 @@ R51 探测时点「查看」无反应，本轮定性为**探针问题**：高级
 「参数校验失败：params.width Input should be greater than or equal to 5」）。
 该尾句暴露一处**中英混排**：对象形状的 spec 错误只翻译了顶层，嵌套的 pydantic 消息仍是英文，
 留待下一轮处理。
+
+**R54（2026-11-05）对象形状 422 的嵌套消息也翻译，两种形状规则统一**
+
+R46 只把**数组形状**（FastAPI 请求体规则）的字段消息译成中文；**对象形状**（应用层 spec 校验）
+只翻译了顶层 code，嵌套的 pydantic 消息仍是英文——同一个参数越界，两种入口两种语言。
+本轮把 `humanizeSpecError()` 接到对象形状：`params.width` 去掉 `params.` 前缀、套用同一张
+消息翻译表，规则与数组形状一致（**全部可识别才翻译，否则整条回退原文**）。浏览器实测：
+CA 宽度填 3 → `错误：参数校验失败：width 不能小于 5`（原为
+`参数校验失败：params.width Input should be greater than or equal to 5`）。前端 **69/69**。

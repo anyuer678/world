@@ -83,6 +83,24 @@ describe('errorDetailMessage (two 422 shapes, R30)', () => {
     ).toBe('422: grid Field required; x Bad x')
   })
 
+  it('translates nested spec param messages and strips the params. prefix (R54)', () => {
+    expect(
+      errorDetailMessage(422, {
+        detail: {
+          code: 'spec_invalid',
+          message: 'spec validation failed',
+          errors: [{ code: 'params.width', message: 'Input should be greater than or equal to 5' }],
+        },
+      }),
+    ).toBe('参数校验失败：width 不能小于 5')
+    // 认不出的嵌套消息整条回退（保留 code 与原文）
+    expect(
+      errorDetailMessage(422, {
+        detail: { code: 'spec_invalid', message: 'spec validation failed', errors: [{ code: 'params.gamma', message: '≥0' }] },
+      }),
+    ).toBe('参数校验失败：params.gamma ≥0')
+  })
+
   it('translates the session step bound and keeps unknown messages verbatim', () => {
     expect(
       errorDetailMessage(422, {

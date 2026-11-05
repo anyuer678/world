@@ -840,3 +840,12 @@
     文案「参数校验失败：params.width Input should be greater than or equal to 5」。
     ④ 新发现（下一轮处理）：对象形状的 spec 错误只翻译顶层 code，嵌套 pydantic 消息仍为英文，
     与数组形状（R46 已翻译）形成不对称。
+
+65. **R54 对象形状 422 的嵌套消息翻译（与数组形状统一）**。
+    ① 缺陷：R46 只覆盖数组形状；对象形状（spec 校验）只译顶层 code，嵌套 pydantic 消息仍英文，
+    同一越界在两种入口下语言不同。
+    ② 修：`humanizeSpecError()` 处理 `errors[]`：`params.` 前缀去掉、复用同一张消息表，
+    规则同样为「全部可识别才译，否则整条回退」。
+    ③ 单测：`params.width` + 英文消息 → 「width 不能小于 5」；不可识别的 `params.gamma ≥0`
+    整条回退（前端 **69/69**）。
+    ④ 浏览器实测：CA 宽度 3 → `错误：参数校验失败：width 不能小于 5`。
