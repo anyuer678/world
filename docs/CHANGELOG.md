@@ -174,3 +174,26 @@ JSX 不解析 markdown → 页面原样显示星号，改为 `<strong>` 后复�
 ⑤ 新增测试 4 项：后端（嵌套/空列表 422 的 code 与文案、`items` 按 offset 续读不重不漏且 total 稳定）、
 前端（`itemsHeading` 满页/截断两分支）。API_CONTRACT 的 `POST /api/batches` 与 `items` 两处按实补写。
 后端 **281/281**、前端 **62/62**、tsc -b/vite build 干净。
+
+
+**R35（2026-11-05）「只在新实例/单例/正路径验过」审计线：孤儿模型实验的两处真缺陷**
+
+① 会话并发与状态机（探针）：同一会话 6 个并发 `/step` 精确推进 1..6、无重复无异常；
+`run → pause → step` 后停在 257 步且 1.2 秒后仍不动；`reset` 回 `idle`/step 0；
+**运行中** `DELETE /api/sessions/{id}` → 204、列表移除、再 GET 404。状态机竞态是干净的，本轮不改。
+② 实验列表过滤 × 分页（探针）：`total` 确实是被过滤后的条数、`model_id`+`tag` 是 AND、
+未知 tag/模型返回空、`offset` 续读不重叠——行为全对，但**没有一条测试断言这些语义**，补 1 项。
+③ 真缺陷一（提交时校验不一致）：库里存在「注册表已无此模型」的实验时（插件模块没配好、
+版本被撤下——D21 的常态后果），`run`/`rerun` 原本先答 200 `queued`，再由工作线程把 run 标成
+`failed`；而 `create`/`clone`/建批同样是这个 spec 却当场 422。改为**提交时校验**（且发生在状态改写
+之前，实验不会被留在 `running`）。线上复验（真起 uvicorn、载入插件建实验、重启不载插件）：
+详情/结果/报告 200，`run`/`rerun`/`clone` 422 `unknown_model`，实验状态仍是 `created`。
+④ 真缺陷二（诊断即泄漏又噪声）：`run.error` 存的是 `类型: 消息\nTraceback …`，
+**带本机绝对路径**，而它会进导出报告；批量单项与交互会话的错误本来就只存一行。
+抽出 `describe_run_failure()`：预期内失败族（`SpecValidationError`/`RegistryError`/`SimulationError`）
+只留一行原因，其它意外仍保留 3 层栈便于定位。
+⑤ 契约纠偏：`POST /api/experiments/{id}/run` 实测是 **200 `{experiment_id, run_id, status}`**，
+契约此前写成 202 + `{runs:[run_id]}`（`rerun` 同）；补 `error` 字段口径与「提交时校验」两条；
+README 关键语义加「插件卸载不吞历史」。
+⑥ 卫生：R33 探针在本地 dev 库留下 18 条孤儿实验，已删除（探针产物自己收口）。
+后端 **285/285**、前端 **62/62**（本轮未改前端）、tsc -b/vite build 干净。

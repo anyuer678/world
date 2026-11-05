@@ -574,3 +574,22 @@
     **守则：文案是否成立只能以浏览器 DOM 为准，不能以源码为准。**
     ⑤ 新增 `items` offset 分页稳定性测试（同序、total 不变、不重不漏）。
     回归：后端 **281/281**、前端 **62/62**、tsc -b/vite build 干净。
+
+47. **R35 巡检轮：孤儿模型实验的校验一致性与诊断口径**（决策见 DECISIONS D59）。
+    ① 会话竞态探针：并发 6 路 `/step` 得到步数 1..6 各一次（无重复无 500）；
+    `run→pause→step` 停在 257 步、1.2s 后不自走；`reset` → `idle`/step 0；
+    运行中 `DELETE` 会话 → 204 → 列表无 → GET 404。状态机无需改动（阴性结论也记录）。
+    ② 实验列表 `model_id`+`tag` AND、`total` 随过滤、未知 tag 空集、`offset` 不重叠——
+    行为正确但无测试 → `test_experiment_list_filters_combine_and_total_follows_filter`。
+    ③ **缺陷一**：孤儿实验（模型注册表里已无，如插件模块未载入）`run`/`rerun` 先 200 queued、
+    再由 worker 把 run 标 failed；`create`/`clone`/建批同 spec 却 422。修复为提交时
+    `validate_spec`（位于状态改写之前）。线上复验：读路径 200、`run`/`rerun`/`clone` 422
+    `unknown_model`、实验仍 `created`；新增 `test_run_rejects_unregistered_model_at_submit_time`。
+    ④ **缺陷二**：`run.error` 含 `Traceback` 与本机绝对路径并会进导出报告；抽
+    `describe_run_failure()`——`SpecValidationError`/`RegistryError`/`SimulationError` 只留一行
+    `类型: 原因`，其它保留 3 层栈；测试断言前者无换行无路径、后者仍含定位信息。
+    ⑤ 契约纠偏：`POST /experiments/{id}/run` 是 **200 `{experiment_id, run_id, status}`**
+    （原文写 202 + `runs:[…]`）；补 error 口径与提交时校验；README 加「插件卸载不吞历史」。
+    ⑥ 孤儿实验读/报告能力另绑测试（`test_orphan_experiment_is_still_readable`）。
+    ⑦ 卫生：删除 R33 探针遗留在 dev 库的 18 条孤儿实验。
+    回归：后端 **285/285**、前端 **62/62**、tsc -b/vite build 干净。

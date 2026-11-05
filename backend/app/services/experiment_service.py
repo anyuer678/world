@@ -20,13 +20,29 @@ from typing import Any
 from .. import APP_VERSION
 from ..config import Settings
 from ..core.engine.engines import Limits, SimulationEngine
-from ..core.engine.base import ENGINE_VERSION
-from ..core.registry import ModelRegistry
+from ..core.engine.base import ENGINE_VERSION, SimulationError
+from ..core.registry import ModelRegistry, RegistryError
 from ..core.schema.spec import SpecValidationError, validate_spec
 from ..db.connection import connect
 from ..db.migrations import apply_migrations
 
 _TERMINAL = {"completed", "failed", "cancelled", "step_limit", "wall_timeout"}
+
+# 预期内的失败族：spec 校验、注册表（模型/版本查无）、引擎主动抛出的模拟错误。
+_EXPECTED_RUN_FAILURES = (SpecValidationError, RegistryError, SimulationError)
+
+
+def describe_run_failure(exc: BaseException) -> str:
+    """写进 run.error 的一句话诊断。
+
+    预期内的失败只保留 `类型: 原因`——栈里全是本机绝对路径，会跟着报告/CSV 外流，
+    对读者也只是噪声（批量单项与交互会话本来就走同样的紧凑口径）。
+    真正的意外才保留 3 层栈用于定位。"""
+    err = f"{type(exc).__name__}: {exc}"
+    if isinstance(exc, _EXPECTED_RUN_FAILURES):
+        return err[:2000]
+    tail = traceback.format_exc(limit=3)[-800:]
+    return (err[:2000] + "\n..." + tail) if len(err) > 2000 else (err + "\n" + tail)
 
 
 class NotFoundError(Exception):
@@ -279,6 +295,10 @@ class ExperimentService:
             if exp["status"] == "running":
                 raise ConflictError(f"experiment {exp_id} is already running")
             spec = json.loads(exp["spec_json"])
+            # 提交时就校验，与 create/clone/建批同口径：模型被卸载（插件模块没配好）或
+            # 版本撤下时立刻 422 unknown_model，而不是先答 202 queued 再在工作线程里
+            # 把 run 静默标成 failed（R35 实测的不对称）。
+            validate_spec(spec, self.registry)
             with conn:
                 conn.execute(
                     "UPDATE experiments SET status='running', started_at=datetime('now'), finished_at=NULL, error=NULL WHERE id=?",
@@ -388,13 +408,10 @@ class ExperimentService:
                 conn.commit()
             except Exception as exc:  # noqa: BLE001 - worker boundary
                 conn.rollback()
-                err = f"{type(exc).__name__}: {exc}"
-                tb = traceback.format_exc(limit=3)
+                detail = describe_run_failure(exc)
                 conn.execute(
                     """UPDATE experiment_runs SET status='failed', error=?, finished_at=datetime('now'), duration_ms=? WHERE id=?""",
-                    (err[:2000] + "\n..." + tb[-800:] if len(err) > 2000 else err + "\n" + tb[-800:],
-                     int((time.monotonic() - t0) * 1000),
-                     run_id),
+                    (detail, int((time.monotonic() - t0) * 1000), run_id),
                 )
                 conn.commit()
             with conn:

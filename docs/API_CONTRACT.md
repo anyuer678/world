@@ -56,14 +56,17 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 - `DELETE /api/experiments/{id}` → 204
 - `POST /api/experiments/{id}/clone` body=`{name?, spec_overrides?}` → 新 Experiment
 - `PUT /api/experiments/{id}/tags` body=`{tags:[string]}` → Experiment
-- `POST /api/experiments/{id}/run` body=`{wait?:bool}` → 202 `{experiment_id, runs:[run_id]}`
-  或 wait=true 时同步返回终态（阶段 1 前端先用 wait）
+- `POST /api/experiments/{id}/run` body=`{wait?:bool}` → **200** `{experiment_id, run_id, status:"queued"}`
+  （R35 实测纠正：既不是 202，也不返回 `runs:[…]` 数组）；`wait=true` 时阻塞到跑完再返回同一形态
+  - **提交时即校验库中 spec**：模型或版本不在注册表（插件模块没配好、版本被撤下）→ 422
+    `spec_invalid` + `errors[].code="unknown_model"`，与 create/clone/建批同口径；
+    校验发生在状态改写**之前**，失败不会把实验留在 `running`
 - `GET /api/experiments/{id}/result` → `{experiment, runs:[RunDetail], aggregate?}`；
-  run 条目键为 **`id`**（不是 `run_id`——`run_id` 只出现在 POST run 的 202 响应里），
+  run 条目键为 **`id`**（不是 `run_id`——`run_id` 只出现在 POST run/rerun 的响应里），
   完整形态 `{id, experiment_id, repeat_index, seed, status, steps, sim_time, metrics,
   summary, result_sha256, duration_ms, started_at, finished_at, error}`
 - `POST /api/experiments/{id}/cancel` → Experiment
-- `POST /api/experiments/{id}/rerun` → 202（重置为 pending 并重新排队）
+- `POST /api/experiments/{id}/rerun` → 200 `{experiment_id, run_id, status}`（重新排队；同样在提交时校验）
 - `GET /api/experiments/{id}/report?format=markdown|json`（阶段 5）→
   markdown 时 `text/markdown` 附件下载（含 spec JSON 块、逐运行指标、聚合均值、
   result_sha256 说明）；json 时返回报告结构，键为
@@ -74,6 +77,11 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 
 ## 运行
 - `GET /api/runs/{run_id}` → RunDetail（status、steps、sim_time、metrics、summary、events 最近 N 条、error、result_sha256）
+  - **`error` 字段口径（R35）**：预期内的失败——spec 校验、注册表查无（`SpecValidationError`/
+    `RegistryError`）、引擎主动抛出的 `SimulationError`——只写一行 `类型: 原因`，**不带栈、
+    不含本机绝对路径**（它会随报告 markdown/JSON 外流，栈对读者只是噪声；批量单项与交互会话
+    本来就是同样的紧凑口径）。其它意外异常仍保留 3 层栈用于定位。绑定测试：
+    `test_run_failure_reporting.py::test_describe_run_failure_keeps_expected_errors_one_line`
 - `GET /api/runs/{run_id}/events?limit=100&offset=0` → `{run_id, total, limit, offset, events}`
   （R25 实现契约承诺的分页端点；limit 钳到 1..1000，越界 offset 返回空数组，
   未知 run 404。事件来自落库快照 `events_json`——每个 run 只持久化**最近 100 条**
