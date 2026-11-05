@@ -7,7 +7,29 @@ import { drawLineChart } from './chartRender'
 import { useCanvas } from './SimView'
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled'])
-const BATCH_ITEM_CAP = 2000
+
+export interface BatchLimits {
+  maxItems: number
+  nameMaxLength: number
+  repeatsMin: number
+  repeatsMax: number
+}
+
+/** Used until /api/limits answers; the server stays the source of truth. */
+export const FALLBACK_LIMITS: BatchLimits = { maxItems: 2000, nameMaxLength: 200, repeatsMin: 1, repeatsMax: 100 }
+
+export function batchSubmitProblem(
+  limits: BatchLimits,
+  opts: { name: string; totalItems: number; repeats: number },
+): string | null {
+  if (!opts.name.trim()) return '批量名称不能为空'
+  if (opts.name.length > limits.nameMaxLength) return `批量名称最长 ${limits.nameMaxLength} 字符（当前 ${opts.name.length}）`
+  if (opts.repeats < limits.repeatsMin || opts.repeats > limits.repeatsMax)
+    return `每组重复需在 ${limits.repeatsMin}–${limits.repeatsMax} 之间（当前 ${opts.repeats}）`
+  if (opts.totalItems > limits.maxItems)
+    return `总项数 ${opts.totalItems} 超过上限 ${limits.maxItems}：请缩小网格或减少重复`
+  return null
+}
 
 export function parseValues(raw: string): unknown[] {
   return raw
@@ -33,6 +55,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const [items, setItems] = useState<BatchItem[]>([])
   const [findings, setFindings] = useState<FindingsResponse | null>(null)
   const [sweepSel, setSweepSel] = useState<{ param: string; metric: string } | null>(null)
+  const [limits, setLimits] = useState<BatchLimits>(FALLBACK_LIMITS)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
@@ -44,6 +67,21 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   useEffect(() => {
     refreshBatches()
   }, [refreshBatches])
+
+  // 提交上限取自服务端 /api/limits（R29）：取不到时用 FALLBACK_LIMITS，不阻塞表单
+  useEffect(() => {
+    api
+      .getLimits()
+      .then((r) =>
+        setLimits({
+          maxItems: r.batch.max_items,
+          nameMaxLength: r.batch.name_max_length,
+          repeatsMin: r.batch.repeats_min,
+          repeatsMax: r.batch.repeats_max,
+        }),
+      )
+      .catch(() => {})
+  }, [])
 
   // 选中的批量未到终态时轮询；结束后拉取 items 与自动发现（summary 随详情返回）
   useEffect(() => {
@@ -88,7 +126,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const comboCount = Object.values(grid).reduce((a, v) => a * v.length, 1) || 1
   const repeatN = Math.max(1, Number(repeats) || 1)
   const totalItems = comboCount * repeatN
-  const overCap = totalItems > BATCH_ITEM_CAP
+  const problem = batchSubmitProblem(limits, { name, totalItems, repeats: repeatN })
 
   async function submit() {
     setBusy(true)
@@ -200,7 +238,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
           </button>
           <p style={{ fontSize: 13, color: '#374151' }}>
             组合数 {comboCount} × 每组重复 {repeatN} = {totalItems} 项
-            {overCap && <strong style={{ color: '#dc2626' }}>（超过上限 {BATCH_ITEM_CAP}，无法提交）</strong>}
+            {problem && <strong style={{ color: '#dc2626' }}>（{problem}）</strong>}
           </p>
         </div>
         <div style={{ flex: 1, minWidth: 220 }}>
@@ -210,7 +248,14 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
           </label>
           <label style={rowFlex}>
             每组重复：
-            <input value={repeats} onChange={(e) => setRepeats(e.target.value)} style={control} />
+            <input
+              type="number"
+              min={limits.repeatsMin}
+              max={limits.repeatsMax}
+              value={repeats}
+              onChange={(e) => setRepeats(e.target.value)}
+              style={control}
+            />
           </label>
           <label style={rowFlex}>
             种子策略：
@@ -228,7 +273,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
             单项墙钟（秒）：
             <input value={wallSec} onChange={(e) => setWallSec(e.target.value)} style={control} />
           </label>
-          <button onClick={submit} disabled={busy || overCap || !name.trim()} style={primaryBtn}>
+          <button onClick={submit} disabled={busy || !!problem} style={primaryBtn}>
             启动批量实验
           </button>
           <p style={{ fontSize: 12, color: '#6b7280' }}>

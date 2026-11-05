@@ -10,6 +10,7 @@ from ..core.engine.base import ENGINE_VERSION
 from ..core.schema.spec import SpecValidationError
 from ..services import reporting
 from ..services.analysis_service import analyze_summary
+from ..services.batch_service import MAX_BATCH_ITEMS
 from ..services.experiment_service import ConflictError, NotFoundError
 
 
@@ -238,6 +239,38 @@ class CreateBatchBody(BaseModel):
     max_retries: int = Field(default=0, ge=0, le=10)
     concurrency: int = Field(default=2, ge=1, le=64)
     per_run_wall_seconds: float = Field(default=60.0, gt=0)
+
+
+def _field_bound(model_field: str, kind: str, fallback: int) -> int:
+    """Read a pydantic constraint (ge/le/max_length…) off CreateBatchBody so the
+    frontend consumes the server's own rules instead of a second hardcoded copy."""
+    for meta in CreateBatchBody.model_fields[model_field].metadata:
+        value = getattr(meta, kind, None)
+        if value is not None:
+            return int(value)
+    return fallback
+
+
+@router.get("/limits")
+def get_limits(request: Request) -> dict[str, Any]:
+    settings = _service(request).settings
+    return {
+        "batch": {
+            "max_items": MAX_BATCH_ITEMS,
+            "name_max_length": _field_bound("name", "max_length", 200),
+            "repeats_min": _field_bound("repeats", "ge", 1),
+            "repeats_max": _field_bound("repeats", "le", 100),
+            "max_retries_min": _field_bound("max_retries", "ge", 0),
+            "max_retries_max": _field_bound("max_retries", "le", 10),
+            "concurrency_min": _field_bound("concurrency", "ge", 1),
+            "concurrency_max": _field_bound("concurrency", "le", 64),
+        },
+        "engine": {
+            "max_wall_seconds": settings.max_wall_seconds,
+            "max_workers": settings.max_workers,
+            "default_max_steps": settings.default_max_steps,
+        },
+    }
 
 
 def _batches(request: Request):

@@ -147,6 +147,20 @@ export interface BatchListItem {
   created_at: string
 }
 
+export interface LimitsResponse {
+  batch: {
+    max_items: number
+    name_max_length: number
+    repeats_min: number
+    repeats_max: number
+    max_retries_min: number
+    max_retries_max: number
+    concurrency_min: number
+    concurrency_max: number
+  }
+  engine: { max_wall_seconds: number; max_workers: number; default_max_steps: number }
+}
+
 export interface BatchItem {
   id: number
   item_index: number

@@ -5,6 +5,29 @@ import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
+import { FALLBACK_LIMITS, batchSubmitProblem } from './BatchPanel'
+
+describe('batchSubmitProblem (server-provided limits, R29)', () => {
+  it('rejects repeats above the server max that the old frontend ignored', () => {
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 150, repeats: 150 })).toContain(
+      '每组重复需在 1–100 之间',
+    )
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 0, repeats: 0 })).toContain(
+      '每组重复需在 1–100 之间',
+    )
+  })
+
+  it('rejects over-cap grids, blank and overlong names; accepts a sane batch', () => {
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 2001, repeats: 3 })).toContain(
+      '总项数 2001 超过上限 2000',
+    )
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: '   ', totalItems: 3, repeats: 3 })).toBe('批量名称不能为空')
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'x'.repeat(201), totalItems: 3, repeats: 3 })).toContain(
+      '批量名称最长 200 字符',
+    )
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'ok', totalItems: 60, repeats: 3 })).toBeNull()
+  })
+})
 import { buildSweep, defaultSweepSelection, sweepParamOptions } from './sweepChart'
 import { computeBounds, edgeCells, parseNetwork } from './trafficRender'
 import { fmtTick, ganttExtent, ganttRows, niceMax, runsFromBits, seriesBounds } from './chartRender'

@@ -144,6 +144,30 @@ def test_run_events_pagination(client):
     assert client.get("/api/runs/987654/events").status_code == 404
 
 
+def test_limits_endpoint_tracks_validation_rules(client):
+    """R29：/api/limits 暴露的必须是服务端自己的校验规则，不能是第二套硬编码。"""
+    from app.services.batch_service import MAX_BATCH_ITEMS
+
+    body = client.get("/api/limits").json()
+    b = body["batch"]
+    assert b["max_items"] == MAX_BATCH_ITEMS
+    assert (b["repeats_min"], b["repeats_max"]) == (1, 100)
+    assert (b["max_retries_min"], b["max_retries_max"]) == (0, 10)
+    assert (b["concurrency_min"], b["concurrency_max"]) == (1, 64)
+    assert b["name_max_length"] == 200
+    assert body["engine"]["max_workers"] >= 1
+
+    spec = {**QUEUE_SPEC}
+    over = {"name": "limits-probe", "spec": spec, "grid": {}, "repeats": b["repeats_max"] + 1}
+    assert client.post("/api/batches", json=over).status_code == 422
+
+    ok = {"name": "limits-probe", "spec": spec, "grid": {}, "repeats": b["repeats_max"]}
+    r = client.post("/api/batches", json=ok)
+    assert r.status_code in (201, 400), r.text  # 400 only via item cap, never a repeats rejection
+    if r.status_code == 201:
+        client.post(f"/api/batches/{r.json()['id']}/cancel")
+
+
 def test_cancel_non_running_is_safe(client):
     exp = client.post("/api/experiments", json={"name": "c", "spec": QUEUE_SPEC}).json()
     r = client.post(f"/api/experiments/{exp['id']}/cancel")

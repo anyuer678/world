@@ -7,6 +7,10 @@ pydantic 原文，前端横幅逐条显示；实测 `spec_invalid` 即此形状�
 
 ## 系统
 - `GET /api/health` → `{status:"ok", app_version, engine_version}`
+- `GET /api/limits`（R29）→ `{batch:{max_items, name_max_length, repeats_min/max,
+  max_retries_min/max, concurrency_min/max}, engine:{max_wall_seconds, max_workers,
+  default_max_steps}}`——值由服务端 pydantic 校验规则与模块常量**现场导出**，
+  前端批量面板据此校验，不再各存一份硬编码上限（有测试绑定两端）。
 
 ## 模型
 - `GET /api/models` → `{models: [ModelInfo]}`，ModelInfo：

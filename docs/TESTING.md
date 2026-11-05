@@ -438,3 +438,16 @@
    且 metrics 与运行一致），步数按成本分档（schelling 20、queueing 500）整套
    秒级；`BUILTIN_MODELS` 扩到 8。回归：后端 **258/258**（+8 参数化）、
    前端 54/54（无前端改动）。
+39. **R29 巡检轮：上限单一事实源 + 文档数量级纠正**（决策见 DECISIONS D53）。
+   ① 新增 `GET /api/limits`（值取自 `CreateBatchBody` 的 pydantic 约束元数据 +
+   `MAX_BATCH_ITEMS` + Settings，无第二份常量），BatchPanel 消费：重复数输入框
+   min/max、提交禁用、红字具体原因（纯函数 `batchSubmitProblem`，拉取失败回落
+   FALLBACK）。修掉此前漂移：前端只知 2000 上限、完全不知 repeats≤100 与
+   name≤200 → 填 150 会放行到后端 422。② 测试绑定两端：后端断言
+   `max_items==MAX_BATCH_ITEMS`、`repeats_max+1` 被 422 拒而 `repeats_max` 不被
+   重复数规则拒；前端 +2 用例（重复数越界/超容量/空名/超长名/合法通过）。③
+   BENCHMARKS 已知限制中「`Limits.max_steps` 默认 100,000 步」为失真数字，实际
+   `Settings.default_max_steps` 默认 **1,000,000**（批量/会话/实验同取），已改。
+   ④ 浏览器实测：repeats=150 → 提示「每组重复需在 1–100 之间（当前 150）」且
+   按钮 disabled；改回 3 → 提示消失、按钮可用；控制台零错误。回归：后端
+   **259/259**、前端 **56/56**、tsc -b/vite build 干净。

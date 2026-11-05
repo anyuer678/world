@@ -110,7 +110,8 @@
 ### 运行时资源上限语义（重要）
 
 4. **批量条目受 `default_max_steps` 硬上限约束**：批量执行的每个条目
-   `max_steps=None`，引擎按 `Limits.max_steps`（默认 100,000 步）硬截断，
+   `max_steps=None`，引擎按 `Limits.max_steps`（取 `Settings.default_max_steps`，
+   默认 **1,000,000** 步；R29 核对：旧文档误写 100,000）硬截断，
    条目以 `step_limit` 终态结束——这是资源有界的**设计语义**，不是缺陷。
    需要更长运行的模型应调大 `Settings.default_max_steps` 或使用
    `stop_condition` 显式限步。交互式会话不受此默认值约束（分片推进时
