@@ -24,7 +24,7 @@ WorldLab 的模型库是插件式的：核心引擎、实验管理、API 与前�
 | `description` | `str` | 非空说明（前端模型选择器展示） |
 | `model_type` | `str` | `"time_stepped"` 或 `"discrete_event"`，**必须与基类一致**（注册时校验） |
 | `version` | `str` | 语义化版本；同 ID 不同版本可共存，跨版本结果默认不可直接比较 |
-| `visualizer` | `dict` | 可视化适配器声明，必须含字符串 `kind`（前端 `SimView` 按 kind 分发；如 `{"kind": "series", "series": [...]}`、`{"kind": "grid"}`、`{"kind": "gantt"}`、`{"kind": "none"}`） |
+| `visualizer` | `dict` | 可视化适配器声明，必须含字符串 `kind`。前端 `SimView` 对以下 kind 有专用视图：`queue`、`cpu_schedule`、`cache`、`ca`、`schelling`、`traffic`、`sir`、`predator_prey`；**其余任意 kind 自动落到通用状态表 `StateTable`**（数据照样能看，只是没有定制图形），所以插件可以先声明新 kind 再接视图。`series` 键只是元数据（内置模型附带曲线名列表），**前端当前不读取它**，不要依赖它自动出图 |
 | `param_model` | `type[WorldLabParams]` | Pydantic 参数 Schema（`extra="forbid"`），`model_json_schema()` 驱动前端结构化编辑器 |
 | `dt` | `float` | 仅 time-stepped：每步推进的固定 Δt |
 | `scenarios` | `list[dict]`（**可选**，缺省 `[]`） | 一键场景库；注册时校验形状（见下） |
@@ -103,8 +103,12 @@ WORLDLAB_PLUGIN_MODULES=my_plugins.lottery,other_pkg.models uvicorn app.main:app
 ## 注册表 API（`app/core/registry.py`）
 
 - `registry.register(cls)` — 校验并登记；同 ID+同版本重复注册报错。
-- `registry.get(model_id, version=None)` — 取类；缺省返回最新版本。
-- `registry.versions_of(model_id)` / `registry.list()` — 元数据清单（`/api/models`）。
+- `registry.get(model_id, version=None)` — 取类；缺省返回**数值上最新**的版本
+  （版本号按点/横线/加号分割的数字组分比较，`10.0.0 > 2.0.0`；非数字段视作 0，R32）。
+- `registry.versions_of(model_id)` / `registry.list()` — 元数据清单（同 ID 内版本升序；
+  `GET /api/models` 在此基础上**每个 model_id 只出一条**并附 `versions` 列表）。
+- `registry.builtin_ids()` — 内置模型 id（注册类来自 `app.models.*`）；插件模型不在列。
+  **这是内置清单的唯一事实源**，基准脚本、端到端测试与文档一致性测试都由它派生。
 
 ## 插件质量要求（与内置模型同标准）
 

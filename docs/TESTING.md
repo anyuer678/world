@@ -593,3 +593,22 @@
     ⑥ 孤儿实验读/报告能力另绑测试（`test_orphan_experiment_is_still_readable`）。
     ⑦ 卫生：删除 R33 探针遗留在 dev 库的 18 条孤儿实验。
     回归：后端 **285/285**、前端 **62/62**、tsc -b/vite build 干净。
+
+48. **R36 巡检轮：ARCHITECTURE/PLUGINS 深审 + 文档锁扩展七项**（决策见 DECISIONS D60）。
+    ① 逐句核账抓到 9 处失真：`core/schema/migrations.py`、`services/run_worker.py` 两个幻影文件；
+    `Limits.max_events` 幻影字段；ModelSpec 的 `model_type` 字段不存在；「pydantic v1」应为 v2、
+    `MIGRATIONS`/`load_spec` 应为 `register_migration`/`upgrade_spec`；「取消标志=DB 状态」
+    实为进程内 `threading.Event`（每 `cancel_poll_interval` 步检查）；`/api/.../steps` 实为 `/step`；
+    「比较 API 返回 cross_version 警告」全仓无此名（实际由 `ComparePanel.tsx` 提示 + 报告
+    `comparability_note` 声明）；`result_artifacts` 建表但无写入方，旧文当能力写。
+    ② ARCHITECTURE 重写：文件清单改为**从磁盘生成**的逐路径块（含关键文件一句话说明），
+    Limits/停止条件/RunResult 状态、ModelSpec 真实字段、表与写入方、执行模型（三服务各持
+    ThreadPoolExecutor、批量在途 `min(concurrency, max_workers)`）、可视化 kind 与
+    `StateTable` 兜底、registry 唯一事实源口径全部按实写明。
+    ③ 锁扩展 7 项：清单↔磁盘双向、`Limits` 字段名、表集合↔迁移 + 死表必须标注、
+    PLUGINS kind 清单↔`SimView` 分发、架构文档 `/api/` 字面量↔OpenAPI（含裸写法与
+    「匹配数过少即失败」的防空锁 guard）、`cross_version` 不得再被宣称。
+    ④ 有效性验证：八路注入全部变红（幻影文件、漏写文件、max_events 回归、表名改错、
+    死表谎报、kind 漏写、kind 虚构、端点写成复数 / 裸路径改名）。
+    ⑤ PLUGINS.md：`visualizer.series` 改口径为「只是元数据，前端不读取」。
+    回归：后端 **292/292**、前端 **62/62**、tsc -b/vite build 干净。

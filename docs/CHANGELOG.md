@@ -197,3 +197,31 @@ JSX 不解析 markdown → 页面原样显示星号，改为 `<strong>` 后复�
 README 关键语义加「插件卸载不吞历史」。
 ⑥ 卫生：R33 探针在本地 dev 库留下 18 条孤儿实验，已删除（探针产物自己收口）。
 后端 **285/285**、前端 **62/62**（本轮未改前端）、tsc -b/vite build 干净。
+
+
+**R36（2026-11-05）ARCHITECTURE/PLUGINS 深审：把「设计意图」与「已实现」分开**
+
+R25 对 API_CONTRACT 做过逐条实测，但 ARCHITECTURE.md 自 R27 局部修补后再没整体审过。
+本轮逐句对磁盘、代码与前端分发器核账，抓到 **9 处** 失真（多数是阶段 0/4 的设计意图被
+当成现状留在文档里）：幻影文件 `core/schema/migrations.py`（迁移实际在 `db/migrations.py`，
+schema 侧是 `evolution.py`/`errors.py`）与 `services/run_worker.py`（根本没有该模块，
+三个服务各持自己的 `ThreadPoolExecutor`）；幻影字段 `Limits.max_events`（真实只有
+`max_steps`/`max_wall_seconds`/`zero_delay_chain_limit`/`cancel_poll_interval`，模拟时间上限
+属于 `stop_condition`）；ModelSpec 谎称含 `model_type` 字段（引擎类型由注册表决定）；
+「pydantic v1 校验」（实际 v2）与不存在的 `MIGRATIONS`/`load_spec` 名称（实际
+`register_migration`/`upgrade_spec`，v0→v1 还把 `horizon` 迁成 `stop_condition`）；
+「取消标志（DB 状态）」（实际是进程内 `threading.Event`，每 `cancel_poll_interval` 步协作检查）；
+`/api/.../steps`（实际 `/step`）；**「比较 API 返回 `cross_version=true` 警告字段」——代码里
+全仓无此名**，不可比提示实际由前端 `ComparePanel` 判定显示、报告用 `comparability_note` 声明；
+以及 `result_artifacts` 表**建了但没有任何写入方**，旧文档把它写成可用能力。
+
+重写后的文档不再靠人记得去对账：`test_docs_consistency.py` 新增 7 项锁——文件清单与磁盘
+**双向**比对（幻影路径与漏写文件都会红，`__init__.py` 除外）、`Limits` 字段名与 dataclass 一致、
+文档表集合 = 迁移声明集合且**死表必须标注「没有写入方」**、PLUGINS.md 的 kind 清单 =
+`SimView` 实际分发集合（并须写明未知 kind 落到 `StateTable`、`series` 前端不消费）、
+架构文档出现的 `/api/...` 字面量必须存在于 OpenAPI（带方法名与裸写法都查，且带
+「匹配数过少即失败」防空锁）、`cross_version` 不得再被当作已有能力宣称。
+**八路注入验证**这些锁真的会红（改一个 kind、删一行清单、加一个幻影文件、把死表说成可用、
+把端点写成复数、裸路径改名等）。另修 `visualizer.series` 的口径：内置模型带着它，但前端从不读，
+文档改为明示「只是元数据」而不是暗示能自动出图。
+后端 **292/292**、前端 **62/62**、tsc -b/vite build 干净。

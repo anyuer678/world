@@ -2,10 +2,11 @@
 
 R24–R30 每轮都在手工修同一类问题：README/BENCHMARKS 里的模型数、测试文件数、
 端点清单与代码漂移（「四模型」错了二十几轮才被读出来）。本文件把这些声称绑到
-注册表与路由表上——再漂移就是红测试，而不是靠人记得去数。
+注册表、路由表、磁盘与前端分发器上——再漂移就是红测试，而不是靠人记得去数。
 """
 from __future__ import annotations
 
+import dataclasses
 import re
 from pathlib import Path
 
@@ -15,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[2]
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 CONTRACT = (ROOT / "docs" / "API_CONTRACT.md").read_text(encoding="utf-8")
 BENCHMARKS = (ROOT / "docs" / "BENCHMARKS.md").read_text(encoding="utf-8")
+ARCH = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+PLUGINS = (ROOT / "docs" / "PLUGINS.md").read_text(encoding="utf-8")
+SIMVIEW = (ROOT / "frontend" / "src" / "SimView.tsx").read_text(encoding="utf-8")
 
 CN_NUMERAL = {1: "一", 2: "两", 3: "三", 4: "四", 5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十"}
 
@@ -88,3 +92,105 @@ def test_contract_promises_no_endpoint_that_does_not_exist():
     claimed = {shape(match) for match in re.findall(r"(?:GET|POST|PUT|DELETE) (/api/[^\s`]+)", CONTRACT)}
     ghost = sorted(claimed - real)
     assert not ghost, f"契约承诺了 OpenAPI 里没有的端点：{ghost}"
+
+
+# --------------------------------------------- R36：ARCHITECTURE / PLUGINS 与代码对账
+
+SCOPE_PREFIXES = ("backend/app/", "backend/scripts/", "backend/migrations/", "frontend/src/")
+
+
+def _shape(path: str) -> str:
+    return re.sub(r"\{[^}]*\}", "*", path.split("?")[0].rstrip("/"))
+
+
+def _architecture_tree_paths() -> set[str]:
+    """「文件清单」代码块里每行以两个空格开头的路径 token。"""
+    block = ARCH.split("## 文件清单", 1)[1].split("```", 2)[1]
+    found = set()
+    for line in block.splitlines():
+        m = re.match(r"\s\s((?:backend|frontend|docs|README\.md|LICENSE|docker-compose\.yml|\.gitignore)\S*)", line)
+        if m:
+            found.add(m.group(1))
+    return found
+
+
+def test_architecture_manifest_has_no_phantom_or_stale_paths():
+    mentioned = _architecture_tree_paths()
+    missing = sorted(p for p in mentioned if not (ROOT / p).exists())
+    assert not missing, f"ARCHITECTURE 列了磁盘上不存在的文件：{missing}"
+
+
+def test_architecture_manifest_covers_every_source_file():
+    mentioned = _architecture_tree_paths()
+    on_disk = set()
+    for prefix in SCOPE_PREFIXES:
+        for p in (ROOT / prefix).rglob("*"):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(ROOT).as_posix()
+            if rel.endswith("__init__.py"):
+                continue
+            if rel.endswith((".py", ".sql", ".ts", ".tsx", ".toml", ".lock")):
+                on_disk.add(rel)
+    unlisted = sorted(on_disk - mentioned)
+    assert not unlisted, f"磁盘上有、ARCHITECTURE 清单里没有的文件：{unlisted}"
+
+
+def test_architecture_limits_claims_are_real_fields():
+    from app.core.engine.engines import Limits
+
+    fields = {f.name for f in dataclasses.fields(Limits)}
+    anchor = ARCH.index("资源上限就是")
+    segment = ARCH[anchor:anchor + 400].split("模拟时间上限")[0]
+    listed = set(re.findall(r"`([a-z_]+)`", segment)) - {"Limits"}
+    assert listed == fields, f"文档列的上限 {sorted(listed)} ≠ Limits 真实字段 {sorted(fields)}"
+    assert "max_events" not in ARCH, "max_events 从来不是 Limits 的字段（旧文档的幻影）"
+
+
+def test_architecture_table_section_matches_migrations_and_writers():
+    sql = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "backend" / "migrations").glob("*.sql"))
+    declared = set(re.findall(r"CREATE TABLE (?:IF NOT EXISTS )?(\w+)", sql))
+    code = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "backend" / "app").rglob("*.py"))
+    written = set(re.findall(r"(?:INSERT INTO|INSERT OR IGNORE INTO|UPDATE|DELETE FROM)\s+(\w+)", code))
+
+    doc_rows = set(re.findall(r"^\| `(\w+)` \|", ARCH, flags=re.M))
+    assert doc_rows >= declared, f"ARCHITECTURE 漏表：{sorted(declared - doc_rows)}"
+    ghost = sorted(t for t in doc_rows if t not in declared and t != "schema_migrations")
+    assert not ghost, f"ARCHITECTURE 写了不存在的表：{ghost}"
+
+    dead = sorted(t for t in declared - written)
+    for t in dead:
+        row = next(line for line in ARCH.splitlines() if line.startswith(f"| `{t}`"))
+        assert "没有写入方" in row, f"死表 {t} 必须在文档里标明「已建表但当前没有写入方」，不得写成可用能力"
+
+
+def test_plugins_documented_kinds_match_frontend_dispatcher():
+    handled = set(re.findall(r"visualizer\.kind === '([a-z_]+)'", SIMVIEW))
+    assert handled, "SimView 里找不到 kind 分发"
+    assert "StateTable" in SIMVIEW, "未知 kind 必须有兜底视图"
+    sentence = PLUGINS.split("对以下 kind 有专用视图：", 1)[1].split("；", 1)[0]
+    documented = set(re.findall(r"`([a-z_]+)`", sentence))
+    assert documented == handled, f"PLUGINS.md 的 kind 清单 {sorted(documented)} ≠ SimView 分发 {sorted(handled)}"
+    assert "StateTable" in PLUGINS and "不读取它" in PLUGINS, "须写明兜底视图与 series 未被前端消费"
+
+
+def test_architecture_endpoint_literals_exist_in_openapi():
+    """架构文档里出现的 /api/ 路径（含不带方法名的裸写法）必须都是真实端点。
+    前置断言排除 `backend/app/api/routes.py` 这类文件系统路径，结尾排除 .py。"""
+    real = {_shape(p) for p in api_paths()}
+    claimed = re.findall(r"(?:GET|POST|PUT|DELETE) (/api/[^\s`（)，。]+)", ARCH)
+    claimed += [m for m in re.findall(r"(?<![\w./])/api/[A-Za-z0-9_/{}.-]*[A-Za-z0-9_/{}]", ARCH)
+                if not m.endswith(".py")]
+    ghost = sorted(c for c in set(claimed) if _shape(c) not in real)
+    assert claimed, "架构文档里一个端点都没提，这条锁变成空锁"
+    assert len(real) > 10 and len(set(claimed)) >= 3, f"匹配数异常少（{len(set(claimed))}），检查正则是否失效"
+    assert not ghost, f"ARCHITECTURE 引用了不存在的端点：{ghost}"
+
+
+def test_comparability_guard_is_described_where_it_actually_lives():
+    """R36：旧架构文档把「比较 API 返回 cross_version 警告字段」写成已完成能力，
+    实际代码里根本没有该字段——不可比提示由前端 ComparePanel 判定、报告用 comparability_note 声明。"""
+    assert "cross_version=true" not in ARCH and "cross_version" not in CONTRACT
+    compare_src = (ROOT / "frontend" / "src" / "ComparePanel.tsx").read_text(encoding="utf-8")
+    assert "不可直接比较" in compare_src, "不可比提示的实现位置变了，文档要跟着改"
+    assert "ComparePanel" in ARCH and "comparability_note" in ARCH
