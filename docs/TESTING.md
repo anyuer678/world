@@ -711,3 +711,15 @@
     `GET /api/sessions` 返回空列表（会话是内存态，文档已声明重启即失）。
     ⑤ 负结果：本轮未发现缺陷，未改动任何产品代码；探针实验已从容器库删除，
     compose 栈已 `down`（保留数据卷）。
+
+54. **R43 批量并发取消的聚合口径（8 并发 / 16 项 / 真实中途取消）**。
+    ① 探针：toy_slow_step 每项 20 万步，`concurrency=8`（服务端 max_workers=2 → 生效 2），
+    0.45 s 后取消；终态 `cancelled`、`counts={cancelled:16}`、无 pending/running、
+    `items.total=16`、`export.csv` 数据行 16（前 3 行是导出头注释，`rows==total+1` 的
+    朴素断言是错的）、`findings` 200——**聚合无缺陷**。
+    ② 同轮暴露的透明度缺口：建批时 `concurrency` 与 `per_run_wall_seconds` 会被
+    服务端上限钳制后落库（响应回显的是生效值），但契约只在取消端点旁提过并发上限，
+    创建条目没有说明。补契约两行公式，新增 `test_batch_records_effective_limits_not_requested`
+    （请求 64/3600 → 记录 2/60，服务层与详情两头断言）。
+    ③ 本轮无产品代码改动；探针文件已删。
+    回归：后端 **303/303**、前端 **62/62**（无前端改动）。

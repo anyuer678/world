@@ -321,3 +321,15 @@ R30 做过 Docker 复验，但那时还没有 R39（暂停≠取消）与 R40（
 另验两条**重启语义**：运行中的实验在 `docker compose restart api` 后变
 `failed | interrupted: service restarted while run was in progress`，
 会话列表如约清空（内存态）。本轮未发现缺陷，未改代码；证据记入 `TESTING §53`。
+
+**R43（2026-11-05）批量并发取消的聚合口径核验 + 钳制值的透明度成文**
+
+用 8 并发、16 项（toy_slow_step，每项 20 万步）在运行中途取消：终态 `cancelled`、
+`counts={cancelled:16}` 与 `total_items` 自洽、无 pending/running 残留、`items.total=16`、
+`export.csv` 数据行 16（前三行是导出头注释）、`findings` 200——**聚合口径没有缺陷**。
+但同一探针暴露一处透明度缺口：请求 `concurrency=8` 时服务端 `max_workers=2`，批量
+记录的是**生效值 2**；`per_run_wall_seconds` 同样被 `min(值, max_wall_seconds)` 钳制。
+行为是对的（报告值与实际在途一致），但契约只在取消端点旁提过一句，创建端点没有说明。
+补：`API_CONTRACT` 的建批条目写明两个钳制公式与「回显生效值」，并新增
+`test_batch_records_effective_limits_not_requested` 绑定该语义（请求 64/3600 →
+记录 2/60）。本轮无产品代码改动。

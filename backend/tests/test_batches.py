@@ -382,3 +382,19 @@ def test_batch_items_offset_pages_are_stable_and_ordered(client):
     assert first["total"] == second["total"] == 4
     assert [it["item_index"] for it in first["items"]] == [0, 1, 2]
     assert [it["item_index"] for it in second["items"]] == [3]
+
+
+def test_batch_records_effective_limits_not_requested(batches, settings):
+    """R43：concurrency / per_run_wall_seconds 被服务端上限钳制后再落库。
+
+    契约已按此写明；这条测试绑定「报告的是生效值」，避免以后改成存请求值却没人
+    发现——那会让响应里的并发与实际在途上限脱钩，正是 R34 记录过的那类透明度病。"""
+    b = batches.create("clamp", _spec(), {}, repeats=1, concurrency=64,
+                       per_run_wall_seconds=3600.0)
+    assert settings.max_workers == 2 and settings.max_wall_seconds == 60.0
+    assert b["concurrency"] == 2, b["concurrency"]
+    assert b["per_run_wall_seconds"] == 60.0, b["per_run_wall_seconds"]
+    got = batches.get_batch(b["id"], include_summary=False)
+    assert (got["concurrency"], got["per_run_wall_seconds"]) == (2, 60.0)
+    _wait_terminal(batches, b["id"])
+

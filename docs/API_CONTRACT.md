@@ -94,6 +94,11 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   也不接受空列表——两者都在建批时 422 `spec_invalid` 并指明 `code:"grid"` 与具体键名
   （静默接受会让「所有组合结果相同」被误读成真的无敏感性，R34 有测试绑定）。
   与 repeats 相乘后超 `MAX_BATCH_ITEMS` 直接 400（限量前移，不物化，R1）
+  **并发与单项墙钟先被服务端上限钳制，再落库并回显**（R43 成文）：
+  `concurrency → min(concurrency, engine.max_workers)`、
+  `per_run_wall_seconds → min(值, engine.max_wall_seconds)`；Batch 里返回的是**生效值**
+  而非请求值（例：请求 `concurrency=8`、服务端 `max_workers=2` → 批量记录 `2`）。
+  两个上限都可从 `GET /api/limits` 读到，调用方据此决定请求值即可。
 - `GET /api/batches?limit&offset` → `{total, batches:[概要]}`，概要 =
   `{id, name, model_id, model_version, status, total_items, repeats, seed_strategy,
   seed_base, created_at, duration_ms, done_items}`（无 started_at/finished_at）。
