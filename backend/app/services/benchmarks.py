@@ -26,16 +26,24 @@ class BenchResult:
     steps: int
     seconds: float
 
+    # 低于这个耗时窗口，steps/s 的有效数字全是计时噪声（R31：cpu_scheduling 示例
+    # 参数在约 400 个事件后队列排空，实测 <0.001 s，旧代码把吞吐报成 0.0，
+    # 读起来像「这个模型慢到跑不动」，而实际是快到测不出）。
+    MIN_MEANINGFUL_SECONDS = 1e-3
+
     @property
-    def per_second(self) -> float:
-        return self.steps / self.seconds if self.seconds > 0 else 0.0
+    def per_second(self) -> float | None:
+        """None = 太快、在此步数下测不出有意义的吞吐（不当 0 报）。"""
+        return self.steps / self.seconds if self.seconds >= self.MIN_MEANINGFUL_SECONDS else None
 
     def to_json(self) -> dict[str, Any]:
+        per_second = self.per_second
         return {
             "name": self.name,
             "steps": self.steps,
-            "seconds": round(self.seconds, 4),
-            "steps_per_second": round(self.per_second, 1),
+            "seconds": round(self.seconds, 6),
+            "steps_per_second": round(per_second, 1) if per_second is not None else None,
+            "measurable": per_second is not None,
         }
 
 

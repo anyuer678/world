@@ -77,6 +77,17 @@ class ModelRegistry:
     def versions_of(self, model_id: str) -> list[str]:
         return sorted(self._by_id.get(model_id, {}))
 
+    def builtin_ids(self) -> list[str]:
+        """内置模型 id（注册类来自 `app.models.*`）。插件模型注册自其它包，故不在列。
+        基准脚本、端到端测试与文档一致性测试共用它，避免各处再抄写模型清单。"""
+        return sorted(
+            {
+                model_id
+                for model_id, versions in self._by_id.items()
+                if any(cls.__module__.startswith("app.models.") for cls in versions.values())
+            }
+        )
+
     def list(self) -> list[dict[str, Any]]:
         out = []
         for model_id, versions in sorted(self._by_id.items()):

@@ -478,3 +478,18 @@
    `export.csv`（12 列 + BOM）、repeats=101 → 422；改动后前端镜像重建通过（容器内 `npm ci`
    + tsc/vite）。⑤ `.gitignore` 补 `pytest-of-*/`（README 的命令会生成该目录污染 status）。
    回归：后端 **260/260**、前端 **60/60**、tsc -b/vite build 干净。
+
+41. **R31 巡检轮：写死清单根治 + 文档一致性锁 + 基准口径修正**（决策见 DECISIONS D55）。
+    ① `registry.builtin_ids()` 成为内置模型清单唯一事实源；`test_e2e`、`test_scenarios`、
+    `scripts/benchmark.py` 改为派生，基准脚本对「注册了但没配 `BENCH_STEPS`」直接 SystemExit，
+    e2e 加步数预算覆盖测试。② 新增 `tests/test_docs_consistency.py` 7 项：README 模型表/计数
+    措辞/测试文件数、BENCHMARKS 模型覆盖、OpenAPI 端点逐个进契约、契约不承诺不存在的端点。
+    **锁的有效性经六路注入验证**（把端点从契约改名、往契约加虚构端点、改错计数、改错措辞、
+    改错表名、删基准行，全部变红）。落地即抓到 README「23 个测试文件」→ 24。
+    ③ 修基准假数字：耗时 <1ms 时 `per_second` 报 None（`measurable:false`），不再报 0.0
+    steps/s；cpu_scheduling 早停（400 步/队列排空）实测该路径，BENCHMARKS 记口径。
+    ④ axe-core 4.10.2 复扫 R22 新视图与 R29/R30 新输入：空态 / 捕食者-猎物运行态 /
+    批量面板展开三态各 **0 违规**，两张 canvas 有 `role=img` + 中文 aria-label。
+    ⑤ README R 段逐字外迁 `docs/CHANGELOG.md`（脚本自检内容完整），README 变短 3,190 字符。
+    ⑥ 新增 GitHub Actions 门禁（后端 pytest + 前端 vitest/tsc/vite build）。
+    回归：后端 **270/270**、前端 **60/60**、tsc -b/vite build 干净。

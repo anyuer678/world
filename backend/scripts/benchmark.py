@@ -27,14 +27,18 @@ from app.services.session_service import SessionService
 
 APP_VERSION = "0.1.0"
 
-QUEUE_SPEC_STEPS = 100_000
-CA_SPEC_STEPS = 500
-CACHE_SPEC_STEPS = 100_000
-CPU_SPEC_STEPS = 50_000
-SCHELLING_SPEC_STEPS = 500
-TRAFFIC_SPEC_STEPS = 500
-SIR_SPEC_STEPS = 5_000
-PREDATOR_PREY_SPEC_STEPS = 5_000
+# 每个内置模型的基准步数。模型清单取自 registry.builtin_ids()——新模型若没有
+# 这里的一行，基准脚本会直接报错而不是悄悄少测一个模型（R28/R31 的写死清单教训）。
+BENCH_STEPS = {
+    "queueing": 100_000,
+    "cpu_scheduling": 50_000,
+    "cache_sim": 100_000,
+    "cellular_automaton": 500,
+    "schelling": 500,
+    "traffic_network": 500,
+    "sir": 5_000,
+    "predator_prey": 5_000,
+}
 
 
 def build_spec(model_id: str, steps: int) -> dict:
@@ -63,18 +67,18 @@ def main() -> None:
         "batch": {},
     }
 
-    for model_id, steps in (
-        ("queueing", QUEUE_SPEC_STEPS),
-        ("cpu_scheduling", CPU_SPEC_STEPS),
-        ("cache_sim", CACHE_SPEC_STEPS),
-        ("cellular_automaton", CA_SPEC_STEPS),
-        ("schelling", SCHELLING_SPEC_STEPS),
-        ("traffic_network", TRAFFIC_SPEC_STEPS),
-        ("sir", SIR_SPEC_STEPS),
-        ("predator_prey", PREDATOR_PREY_SPEC_STEPS),
-    ):
+    builtins = registry.builtin_ids()
+    unbenchmarked = [mid for mid in builtins if mid not in BENCH_STEPS]
+    if unbenchmarked:
+        raise SystemExit(
+            f"BENCH_STEPS 缺内置模型 {unbenchmarked}——新增模型必须同时加基准步数，"
+            "否则基准表会静默少一行"
+        )
+    for model_id in builtins:
         results["engine"].append(
-            benchmarks.bench_engine(build_spec(model_id, steps), registry, steps).to_json()
+            benchmarks.bench_engine(
+                build_spec(model_id, BENCH_STEPS[model_id]), registry, BENCH_STEPS[model_id]
+            ).to_json()
         )
 
     from fastapi.testclient import TestClient
@@ -120,7 +124,12 @@ def main() -> None:
     print()
     print("引擎吞吐（真实运行）")
     for r in results["engine"]:
-        print(f"  {r['name']:<36} {r['steps']:>9,} steps in {r['seconds']:>8.3f}s = {r['steps_per_second']:>12,.1f} steps/s")
+        throughput = (
+            f"{r['steps_per_second']:>12,.1f} steps/s"
+            if r["measurable"]
+            else " n/a（<1 ms，测不出）"
+        )
+        print(f"  {r['name']:<36} {r['steps']:>9,} steps in {r['seconds']:>10.4f}s = {throughput}")
     api = results["api"]
     print()
     print("API 延迟（TestClient 进程内）")

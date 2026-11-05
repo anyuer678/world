@@ -17,16 +17,8 @@ from app.core.registry import registry
 from app.core.schema.spec import example_spec_for
 from app.main import create_app
 
-BUILTIN_MODELS = {
-    "queueing",
-    "cpu_scheduling",
-    "cache_sim",
-    "cellular_automaton",
-    "schelling",
-    "traffic_network",
-    "sir",
-    "predator_prey",
-}
+# 模型清单取自注册表（R31）：写死名单在 R10→R22 期间就漏过三个模型没被端到端断言
+BUILTIN_MODELS = set(registry.builtin_ids())
 
 # 每个模型的步数上限：只够产出指标、又让整套参数化测试在秒级完成
 # （schelling 最贵 ≈288 steps/s，故给到 20 步）
@@ -40,6 +32,11 @@ E2E_STEPS = {
     "sir": 50,
     "predator_prey": 50,
 }
+
+
+def test_e2e_step_budget_covers_every_builtin_model():
+    """注册表里新增模型而这里没配步数 → 立刻红，不靠 KeyError 或静默跳过。"""
+    assert set(E2E_STEPS) == BUILTIN_MODELS
 
 
 @pytest.mark.parametrize("model_id", sorted(BUILTIN_MODELS))

@@ -46,6 +46,29 @@ def test_engine_throughput_cache():
     assert res.per_second > 10_000  # 实测 ~40 万 steps/s
 
 
+def test_bench_result_never_reports_zero_throughput():
+    """R31：快到测不出（或早停到几百微秒）时报 None，而不是 0.0——
+    「0 steps/s」读起来像数量级回归，而事实是相反。"""
+    from app.services.benchmarks import BenchResult
+
+    tiny = BenchResult("engine:x", 400, 5e-5)
+    assert tiny.per_second is None
+    assert tiny.to_json()["steps_per_second"] is None
+    assert tiny.to_json()["measurable"] is False
+
+    ok = BenchResult("engine:x", 1000, 0.5)
+    assert ok.per_second == pytest.approx(2000.0)
+    assert ok.to_json()["measurable"] is True
+
+
+def test_cpu_scheduling_example_early_stops_and_is_not_misreported():
+    """cpu_scheduling 示例作业集排空事件队列后提前停止（BENCHMARKS 的说明），
+    基准必须如实呈现：步数小于请求步数，吞吐要么 None 要么正数，绝不报 0。"""
+    res = bench_engine(_spec("cpu_scheduling", 50_000), registry, 50_000)
+    assert 0 < res.steps < 50_000
+    assert res.per_second is None or res.per_second > 0
+
+
 def test_engine_cellular_automaton_speed():
     res = bench_engine(_spec("cellular_automaton", 500), registry, 500)
     assert res.steps == 500

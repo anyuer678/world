@@ -48,6 +48,10 @@
   引擎因“无事件可处理”提前停止，因此其吞吐数字没有意义——该模型的
   步数由作业数量决定，不适用于“固定步数吞吐”基准。正确性由
   `tests/test_cpu_scheduling.py` 保证。
+- **R31 报告口径**：早停且耗时低于 1 ms 时，`benchmark.py --json` 现在报
+  `steps_per_second: null` + `measurable: false`，文本表打印「n/a（<1 ms，测不出）」。
+  旧行为把这种情况报成 `0.0 steps/s`——那会被读成数量级回归，而事实恰好相反
+  （快到测不出）。有测试绑定（`test_bench_result_never_reports_zero_throughput`）。
 
 ## API 延迟（TestClient 进程内往返）
 

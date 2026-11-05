@@ -5,12 +5,14 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+import app.models  # noqa: F401 - 确保内置模型已注册（模块级派生清单需要）
 from app.core.engine.engines import Limits, SimulationEngine
 from app.core.registry import registry
 from app.core.schema.spec import validate_spec
 from app.main import create_app
 
-BUILTIN_IDS = ["queueing", "cpu_scheduling", "cache_sim", "cellular_automaton", "traffic_network", "schelling", "sir", "predator_prey"]
+# 清单取自注册表（R31）：写死名单是「加了模型忘了测」的复发点
+BUILTIN_IDS = registry.builtin_ids()
 
 LIMITS = Limits(
     max_steps=1_000_000, max_wall_seconds=30, zero_delay_chain_limit=10_000, cancel_poll_interval=1000
