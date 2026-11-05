@@ -239,7 +239,10 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   return (
     <>
       {error && (
-        <p style={{ color: '#dc2626', background: '#fef2f2', padding: '6px 10px', borderRadius: 6, fontSize: 13 }}>
+        <p
+          role="alert"
+          style={{ color: '#dc2626', background: '#fef2f2', padding: '6px 10px', borderRadius: 6, fontSize: 13 }}
+        >
           错误：{error}
         </p>
       )}
