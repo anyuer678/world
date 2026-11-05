@@ -406,10 +406,23 @@
    ≈355,900、CA ≈4,550、schelling ≈288、traffic ≈6,410、sir ≈45,500、
    predator_prey ≈35,700 steps/s；API 单步 p50 0.0/p95 16.0/max 16.0 ms；
    批量 8 项 0.172 s ≈46.5 items/s；并写明「数字须连同日期环境引用，两轮相差
-   10–55%、量级与排序不变」，回归阈值表括号内实测值同步。② 声称核对：
+   0–55%、量级与排序不变」，回归阈值表括号内实测值同步。② 声称核对：
    `CHUNK_STEPS=256`、`cancel_poll_interval` 默认 256（引擎 `steps % 256`）、
    前端 running 300ms 轮询 + visibilitychange 补偿——均与代码一致。③ 机制
    失真纠正：契约与 D16 称 running 读取为「≤100ms 节流」，实现是**分片边界
    缓存快照**；实测 CA 64×64 运行中 40ms 连读 6 次得 `[0,256,256,256,512,512]`
    （相邻重复、不同值皆 256 倍数）→ 契约已按实改写，D16 原文保留由 D50 记录
    纠正。探针会话已删。回归沿用 R25 基线：后端 249/249、前端 54/54（本轮无代码改动）。
+37. **R27 巡检轮：检查点形状对账 + 绑定拒绝补测 + restore 语义入契约**（决策见
+   DECISIONS D51）。① ARCHITECTURE 检查点形状自 R1 起未更新（旧写
+   `{step, clock, model_state, event_queue, rng_state}`），实现实为
+   `{engine_version, model_id, model_version, model_type, params_digest, step,
+   clock, status, rng, model_state, engine}`（DES `engine={queue,seq}`、时间步进
+   `{}`），已按实重写并补「JSON 往返=深拷贝+可序列化校验」的用意；核实
+   `deque(maxlen=500)` 事件环与文档一致。② 补测安全机制：`restore()` 的四项指纹
+   校验（model_id/engine_version/model_version/params_digest → SimulationError）
+   此前零覆盖 → 新增 `test_checkpoint_binding_rejects_mismatch`（逐字段篡改验四路
+   拒绝 + 正常恢复对照），test_engines 17→18。③ API 层实测：restore 对四类错配
+   一律 409 `conflict`（无 500），message 指明具体项；有效恢复后 status 沿用检查点
+   当时值（单步后检查点 → `paused`）；契约原只写「→ SessionState」，现写明拒绝
+   条件与状态语义。探针会话已删。回归：后端 **250/250**、前端 54/54（无前端改动）。

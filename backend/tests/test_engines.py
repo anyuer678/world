@@ -1,7 +1,7 @@
 import pytest
 
 from app.core.engine.engines import Limits, SimulationEngine
-from app.core.engine.base import SimulationLimitExceeded
+from app.core.engine.base import SimulationError, SimulationLimitExceeded
 from conftest import ToyDesModel, ToyStepModel, ZeroDelayLoopModel
 
 
@@ -26,6 +26,28 @@ def test_time_stepped_step_and_resume():
         assert engine.step()
     assert engine.steps == 4
     assert engine.clock == 4.0
+
+
+def test_checkpoint_binding_rejects_mismatch():
+    engine = SimulationEngine(ToyStepModel({}, rng_seed=3), {"type": "steps", "value": 10})
+    engine.run(max_steps=4)
+    cp = engine.checkpoint()
+
+    for field, value, match in [
+        ("model_id", "other_model", "model_id"),
+        ("engine_version", "0.0", "engine version"),
+        ("model_version", "9.9.9", "model_version"),
+        ("params_digest", "deadbeef", "params digest"),
+    ]:
+        bad = dict(cp)
+        bad[field] = value
+        target = SimulationEngine(ToyStepModel({}, rng_seed=3), {"type": "steps", "value": 10})
+        with pytest.raises(SimulationError, match=match):
+            target.restore(bad)
+
+    ok = SimulationEngine(ToyStepModel({}, rng_seed=3), {"type": "steps", "value": 10})
+    ok.restore(cp)
+    assert ok.steps == cp["step"]
 
 
 def test_time_stepped_checkpoint_restore_equivalence():

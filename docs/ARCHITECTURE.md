@@ -65,7 +65,12 @@ docker-compose.yml
 `checkpoint()` / `restore()` / 取消回调 / 指标收集 / 资源上限
 （max_steps、max_events、max_sim_time、max_wall_seconds）。
 
-**检查点 = JSON 可序列化字典**：`{step, clock, model_state, event_queue, rng_state}`。
+**检查点 = JSON 可序列化字典**（R1 起绑定版本与参数指纹，防跨版本误恢复）：
+`{engine_version, model_id, model_version, model_type, params_digest, step, clock,
+status, rng, model_state, engine}`——`engine` 子字典按引擎类型分派：离散事件为
+`{queue, seq}`（事件队列 + 内部序号），时间步进为 `{}`。序列化走
+`json.loads(json.dumps(cp))`：一次往返同时完成深拷贝与 JSON 可序列化校验，
+避免模型原地改 job 字典导致「恢复后继续运行污染快照」。
 模型约定状态必须 JSON 安全（快照本来就要经 API 传输）。RNG 用 `random.Random`，
 其 state 元组为纯 int，可 JSON 往返；恢复后与不中断运行逐比特一致（有测试保证）。
 

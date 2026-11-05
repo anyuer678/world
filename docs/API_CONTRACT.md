@@ -75,8 +75,13 @@ pydantic 原文，前端横幅逐条显示；实测 `spec_invalid` 即此形状�
 - `POST /api/sessions/{id}/pause` → SessionState（协作式暂停，生效粒度 ≤ 一个分片）
 - `POST /api/sessions/{id}/resume` → SessionState
 - `POST /api/sessions/{id}/reset` → SessionState（回到 step=0，同种子同参数 ⇒ 重放结果一致）
-- `POST /api/sessions/{id}/checkpoint` → `{checkpoint}`（JSON，含 RNG state）
-- `POST /api/sessions/{id}/restore` body=`{checkpoint}` → SessionState
+- `POST /api/sessions/{id}/checkpoint` → `{checkpoint}`；checkpoint 是 JSON 字典，键为
+  `{engine_version, model_id, model_version, model_type, params_digest, step, clock,
+  status, rng, model_state, engine}`（R27 实测列出，防手写形状失真）
+- `POST /api/sessions/{id}/restore` body=`{checkpoint}` → SessionState。
+  **指纹不符一律 409 `conflict`**（绝不 500）：`model_id` / `engine_version` /
+  `model_version` / `params_digest` 四项任一不匹配即拒绝，message 指明具体哪项；
+  有效恢复后 status 取检查点内快照当时的 status（实测单步后检查点恢复 → `paused`）
 - 会话语义：进程内存储（重启即失），服务重启后 id 404；后台运行按 256 步分片推进
   （`session_service.CHUNK_STEPS = 256`）；**running 期间的 GET 直接返回 worker 在
   分片边界写入的缓存快照**（粒度 = 一个分片，非实时锁内重建），前端每 300 ms 轮询一次；
