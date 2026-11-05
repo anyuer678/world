@@ -396,6 +396,7 @@ describe('quickPicks', () => {
   const mkModel = (id: string, scenarioIds: string[]): ModelInfo => ({
     model_id: id,
     version: '1.0.0',
+    versions: ['1.0.0'],
     display_name: id,
     description: '',
     model_type: 'time_stepped',

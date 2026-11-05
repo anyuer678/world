@@ -25,12 +25,18 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   前端批量面板据此校验，不再各存一份硬编码上限（有测试绑定两端）。
 
 ## 模型
-- `GET /api/models` → `{models: [ModelInfo]}`，ModelInfo：
-  `{model_id, display_name, description, model_type, version, params_schema(JSON Schema), example_spec, scenarios[]}`
-  （scenarios 为「一键场景」：`{id, title, description, params}` 必填非空，
+- `GET /api/models` → `{models: [ModelInfo]}`，**每个 model_id 恰好一条**（列最新版本；
+  R32 前同 id 多版本会出多条，前端下拉重复、且详情命中最旧版本）。ModelInfo：
+  `{model_id, display_name, description, model_type, version, versions: string[],
+  params_schema(JSON Schema), example_spec, scenarios[]}`
+  （`versions` 按版本号数字组分升序，如 `["1.0.0","2.0.0","10.0.0"]`；
+  `example_spec.model_version` 与所列 `version` 一致。
+  scenarios 为「一键场景」：`{id, title, description, params}` 必填非空，
   `seed`/`stop_condition` **可选**（R24：工作台点卡片时省略即沿用当前表单值）；
   R3 起，插件模型同样可声明，详见 PLUGINS.md）
-- `GET /api/models/{model_id}` → ModelInfo
+- `GET /api/models/{model_id}` → ModelInfo；**默认返回最新版本**，
+  `?version=` 可取指定版本；未知 model_id 或未知版本一律 404 `not_found`，
+  后者 message 里带 `available: [...]`（R32 实测）
 - `POST /api/models/{model_id}/validate` body=spec（**裸 spec，不包 `{"spec":…}`**）→
   `{valid, errors[], normalized_spec}`；normalized_spec 另含
   `model_version/display_name/notes`（迁移补齐后的形态）

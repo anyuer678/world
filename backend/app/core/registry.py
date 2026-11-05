@@ -3,10 +3,18 @@ model package directly. Adding a model = new package + one import in
 app/models/__init__.py."""
 from __future__ import annotations
 
+import re
 from typing import Any, Optional, Type
 
 from .engine.base import ModelType
 from .engine.models_base import BaseWorldModel, DiscreteEventModel, TimeSteppedModel
+
+
+def version_key(version: str) -> tuple[int, ...]:
+    """按数字组分比较版本号（"2.0.0" < "10.0.0"）。
+    字符串比较会把 10.0.0 排在 2.0.0 之前，从而把「最新版本」解析错。"""
+    parts = tuple(int(p) if p.isdigit() else 0 for p in re.split(r"[.\-+]", version.strip()))
+    return parts or (0,)
 
 
 class RegistryError(Exception):
@@ -68,14 +76,14 @@ class ModelRegistry:
         if not versions:
             raise RegistryError(f"unknown model_id: {model_id!r}")
         if version is None:
-            latest = max(versions)
+            latest = max(versions, key=version_key)
             return versions[latest]
         if version not in versions:
             raise RegistryError(f"unknown version {version!r} for model {model_id!r}")
         return versions[version]
 
     def versions_of(self, model_id: str) -> list[str]:
-        return sorted(self._by_id.get(model_id, {}))
+        return sorted(self._by_id.get(model_id, {}), key=version_key)
 
     def builtin_ids(self) -> list[str]:
         """内置模型 id（注册类来自 `app.models.*`）。插件模型注册自其它包，故不在列。
@@ -91,7 +99,8 @@ class ModelRegistry:
     def list(self) -> list[dict[str, Any]]:
         out = []
         for model_id, versions in sorted(self._by_id.items()):
-            for version, cls in sorted(versions.items()):
+            for version in sorted(versions, key=version_key):
+                cls = versions[version]
                 out.append(
                     {
                         "model_id": model_id,

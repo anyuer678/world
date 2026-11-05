@@ -471,19 +471,32 @@ class ExperimentService:
             conn.close()
 
     # ---------------------------------------------------------------- models
+    def _decorate(self, info: dict[str, Any]) -> dict[str, Any]:
+        info["example_spec"] = {
+            "schema_version": 1,
+            "model_id": info["model_id"],
+            "model_version": info["version"],
+            "params": self.registry.get(info["model_id"], info["version"]).param_model().model_dump(),
+            "stop_condition": {"type": "steps", "value": 10000},
+            "seed": 42,
+        }
+        info["versions"] = self.registry.versions_of(info["model_id"])
+        return info
+
+    def model_versions(self, model_id: str) -> list[dict[str, Any]]:
+        """某个模型 id 的全部版本目录条目，按版本号升序（末位即最新）。"""
+        return [self._decorate(info) for info in self.registry.list() if info["model_id"] == model_id]
+
     def list_models(self) -> list[dict[str, Any]]:
-        out = []
-        for info in self.registry.list():
-            info["example_spec"] = {
-                "schema_version": 1,
-                "model_id": info["model_id"],
-                "model_version": info["version"],
-                "params": self.registry.get(info["model_id"], info["version"]).param_model().model_dump(),
-                "stop_condition": {"type": "steps", "value": 10000},
-                "seed": 42,
-            }
-            out.append(info)
-        return out
+        """模型目录：每个 model_id 一条（最新版本）+ `versions` 列出全部可用版本。
+
+        同一 id 在目录里出多条会让前端下拉重复，也让按 id 取详情时命中到最旧版本
+        （R32 实测：注册 1.0.0/2.0.0/10.0.0 时 `/api/models` 给出 3 条、
+        `/api/models/sir` 返回 1.0.0，而真正跑起来用的是另一个版本）。"""
+        latest: dict[str, dict[str, Any]] = {}
+        for info in self.registry.list():  # registry.list() 版本升序 → 覆盖即留最新
+            latest[info["model_id"]] = self._decorate(info)
+        return list(latest.values())
 
     def validate_spec_only(self, spec_raw: dict[str, Any]) -> dict[str, Any]:
         spec, model_cls = validate_spec(spec_raw, self.registry)

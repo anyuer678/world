@@ -14,6 +14,7 @@ export interface ModelInfo {
   display_name: string
   description: string
   model_type: 'time_stepped' | 'discrete_event'
+  versions: string[]
   params_schema: Record<string, unknown>
   visualizer: { kind: string; series?: string[] }
   example_spec: ModelSpec

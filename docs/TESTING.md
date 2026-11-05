@@ -494,3 +494,19 @@
     ⑥ 新增 GitHub Actions 门禁（后端 pytest + 前端 vitest/tsc/vite build）。
     首跑已核验（run 42019027707）：后端 job **270 passed / 22.5 s**（ubuntu-latest、`uv sync --frozen` 装的 CPython 3.12.16），前端 job 60 项 + `tsc -b`/vite build 通过——这是本项目**第一次**在 Linux 上跑通整套测试。
     回归：后端 **270/270**、前端 **60/60**、tsc -b/vite build 干净。
+
+42. **R32 巡检轮：多版本模型的真实缺口（能力宣称 vs 单例实现）**（决策见 DECISIONS D56）。
+    探针法：临时插件把 SIR 复制成 2.0.0/10.0.0 两个版本挂进注册表，真起 uvicorn 打真接口。
+    ① 缺陷三处：版本号按字符串排序（`['1.0.0','10.0.0','2.0.0']`）；`registry.get()` 的
+    「最新」= 字符串 max → 选 `2.0.0` 而真实最新是 `10.0.0`（运行静默用错版本）；
+    `/api/models` 一版一条（3 张同 id 卡片）、`/api/models/{id}` 返回**最旧**版本
+    （1.0.0）—— advertised schema ≠ 实际执行版本。② 修：`registry.version_key()` 数字组分
+    比较（非数字段视作 0，注释写明不做完整 semver 预发布序），`get/versions_of/list` 统一；
+    目录改「每 id 一条（最新）+ `versions`」，`/api/models/{id}` 默认最新 + `?version=` 指定，
+    未知 id / 未知版本一律 404（后者 message 带 `available: [...]`）。③ 前端 `ModelInfo`
+    加 `versions` 后 tsc 立即抓到测试夹具缺键——契约类型与后端形状绑在一起的价值当场体现。
+    ④ 新增 `test_model_versions.py` 5 项（夹具在测后从全局注册表摘掉探针模型，避免污染
+    其他用例）；改后同一探针复核：目录 8 条、`sir` 详情 10.0.0、运行 `model_version` 10.0.0
+    三者一致，`?version=1.0.0` 取到旧版 Schema，`?version=9.9.9` 返回 available 清单；
+    浏览器复跑：模型下拉 8 项无重复、SIR 一键场景到 completed。
+    回归：后端 **275/275**、前端 **60/60**、tsc -b/vite build 干净。

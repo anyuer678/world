@@ -54,12 +54,19 @@ def list_models(request: Request) -> dict[str, Any]:
 
 
 @router.get("/models/{model_id}")
-def get_model(model_id: str, request: Request) -> dict[str, Any]:
-    models = _service(request).list_models()
-    for m in models:
-        if m["model_id"] == model_id:
+def get_model(model_id: str, request: Request, version: str | None = None) -> dict[str, Any]:
+    """默认返回最新版本；`?version=` 可取指定版本（版本号按数字组分比较）。"""
+    matches = _service(request).model_versions(model_id)
+    if not matches:
+        raise NotFoundError(f"model {model_id} not found")
+    if version is None:
+        return matches[-1]
+    for m in matches:
+        if m["version"] == version:
             return m
-    raise NotFoundError(f"model {model_id} not found")
+    raise NotFoundError(
+        f"model {model_id} has no version {version!r}; available: {[m['version'] for m in matches]}"
+    )
 
 
 @router.post("/models/{model_id}/validate")

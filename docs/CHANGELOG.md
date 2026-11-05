@@ -109,3 +109,24 @@ BENCHMARKS 补口径说明，`test_bench_result_never_reports_zero_throughput` �
 首跑已核验（run 42019027707）：后端 job **270 passed / 22.5 s**（ubuntu-latest、`uv sync --frozen` 装的 CPython 3.12.16），前端 job 60 项 + `tsc -b`/vite build 通过——这是本项目**第一次**在 Linux 上跑通整套测试。
 
 回归：后端 **270/270**、前端 **60/60**、tsc -b/vite build 干净。
+
+
+**R32（2026-11-05）版本化能力的真实缺口：多模型版本从「宣称」到「可用」**
+
+探针（临时插件给 `sir` 挂 2.0.0 与 10.0.0 两个版本，真起 uvicorn 打真接口）暴露三处缺陷，
+且都是「单版本时看不见」的：① 版本号按**字符串**比较，`versions_of` 给出
+`['1.0.0','10.0.0','2.0.0']`；② `registry.get()` 的「最新版本」用字符串 max，于是选中
+`2.0.0` 而数值最新是 `10.0.0`——运行会静默用错版本；③ `GET /api/models` 每个版本出一条
+（实测 3 张 `sir` 卡片），而 `GET /api/models/{id}` 返回**第一条＝最旧版本**（1.0.0），
+用户照它写的 spec 与实际跑的模型不是一回事。
+修法：新增 `registry.version_key()`（按点/横线/加号分割的数字组分比较，非数字段视作 0），
+`get/versions_of/list` 统一走它；目录改为「每个 model_id 一条（最新）+ `versions` 列表」，
+`/api/models/{model_id}` 默认最新版并支持 `?version=` 指定，未知 model_id 与未知版本都是
+404 `not_found`，后者 message 带 `available: [...]`。前端 `ModelInfo` 加 `versions` 字段后，
+`tsc` 立刻抓到测试夹具缺这个键（正是类型跟着契约走的收益）。
+验证：新增 `tests/test_model_versions.py` 5 项（数字序、最新解析、目录去重+versions、
+`?version=` 与 404、未知 id 404；探针模型注册后在夹具里摘掉，不给全局注册表留垃圾）；
+改后重跑同一探针：目录 8 条 / `sir` 详情 10.0.0 / 运行的 `model_version` 10.0.0 三者一致、
+`?version=1.0.0` 命中旧版、`?version=9.9.9` 给出 available 清单；浏览器复跑确认模型下拉
+仍是 8 个且无重复项、SIR 场景一键运行到 completed。API_CONTRACT 模型节按实重写。
+后端 **275/275**、前端 **60/60**、tsc -b/vite build 干净。
