@@ -6,7 +6,7 @@ import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
-import { FALLBACK_LIMITS, batchSubmitProblem, itemsHeading } from './BatchPanel'
+import { FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, itemsHeading } from './BatchPanel'
 import { toggleCompare } from './ComparePanel'
 import { ApiError, errorDetailMessage, isNotFoundOn } from './api'
 
@@ -745,6 +745,14 @@ describe('isSessionGone (session TTL recovery, R50)', () => {
     expect(isNotFoundOn(new ApiError(404, '/api/batches/7', 'not_found', 'x'), '/batches/')).toBe(true)
     expect(isNotFoundOn(new ApiError(404, '/api/batches/7', 'not_found', 'x'), '/sessions/')).toBe(false)
     expect(isNotFoundOn(new Error('network down'), '/batches/')).toBe(false)
+  })
+})
+
+describe('batchesHeading (batch list truncation, R57)', () => {
+  it('states the total and the cut when the list is only the latest page', () => {
+    expect(batchesHeading(0, 0)).toBe('批量实验')
+    expect(batchesHeading(3, 3)).toBe('批量实验（共 3 条）')
+    expect(batchesHeading(10, 19)).toBe('批量实验（显示最近 10 条 / 共 19 条，更早的未在界面列出）')
   })
 })
 

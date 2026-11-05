@@ -47,6 +47,14 @@ export function batchSubmitProblem(
  * 单项结果表头的诚实口径：接口一次最多取一页，必须把「共多少项」一起显示，
  * 否则 1200 项的批次只出现 50 行会被读成全部数据（完整明细在 CSV 导出里）。
  */
+/** 批量列表的截断口径（R57）：只展示最近 10 条时必须给出总数，
+ * 否则「10 条」会被当成「全部 10 条」（与 R48 的历史口径一致）。 */
+export function batchesHeading(shown: number, total: number): string {
+  if (total <= 0) return '批量实验'
+  if (shown >= total) return `批量实验（共 ${total} 条）`
+  return `批量实验（显示最近 ${shown} 条 / 共 ${total} 条，更早的未在界面列出）`
+}
+
 export function itemsHeading(shown: number, total: number): string {
   if (total <= 0 || shown >= total) return `单项结果（全部 ${shown} 项）`
   return `单项结果（显示前 ${shown} / 共 ${total} 项，其余见「导出 CSV」）`
@@ -72,6 +80,8 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const [retries, setRetries] = useState('0')
   const [wallSec, setWallSec] = useState('60')
   const [batches, setBatches] = useState<BatchListItem[]>([])
+  // R57：列表固定取最近 10 条，必须同时显示总数（与 R48 的实验历史同一口径）
+  const [batchesTotal, setBatchesTotal] = useState(0)
   const [batch, setBatch] = useState<BatchDetail | null>(null)
   const [items, setItems] = useState<BatchItem[]>([])
   const [itemsTotal, setItemsTotal] = useState(0)
@@ -87,7 +97,10 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     // 用户会把失败当成「没有数据」。这里至少把原因显示出来。
     api
       .listBatches()
-      .then((r) => setBatches(r.batches))
+      .then((r) => {
+        setBatches(r.batches)
+        setBatchesTotal(r.total)
+      })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
 
@@ -337,7 +350,9 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
       </div>
 
       {batches.length > 0 && (
-        <table style={table}>
+        <>
+          <h4 style={{ fontSize: 14, margin: '12px 0 4px' }}>{batchesHeading(batches.length, batchesTotal)}</h4>
+          <table style={table}>
           <thead>
             <tr>
               <th style={th}>#</th>
@@ -366,7 +381,8 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
               </tr>
             ))}
           </tbody>
-        </table>
+          </table>
+        </>
       )}
 
       {batch !== null && (
