@@ -187,6 +187,35 @@ def test_architecture_endpoint_literals_exist_in_openapi():
     assert not ghost, f"ARCHITECTURE 引用了不存在的端点：{ghost}"
 
 
+def test_benchmarks_are_internally_consistent_and_attributed():
+    """R38：基准表的每个吞吐数字必须与同行「步数 ÷ 耗时」算得通。
+
+    这不是形式检查：R22 曾把新模型的行插进另一台机位/另一轮的行里，R26 定下
+    「整表来自同一次运行」的规矩却无人执行。算术一致性让改错一个数、
+    混进别轮数字都变成红，而不是靠人记得核对。"""
+    rows = re.findall(
+        r"^\| (\w+)（[^）]*） \| ([\d,]+) \| ([\d.]+) s \| ≈([\d,]+) steps/s \|", BENCHMARKS, flags=re.M)
+    assert len(rows) >= len(registry.builtin_ids()) - 2, f"引擎表行数异常少：{len(rows)}"
+    for model, steps, secs, sps in rows:
+        computed = int(steps.replace(",", "")) / float(secs)
+        claimed = float(sps.replace(",", ""))
+        # 3% 容差：够覆盖「3 位有效数字 + 耗时保留 3 位小数」的舍入，
+        # 又能抓住把另一轮（哪怕只差 8%）的数字混进本表的情况。
+        assert abs(computed - claimed) / claimed < 0.03, (
+            f"{model} 表内不自洽：{steps}/{secs}s = {computed:,.0f}，却写 ≈{claimed:,.0f}")
+
+    m = re.search(r"(\d+) items in ([\d.]+) s ≈ ([\d.]+) items/s", BENCHMARKS)
+    assert m, "批量吞吐行格式变了，锁需要同步"
+    assert abs(int(m.group(1)) / float(m.group(2)) - float(m.group(3))) / float(m.group(3)) < 0.03, m.groups()
+
+    p50, p95, pmax = (float(x) for x in re.search(
+        r"p50 = ([\d.]+) ms，p95 = ([\d.]+) ms，max = ([\d.]+) ms", BENCHMARKS).groups())
+    assert p50 <= p95 <= pmax, (p50, p95, pmax)
+
+    assert "解释器" in BENCHMARKS and re.search(r"Python \d+\.\d+\.\d+", BENCHMARKS), "缺解释器归属"
+    assert "uv run python scripts/benchmark.py" in BENCHMARKS, "必须写明用哪条命令跑出的数（venv 与系统解释器不是同一机位）"
+
+
 def test_comparability_guard_is_described_where_it_actually_lives():
     """R36：旧架构文档把「比较 API 返回 cross_version 警告字段」写成已完成能力，
     实际代码里根本没有该字段——不可比提示由前端 ComparePanel 判定、报告用 comparability_note 声明。"""

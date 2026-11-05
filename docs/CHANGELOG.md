@@ -250,3 +250,25 @@ ARCHITECTURE 后台执行段补上三路径一致性说明。
 继续步进到 310，错配 model_id 的 restore 得 409 `conflict`（message 指明 `'sir' != 'queueing'`），
 delete 204 → 再 GET 404。
 后端 **296/296**、前端 **62/62**、tsc -b/vite build 干净。
+
+
+**R38（2026-11-05）基准可追溯性：解释器机位归属 + 表内算术自洽锁**
+
+① 抓到归属错误：`BENCHMARKS.md` 的测量环境写 Python 3.12.3，而 README 记录、实际使用的
+运行方式是 `uv run python scripts/benchmark.py` → 走 `backend/.venv` 的 **3.11.13**。
+两种解释器都"合法"（旧文档还写着"或 uv run"），于是 R26 辛苦确立的「同一机位」原则
+实际上无法判定——引用者不知道数字是谁跑出来的。本轮重跑一次基准，环境块改为
+**逐项抄录脚本自己打印的 environment**（解释器 3.11.13 / 平台 / CPU 型号 / app 与引擎版本），
+并明写「系统 python 3.12.3 属另一机位，不可混引」。
+② 三张表全部换成这一次运行（R38）：queueing ≈246,000、cache ≈337,000、CA ≈4,000、
+schelling ≈202（最贵）、traffic ≈6,410、sir ≈40,000、predator_prey ≈64,100 steps/s；
+API 单步 p50 0 / p95 16 / max 31 ms；批量 8 项 0.203 s ≈39.41 items/s。
+跨轮对照也按实更新：R26 与 R38 同机相差 0–80%（predator_prey 摆动最大），
+并明确「只有量级与相对排序可用」。回归阈值表的括注原先拿 5 万步测试冒充 10 万步数字，
+改为引用本表同行。
+③ 新锁（`test_benchmarks_are_internally_consistent_and_attributed`）：每一行的
+「步数 ÷ 耗时」必须与该行吞吐在 3% 内算得通（够覆盖 3 位有效数字舍入），
+批量行同理；API 的 p50 ≤ p95 ≤ max 必须成立；环境块必须给出解释器版本与
+`uv run python scripts/benchmark.py` 的命令归属。五路注入全部变红，包括
+「把上一轮的 8% 差值数字混进来」「只改耗时不改吞吐」这类真实的混机位症状。
+后端 **297/297**、前端 **62/62**、tsc -b/vite build 干净。

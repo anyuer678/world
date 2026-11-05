@@ -8,42 +8,43 @@
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-11-05（R26 复测；上一轮全模型复测为 2026-10-28 的 R10） |
-| Python | 3.12.3 |
-| 引擎版本 | 1.0 |
-| 平台 | Windows-11-10.0.26200-SP0（x64，开发机，非专用基准机） |
-| 运行方式 | `cd backend && python scripts/benchmark.py`（或 `uv run python …`） |
+| 日期 | 2026-11-05（R38 复测；上一轮为 R26 同日、同一台机器） |
+| 解释器 | **Python 3.11.13**——即 `backend/.venv`（`uv run` 使用的解释器）。注意直接敲 `python scripts/benchmark.py` 会走系统 3.12.3，属另一机位，不可与本表混引 |
+| 引擎版本 | 1.0（app 0.1.0） |
+| 平台 | Windows-10-10.0.26200-SP0（x64，开发机，非专用基准机） |
+| CPU | Intel64 Family 6 Model 183 Stepping 1, GenuineIntel |
+| 运行方式 | `cd backend && uv run python scripts/benchmark.py`（README 记录的即此条） |
 
-> 下表全部来自**同一次** `benchmark.py` 运行。数字随机器负载浮动（R10 与
-> R26 两轮相差 0–55%：traffic/cache/predator_prey 基本持平，schelling 从
-> ≈186 提升到 ≈288 steps/s），量级与模型间相对排序不变；引用本表数字请
-> 连同上面的日期环境一起引用。
+> 下表全部来自**同一次** `benchmark.py` 运行。数字随机器负载明显浮动：R26 与
+> R38 两轮（同机同解释器链）相差 0–80%——traffic 基本持平，queueing/cache 差 5–8%，
+> CA/SIR 约 12%，schelling 从 ≈288 掉到 ≈202，
+> predator_prey 从 ≈35,700 涨到 ≈64,100
+> （纯 ODE 模型受 CPU 频率/负载调度影响最大）。因此**只有量级与模型间相对排序可用**，
+> 引用数字必须连同上面的日期与解释器一起引用；跨机位数字不得混进同一张表（R26 的教训）。
 
 ## 引擎吞吐（进程内，连续 run）
 
 | 模型 | 步数 | 实测耗时 | 吞吐 |
 | --- | ---: | ---: | ---: |
-| queueing（离散事件） | 100,000 | 0.375 s | ≈266,700 steps/s |
-| cache_sim（时间步进） | 100,000 | 0.281 s | ≈355,900 steps/s |
-| cellular_automaton（时间步进） | 500 | 0.110 s | ≈4,550 steps/s |
-| schelling（同步步智能体） | 500 | 1.734 s | ≈288 steps/s |
+| queueing（离散事件） | 100,000 | 0.406 s | ≈246,000 steps/s |
+| cache_sim（时间步进） | 100,000 | 0.297 s | ≈337,000 steps/s |
+| cellular_automaton（时间步进） | 500 | 0.125 s | ≈4,000 steps/s |
+| schelling（同步步智能体） | 500 | 2.469 s | ≈202 steps/s |
 | traffic_network（时间步进） | 500 | 0.078 s | ≈6,410 steps/s |
-| sir（确定性 ODE） | 5,000 | 0.110 s | ≈45,500 steps/s |
-| predator_prey（确定性 ODE） | 5,000 | 0.140 s | ≈35,700 steps/s |
+| sir（确定性 ODE） | 5,000 | 0.125 s | ≈40,000 steps/s |
+| predator_prey（确定性 ODE） | 5,000 | 0.078 s | ≈64,100 steps/s |
 
 说明：
 
 - cellular_automaton 每步要更新整个网格（例：20×20），单步成本远高于
   排队/缓存模型，吞吐低一个数量级属预期，不是回归。
 - **schelling 是目前单步成本最高的模型**：每步对 40×30=1200 个格子做
-  全量邻居扫描与重定位（纯 Python），吞吐仅 ≈288 steps/s——适合它的
-  批量规模要据此控制（默认参数 500 步约 1.7 s/项）。
+  全量邻居扫描与重定位（纯 Python），吞吐仅 ≈202 steps/s——适合它的批量规模要据此控制（默认参数 500 步约 2.5 s/项）。
 - traffic_network 每步成本取决于路网车辆数，示例路网（小图）下车均
   占用低，500 步仅 0.078 s；大路网/高峰场景下单步成本会上升。
-- sir 每步执行 50 个欧拉子步（每子步仅数次乘加），吞吐 ≈45,500
-  steps/s，与人口规模无关（仓室模型不追踪个体）。
+- sir 每步执行 50 个欧拉子步（每子步仅数次乘加），吞吐 ≈40,000 steps/s，与人口规模无关（仓室模型不追踪个体）。
 - predator_prey 每步 8 个 RK4 子步 ×4 次斜率评估（32 次/步乘加），
-  吞吐 ≈35,700 steps/s，与种群数量无关；同为纯 ODE 仓室级成本。
+  吞吐 ≈64,100 steps/s，与种群数量无关；同为纯 ODE 仓室级成本。
 - cpu_scheduling 的示例参数（作业集）在约 400 个事件后事件队列为空，
   引擎因“无事件可处理”提前停止，因此其吞吐数字没有意义——该模型的
   步数由作业数量决定，不适用于“固定步数吞吐”基准。正确性由
@@ -57,7 +58,7 @@
 
 | 指标 | 值 |
 | --- | --- |
-| POST /api/sessions/{id}/step（n=1），50 次 | p50 = 0.0 ms，p95 = 16.0 ms，max = 16.0 ms |
+| POST /api/sessions/{id}/step（n=1），50 次 | p50 = 0.0 ms，p95 = 16.0 ms，max = 31.0 ms |
 
 说明：TestClient 不经过真实 TCP/HTTP 栈；真实部署下的延迟由 uvicorn
 另测（见 `docs/` 部署章节的已知限制）。此数字只用于捕捉“单步处理本身”
@@ -67,7 +68,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| cache_sim 网格 4 容量 × 2 重复（fixed 种子），每项 1000 步 | 8 items in 0.172 s ≈ 46.5 items/s，status=completed |
+| cache_sim 网格 4 容量 × 2 重复（fixed 种子），每项 1000 步 | 8 items in 0.203 s ≈ 39.41 items/s，status=completed |
 
 说明：条目极小（1000 步/项），该数字主要反映任务调度与 SQLite 写入
 开销，而非模拟计算本身；大批量场景下的真实吞吐以 per-item 均值×
@@ -80,19 +81,19 @@
 
 | 测试 | 断言 |
 | --- | --- |
-| queueing 5 万步 | > 10,000 steps/s（实测 ≈26.7 万） |
-| cache_sim 5 万步 | > 10,000 steps/s（实测 ≈35.6 万） |
-| cellular_automaton 500 步 | < 10 s（实测 ≈0.11 s） |
-| schelling 500 步 | < 10 s（实测 ≈1.7 s，最贵模型） |
-| traffic_network 500 步 | < 10 s（实测 ≈0.08 s） |
-| sir 5,000 步 | < 10 s（实测 ≈0.11 s） |
-| predator_prey 5,000 步 | < 10 s（实测 ≈0.14 s） |
-| 会话单步 API p95 | < 1000 ms（实测 ≈16 ms） |
-| 4 项批量 | < 60 s 完成（实测 ≈0.17 s） |
+| queueing 5 万步 | > 10,000 steps/s（上表同模型 ≈24.6 万，10 万步口径） |
+| cache_sim 5 万步 | > 10,000 steps/s（上表同模型 ≈33.7 万，10 万步口径） |
+| cellular_automaton 500 步 | < 10 s（上表实测 0.125 s） |
+| schelling 500 步 | < 10 s（上表实测 2.469 s，最贵模型） |
+| traffic_network 500 步 | < 10 s（上表实测 0.078 s） |
+| sir 5,000 步 | < 10 s（上表实测 0.125 s） |
+| predator_prey 5,000 步 | < 10 s（上表实测 0.078 s） |
+| 会话单步 API p95 | < 1000 ms（本表 p95 = 16.0 ms） |
+| 4 项批量 | < 60 s 完成（本表 8 项 0.203 s） |
 
 ## 已识别的瓶颈与结论
 
-1. **模拟计算瓶颈**：纯 Python 引擎，吞吐在 10⁵ steps/s 量级。若未来
+1. **模拟计算瓶颈**：纯 Python 引擎，排队/缓存吞吐在 10⁵ steps/s 量级，ODE 类在 10⁴–10⁵，智能体类（schelling）在 10² 量级。若未来
    需要 10⁶+ 量级，方向是 NumPy 向量化时间步进模型或 PyPy/Rust 扩展，
    目前不引入（符合“NumPy 仅必要时”的选型原则）。
 2. **渲染瓶颈**：前端可视化按采样/节流拉取会话状态，CA 演化视图只渲染
