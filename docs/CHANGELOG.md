@@ -130,3 +130,10 @@ BENCHMARKS 补口径说明，`test_bench_result_never_reports_zero_throughput` �
 `?version=1.0.0` 命中旧版、`?version=9.9.9` 给出 available 清单；浏览器复跑确认模型下拉
 仍是 8 个且无重复项、SIR 场景一键运行到 completed。API_CONTRACT 模型节按实重写。
 后端 **275/275**、前端 **60/60**、tsc -b/vite build 干净。
+
+
+**R32 收口审计（成文于 docs/TESTING.md §43）**：六个维度（声称 vs 实现、测试与门禁、
+生产形态、无障碍与入口质量、内容型拓展、其余候选的拒绝理由）逐条给证据或取舍；
+本轮另补查三个此前未单独验证的资源类声称（`sim_time` 停止、零延迟链上限、
+批量在途上限——后者由「建批时写入 effective 值 + 线程池上限」双重构造保证，并有实测绑定）。
+Docker 用 R32 代码重建复跑全链路，predator_prey 的 `result_sha256` 与 R30 逐位一致。

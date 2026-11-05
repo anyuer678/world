@@ -510,3 +510,34 @@
     三者一致，`?version=1.0.0` 取到旧版 Schema，`?version=9.9.9` 返回 available 清单；
     浏览器复跑：模型下拉 8 项无重复、SIR 一键场景到 completed。
     回归：后端 **275/275**、前端 **60/60**、tsc -b/vite build 干净。
+
+43. **R32 收口审计（目标：「分析拓展并完善项目，直到没有能拓展和开发的新任务为止」）**。
+    逐维度给结论与证据，不做无证据的「应该没问题」：
+    ① **声称 vs 实现**（R24–R32 累计扫过并修）：API 契约逐端点（双向锁进测试）、文档计数与
+    模型表（7 项一致性测试 + 六路注入验证）、检查点形状与四项指纹拒绝、导出链路 md/json/csv、
+    插件场景契约、基准可复现性与「0.0 steps/s」假数、统计 CI 三态与零宽区间、
+    版本化模型的多版本真实行为。本轮再补查三个此前没单独验过的资源类声称：
+    `sim_time` 停止条件（`test_engines.py:223`）、零延迟事件链上限
+    （`test_des_zero_delay_chain_limit`）、批量在途上限——实现是
+    `min(concurrency, max_workers)` 在建批时写入 DB，运行线程池本身又以
+    `settings.max_workers` 为上限，故「在途不超上限」由构造保证（非仅约定），
+    `test_integrity.py::test_batch_concurrency_bounded_per_batch` 实测绑定。
+    ② **测试与门禁**：后端 275 项 + 前端 60 项 + tsc/vite 干净；GitHub Actions 双 job
+    在 ubuntu-latest 连续绿（R31 run 42019420098、R32 run 42021854641）。
+    ③ **生产形态**：R32 代码重新 `compose build/up` 并复跑全套链路（八模型目录、nginx 反代、
+    limits、实验→运行→指标+sha、events 分页与 404、报告键集、批量→findings→CSV 12 列+BOM、
+    请求体越界 422）；predator_prey 的 `result_sha256` 与 R30 **逐位一致**
+    （b62e6d59cb307616…）→ 跨镜像重建的确定性成立。
+    ④ **无障碍/入口质量**：axe-core 三态 0 违规（含 R22 相平面图与 R29/R30 数字输入）、
+    meta description 在位、README 已从 7,835 字符瘦身到约 4,700 并把 R 日志外迁。
+    ⑤ **内容型拓展（有意不做）**：再加第 9 个内置模型属课设内容偏好，不是能力缺口——
+    加模型的成本已经是「一个包 + 一行 import」，且有 `registry.builtin_ids()` 派生清单 +
+    文档一致性测试兜住漏测/漏写。
+    ⑥ **其余候选及拒绝理由**：WebSocket 实时推送（REST + 轮询是 D 记录在案的取舍，R12 已清除
+    失实声明）；鉴权/多用户（单机 SQLite 课设范围，已写入「已知限制」）；模型版本下拉 UI
+    （沿用 D38 的 API-only 先例，`?version=` 已可用）；semver 预发布全序（项目内版本号只有
+    数字点分，`version_key` 注释写明边界）；给 8 个视图统一加可见图标题（现设计是 aria-label +
+    下方数据行，改动需一致覆盖 8 处，属 UI 改版而非缺陷）；CI 加 Windows 矩阵或性能基准 job
+    （Linux 单跑已能捕获断链，双平台翻倍 runner 用量而收益边际）。
+    结论：能力、正确性、可复现、文档、门禁、生产形态六个维度上，已无「已知可做且不靠猜」的项；
+    剩余全是内容扩充或范围外偏好，需要用户点名才动。
