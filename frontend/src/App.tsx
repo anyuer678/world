@@ -182,7 +182,14 @@ export default function App() {
       const r = await api.getResult(id)
       applySpec(r.experiment.spec)
       if (r.experiment.name) setName(r.experiment.name)
-      setNotice(`已载入实验 #${id} 的配置（模型 ${r.experiment.model_id} v${r.experiment.model_version}）。`)
+      // R46：孤儿模型的实验仍可读（R35），但载入时就要说清它跑不了，
+      // 而不是等用户点「开始实时模拟」再吃一个英文 422。目录为空（拉取失败）时不误报。
+      const stillAvailable = models.length === 0 || models.some((m) => m.model_id === r.experiment.model_id)
+      setNotice(
+        stillAvailable
+          ? `已载入实验 #${id} 的配置（模型 ${r.experiment.model_id} v${r.experiment.model_version}）。`
+          : `已载入实验 #${id} 的配置，但其模型 ${r.experiment.model_id} 已不在当前模型目录中——配置可查看，运行会被拒绝。`,
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {

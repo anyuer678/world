@@ -749,3 +749,16 @@
     ④ 浏览器实测：展开批量面板后，`main td` 中英文状态值的集合为空；实验历史、批量列表、
     批量详情头部 `<strong role=status>` 均为「已完成」。比较面板行未单独打开验证
     （与其余四处同一函数，由单测覆盖）。
+
+57. **R46 错误提示可读性（字段校验消息 + 孤儿配置载入）**。
+    ① 实测路径：步数填 2000000 → 横幅 `错误：422: n Input should be less than or equal to 1000000`；
+    载入模型已移除的历史实验（如 mrp_probe）→ 只提示「已载入配置」，点运行时才吃英文 422。
+    ② 修 `errorDetailMessage`：字段名映射（n/repeats/name/max_retries/concurrency/
+    per_run_wall_seconds）+ 九类常见 pydantic 消息；**全部可识别才输出中文**，否则整条回退原文
+    （带状态码），避免中英混排；对象形状的已知顶层 code 中文化。
+    ③ 载入历史配置时对比 `/api/models`：模型不在目录中则提示「配置可查看，运行会被拒绝」；
+    目录拉取失败（列表为空）时不误报。
+    ④ 浏览器实测：单步越界 → `错误：步数 不能大于 1000000`；载入孤儿实验 → 新提示文案；
+    用孤儿 spec 创建 → `错误：参数校验失败：unknown_model unknown model_id: 'mrp_probe'`。
+    ⑤ 单测：`errorDetailMessage` 新增步数上限、`Field required`、不可识别回退三组断言
+    （前端 **63/63**）；tsc/vite 干净。

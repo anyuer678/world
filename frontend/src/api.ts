@@ -19,10 +19,53 @@ type FastApiError = { loc?: unknown[]; msg?: string; type?: string }
  * return `detail: [{loc, msg, type}]`. Reading only the first shape made every
  * body-rule violation render as a bare "422" with no reason.
  */
+const FIELD_LABELS: Record<string, string> = {
+  n: '步数',
+  name: '名称',
+  repeats: '每组重复',
+  max_retries: '失败重试',
+  concurrency: '并发数',
+  per_run_wall_seconds: '单项墙钟上限',
+}
+
+const CODE_LABELS: Record<string, string> = {
+  spec_invalid: '参数校验失败',
+  unknown_model: '模型或版本不存在',
+}
+
+/** pydantic 的英文短消息 → 中文；未识别的原样保留（不隐藏信息）。 */
+const MESSAGE_PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^Input should be less than or equal to (\S+)$/, (m) => `不能大于 ${m[1]}`],
+  [/^Input should be greater than or equal to (\S+)$/, (m) => `不能小于 ${m[1]}`],
+  [/^Input should be greater than (\S+)$/, (m) => `必须大于 ${m[1]}`],
+  [/^Input should be less than (\S+)$/, (m) => `必须小于 ${m[1]}`],
+  [/^Input should be a valid integer.*/, () => '必须是整数'],
+  [/^Input should be a valid number.*/, () => '必须是数字'],
+  [/^Field required$/, () => '必填'],
+  [/^String should have at least (\d+) characters?$/, (m) => `至少 ${m[1]} 个字符`],
+  [/^String should have at most (\d+) characters?$/, (m) => `最多 ${m[1]} 个字符`],
+]
+
+/** 单个 FastAPI 请求体错误 → 中文；识别不了就返回 null，由调用方回退到原文。 */
+function humanizeFastApiError(item: FastApiError): string | null {
+  const loc = (item.loc ?? []).filter((p) => p !== 'body' && p !== 'query')
+  const field = String(loc[loc.length - 1] ?? '')
+  const label = FIELD_LABELS[field] ?? field
+  const msg = item.msg ?? ''
+  for (const [re, fmt] of MESSAGE_PATTERNS) {
+    const m = msg.match(re)
+    if (m) return `${label ? label + ' ' : ''}${fmt(m)}`
+  }
+  return null
+}
+
 export function errorDetailMessage(status: number, body: unknown): string {
   const detail = (body as { detail?: unknown } | null)?.detail
   if (typeof detail === 'string') return detail
   if (Array.isArray(detail)) {
+    // 全部可翻译才用中文：一半中文一半英文的横幅比原文更难读，也会丢信息。
+    const human = (detail as FastApiError[]).map(humanizeFastApiError)
+    if (human.length && human.every((h): h is string => h !== null)) return human.join('；')
     const parts = (detail as FastApiError[])
       .map((item) => {
         const path = (item.loc ?? []).filter((p) => p !== 'body' && p !== 'query').join('.')
@@ -31,9 +74,9 @@ export function errorDetailMessage(status: number, body: unknown): string {
       .filter(Boolean)
     return parts.length ? `${status}: ${parts.join('; ')}` : `${status}`
   }
-  const obj = detail as { message?: string; errors?: SpecError[] } | undefined
-  const message = obj?.message ?? `${status}`
-  return obj?.errors?.length ? `${message}: ${obj.errors.map((e) => `${e.code} ${e.message}`).join('; ')}` : message
+  const obj = detail as { code?: string; message?: string; errors?: SpecError[] } | undefined
+  const message = (obj?.code ? CODE_LABELS[obj.code] : undefined) ?? obj?.message ?? `${status}`
+  return obj?.errors?.length ? `${message}：${obj.errors.map((e) => `${e.code} ${e.message}`).join('; ')}` : message
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

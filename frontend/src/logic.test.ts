@@ -62,7 +62,7 @@ describe('errorDetailMessage (two 422 shapes, R30)', () => {
       errorDetailMessage(422, {
         detail: { code: 'spec_invalid', message: 'spec validation failed', errors: [{ code: 'params.gamma', message: '≥0' }] },
       }),
-    ).toBe('spec validation failed: params.gamma ≥0')
+    ).toBe('参数校验失败：params.gamma ≥0')
   })
 
   it('reads FastAPI request-body rule arrays instead of rendering a bare 422', () => {
@@ -70,7 +70,8 @@ describe('errorDetailMessage (two 422 shapes, R30)', () => {
       errorDetailMessage(422, {
         detail: [{ type: 'less_than_equal', loc: ['body', 'repeats'], msg: 'Input should be less than or equal to 100', input: 150 }],
       }),
-    ).toBe('422: repeats Input should be less than or equal to 100')
+    ).toBe('每组重复 不能大于 100')
+    // 有一条识别不了就整条回退（不混排中英、不丢信息）
     expect(
       errorDetailMessage(422, {
         detail: [
@@ -79,6 +80,20 @@ describe('errorDetailMessage (two 422 shapes, R30)', () => {
         ],
       }),
     ).toBe('422: grid Field required; x Bad x')
+  })
+
+  it('translates the session step bound and keeps unknown messages verbatim', () => {
+    expect(
+      errorDetailMessage(422, {
+        detail: [{ type: 'less_than_equal', loc: ['body', 'n'], msg: 'Input should be less than or equal to 1000000' }],
+      }),
+    ).toBe('步数 不能大于 1000000')
+    expect(
+      errorDetailMessage(422, { detail: [{ type: 'missing', loc: ['body', 'name'], msg: 'Field required' }] }),
+    ).toBe('名称 必填')
+    expect(
+      errorDetailMessage(422, { detail: [{ type: 'custom', loc: ['body', 'repeats'], msg: 'Something odd' }] }),
+    ).toBe('422: repeats Something odd')
   })
 
   it('falls back to plain strings and bare status codes', () => {
