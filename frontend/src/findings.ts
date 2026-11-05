@@ -7,6 +7,8 @@ export interface JumpFinding {
   value_from: number
   value_to: number
   ratio: number | null
+  /** false = 两段 95% CI 不相交（跳变显著）；true = 相交（可能落在噪声内）；null/缺省 = 重复不足无法判定 */
+  ci_overlap?: boolean | null
 }
 
 export interface DispersionFinding {
@@ -28,6 +30,13 @@ export interface FindingsResponse {
 
 const f4 = (x: number) => (typeof x === 'number' ? Number(x.toFixed(4)).toString() : '-')
 
+const ciNote = (f: JumpFinding): string =>
+  f.ci_overlap === false
+    ? '；两段 95% 置信区间不重叠，跳变显著'
+    : f.ci_overlap === true
+      ? '；两段 95% 置信区间重叠，可能落在重复间噪声范围内'
+      : ''
+
 export function formatFinding(f: Finding): string {
   if (f.type === 'jump') {
     if (f.ratio === null) {
@@ -35,12 +44,12 @@ export function formatFinding(f: Finding): string {
         f.value_to === 0
           ? `从 ${f4(f.value_from)} 坍缩为 0（完全消失）`
           : `从 0 激增到 ${f4(f.value_to)}（从无到有）`
-      return `参数 ${f.param} 从 ${f.from} → ${f.to} 时，指标 ${f.metric} ${change}——可能存在临界点`
+      return `参数 ${f.param} 从 ${f.from} → ${f.to} 时，指标 ${f.metric} ${change}——可能存在临界点${ciNote(f)}`
     }
     const dir = Math.abs(f.value_to) >= Math.abs(f.value_from) ? '跳升' : '坍缩'
     return `参数 ${f.param} 从 ${f.from} → ${f.to} 时，指标 ${f.metric} 从 ${f4(f.value_from)} ${
       dir
-    } 到 ${f4(f.value_to)}（约 ${f.ratio} 倍）——可能存在临界点`
+    } 到 ${f4(f.value_to)}（约 ${f.ratio} 倍）——可能存在临界点${ciNote(f)}`
   }
   const params = Object.entries(f.params)
     .map(([k, v]) => `${k}=${String(v)}`)

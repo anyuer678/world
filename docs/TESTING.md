@@ -359,3 +359,18 @@
    predator_prey；生产 index.html 携带「八个内置模型」SEO 描述；经代理在
    容器内完整跑 predator_prey 会话（K=8、240 步）→ completed，收敛
    (5.000000, 0.937500) 命中解析平衡点（<1e-6）。验毕 compose down。
+33. **R23 开发轮：扫描曲线 95% CI 区间带 + 发现文案 CI 显著性**（决策见
+   DECISIONS D47）。① drawLineChart 新增 band：均值线后半透明填充多边形（上
+   界正序+下界逆序），seriesBounds 并入带界防裁切；sweepChart 仅当 n≥2 且带
+   宽>0 输出带，否则 null。② 后端跳变发现加 ci_overlap 三态（False 不重叠
+   /True 重叠/None 无法判定——n<2 或零宽退化 CI，如 fixed 种子重复全同）；
+   前端发现文案三分支加注。③ 单测：后端 ci_overlap 三态+零宽退化 1 条新
+   测试（analysis 套件 11 项）、前端带抽取（真实宽 CI 命中三点带、退化夹具
+   band=null）+文案三分支（53 项，含 quickPicks 八模型）。④ 浏览器双分支实
+   证：批 #11（queueing servers 1/2/3×重复 5、per_repeat_increment）扫描曲线
+   像素探针——带色（rgba(37,99,235,.16) 合成后）11,324 px、均值线 630 px，
+   aria-label 含「阴影为 95% 置信区间带」；同批发现双语义并排：final_queue_length
+   0→1.2 跳变注「置信区间重叠，可能落在重复间噪声范围内」、avg_waiting_time
+   69 倍跳变注「置信区间不重叠，跳变显著」、批 #10（fixed 种子，重复全同零方
+   差）→ aria「重复次数不足，无置信带」+图下引导文案，控制台零错误。回归：
+   后端 245/245、前端 53/53、tsc -b/vite build 干净。

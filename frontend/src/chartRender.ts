@@ -4,10 +4,17 @@ export interface Series {
   data: [number, number][]
 }
 
+export interface Band {
+  /** [x, lower, upper] triples; drawn as a translucent area behind the series */
+  data: [number, number, number][]
+  color: string
+}
+
 export interface LineChartOptions {
   width: number
   height: number
   series: Series[]
+  band?: Band | null
   yMax?: number
   emptyText?: string
 }
@@ -19,7 +26,7 @@ export interface Bounds {
   yMax: number
 }
 
-export function seriesBounds(series: Series[]): Bounds {
+export function seriesBounds(series: Series[], band?: Band | null): Bounds {
   let xMin = Infinity
   let xMax = -Infinity
   let yMin = Infinity
@@ -30,6 +37,14 @@ export function seriesBounds(series: Series[]): Bounds {
       xMax = Math.max(xMax, x)
       yMin = Math.min(yMin, y)
       yMax = Math.max(yMax, y)
+    }
+  }
+  if (band) {
+    for (const [x, lo, hi] of band.data) {
+      xMin = Math.min(xMin, x)
+      xMax = Math.max(xMax, x)
+      yMin = Math.min(yMin, lo, hi)
+      yMax = Math.max(yMax, lo, hi)
     }
   }
   if (!Number.isFinite(xMin)) return { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }
@@ -68,7 +83,7 @@ export function drawLineChart(ctx: CanvasRenderingContext2D, opts: LineChartOpti
     return
   }
 
-  const b = seriesBounds(series)
+  const b = seriesBounds(series, opts.band)
   const yMax = niceMax(opts.yMax ?? b.yMax)
   const plotW = width - PAD.left - PAD.right
   const plotH = height - PAD.top - PAD.bottom
@@ -97,6 +112,24 @@ export function drawLineChart(ctx: CanvasRenderingContext2D, opts: LineChartOpti
   }
   ctx.strokeStyle = '#9ca3af'
   ctx.strokeRect(PAD.left, PAD.top, plotW, plotH)
+
+  const band = opts.band
+  if (band && band.data.length >= 2) {
+    ctx.fillStyle = band.color
+    ctx.beginPath()
+    band.data.forEach(([x, , hi], i) => {
+      const px = toX(x)
+      const py = toY(hi)
+      if (i === 0) ctx.moveTo(px, py)
+      else ctx.lineTo(px, py)
+    })
+    for (let i = band.data.length - 1; i >= 0; i--) {
+      const [x, lo] = band.data[i]
+      ctx.lineTo(toX(x), toY(lo))
+    }
+    ctx.closePath()
+    ctx.fill()
+  }
 
   for (const s of series) {
     if (s.data.length === 0) continue

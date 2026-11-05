@@ -509,17 +509,28 @@ function SweepChart({ sweep }: { sweep: SweepSelection }) {
   const width = 640
   const height = 180
   const canvasRef = useCanvas(
-    (ctx, w, h) => drawLineChart(ctx, { width: w, height: h, series: [sweep.series] }),
+    (ctx, w, h) => drawLineChart(ctx, { width: w, height: h, series: [sweep.series], band: sweep.band }),
     width,
     height,
   )
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 4 }}
-      role="img"
-      aria-label={`${sweep.param} 与 ${sweep.metric} 的扫描曲线`}
-    />
+    <div>
+      <canvas
+        ref={canvasRef}
+        style={{ maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 4 }}
+        role="img"
+        aria-label={
+          sweep.band
+            ? `${sweep.param} 与 ${sweep.metric} 的扫描曲线（蓝线为均值，阴影为 95% 置信区间带）`
+            : `${sweep.param} 与 ${sweep.metric} 的扫描曲线（重复次数不足，无置信带）`
+        }
+      />
+      <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0' }}>
+        {sweep.band
+          ? '阴影带为各点 95% 置信区间（正态近似，来自该组合的全部重复）；带越宽说明重复间波动越大。'
+          : '每个参数值只做 1 次重复（或波动为 0）时给不出置信带——把「每组重复」调到 ≥2 再看。'}
+      </p>
+    </div>
   )
 }
 const control: React.CSSProperties = { flex: 1, padding: 6, border: '1px solid #d1d5db', borderRadius: 6 }

@@ -18,6 +18,23 @@ def _is_number(v: Any) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+def _ci_overlap(s0: dict[str, Any], s1: dict[str, Any]) -> bool | None:
+    """Do the two points' 95% CI intervals intersect?
+
+    None when the test carries no information: either side has fewer than 2
+    repeats, or an interval is degenerate (zero-width — typical when the seed
+    strategy pins identical repeats, in which case "overlap" is vacuous).
+    """
+    if (s0.get("n") or 0) < 2 or (s1.get("n") or 0) < 2:
+        return None
+    lo0, hi0, lo1, hi1 = (s0.get("ci95_low"), s0.get("ci95_high"), s1.get("ci95_low"), s1.get("ci95_high"))
+    if not all(_is_number(v) for v in (lo0, hi0, lo1, hi1)):
+        return None
+    if hi0 - lo0 <= 1e-12 or hi1 - lo1 <= 1e-12:
+        return None
+    return max(lo0, lo1) <= min(hi0, hi1)
+
+
 def _numeric_grid_params(grid: dict[str, list[Any]]) -> list[str]:
     return [
         k
@@ -71,6 +88,7 @@ def find_sweep_jumps(combos: list[dict[str, Any]], grid: dict[str, list[Any]]) -
                         continue
                 if best is None or score > best_score:
                     best_score = score
+                    ci_overlap = _ci_overlap(s0, s1)
                     best = {
                         "type": "jump",
                         "param": param,
@@ -80,6 +98,7 @@ def find_sweep_jumps(combos: list[dict[str, Any]], grid: dict[str, list[Any]]) -
                         "value_from": a,
                         "value_to": b,
                         "ratio": ratio,
+                        "ci_overlap": ci_overlap,
                     }
             if best is not None:
                 findings.append(best)

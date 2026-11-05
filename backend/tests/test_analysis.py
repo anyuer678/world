@@ -20,6 +20,48 @@ def _combo(params: dict, metric_means: dict, n: int = 1, std: float = 0.0) -> di
     }
 
 
+def _combo_ci(params: dict, metric: str, mean: float, ci: tuple, n: int = 5) -> dict:
+    lo, hi = ci
+    return {
+        "params": params,
+        "n": n,
+        "metrics": {metric: {"n": n, "mean": mean, "std": 1.0, "p50": mean, "p90": mean, "ci95_low": lo, "ci95_high": hi}},
+    }
+
+
+def test_jump_ci_overlap_semantics():
+    grid = {"load": [1, 2, 3]}
+    disjoint = [
+        _combo_ci({"load": 1}, "m", 10.0, (9.0, 11.0)),
+        _combo_ci({"load": 2}, "m", 10.0, (9.0, 11.0)),
+        _combo_ci({"load": 3}, "m", 100.0, (95.0, 105.0)),
+    ]
+    out = find_sweep_jumps(disjoint, grid)
+    assert out[0]["ci_overlap"] is False
+
+    overlapping = [
+        _combo_ci({"load": 1}, "m", 10.0, (5.0, 30.0)),
+        _combo_ci({"load": 2}, "m", 10.0, (5.0, 30.0)),
+        _combo_ci({"load": 3}, "m", 100.0, (20.0, 160.0)),
+    ]
+    out = find_sweep_jumps(overlapping, grid)
+    assert out[0]["ci_overlap"] is True
+
+    vals = [10.0, 20.0, 30.0, 40.0, 200.0]
+    single_repeat = [_combo({"load": v}, {"m": m}, n=1) for v, m in zip((1, 2, 3, 4, 5), vals)]
+    out = find_sweep_jumps(single_repeat, {"load": [1, 2, 3, 4, 5]})
+    assert out[0]["ci_overlap"] is None
+
+    # n>=2 but zero-width CIs (fixed seed pins identical repeats): test is vacuous -> None
+    degenerate = [
+        _combo_ci({"load": 1}, "m", 10.0, (10.0, 10.0)),
+        _combo_ci({"load": 2}, "m", 10.0, (10.0, 10.0)),
+        _combo_ci({"load": 3}, "m", 100.0, (100.0, 100.0)),
+    ]
+    out = find_sweep_jumps(degenerate, grid)
+    assert out[0]["ci_overlap"] is None
+
+
 def test_jump_detected_in_single_param_sweep():
     grid = {"load": [0.5, 0.6, 0.7, 0.8, 0.9]}
     combos = [

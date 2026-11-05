@@ -1,4 +1,4 @@
-import type { Series } from './chartRender'
+import type { Band, Series } from './chartRender'
 import type { BatchSummary } from './types'
 
 export interface SweepSelection {
@@ -6,6 +6,8 @@ export interface SweepSelection {
   metric: string
   others: Record<string, unknown>
   series: Series
+  /** 95% CI band from combos with n>=2; null when repeats are too few to estimate */
+  band: Band | null
 }
 
 function isNum(v: unknown): boolean {
@@ -89,6 +91,25 @@ export function buildSweep(
     .map((c) => [c.params[param] as number, c.metrics[metric].mean] as [number, number])
     .sort((a, b) => a[0] - b[0])
   if (points.length < 2) return null
+  const bandPoints = slice
+    .filter((c) => {
+      const s = c.metrics[metric]
+      return (
+        c.params[param] !== undefined &&
+        (s?.n ?? 0) >= 2 &&
+        typeof s.ci95_low === 'number' &&
+        typeof s.ci95_high === 'number'
+      )
+    })
+    .map(
+      (c) =>
+        [c.params[param] as number, c.metrics[metric].ci95_low, c.metrics[metric].ci95_high] as [
+          number,
+          number,
+          number,
+        ],
+    )
+    .sort((a, b) => a[0] - b[0])
   const others: Record<string, unknown> = {}
   for (const p of numeric) {
     if (p === param) continue
@@ -100,6 +121,10 @@ export function buildSweep(
     metric,
     others,
     series: { name: metric, color: '#2563eb', data: points },
+    band:
+      bandPoints.length >= 2 && bandPoints.some(([, lo, hi]) => hi - lo > 1e-12)
+        ? { data: bandPoints, color: 'rgba(37, 99, 235, 0.16)' }
+        : null,
   }
 }
 

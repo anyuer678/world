@@ -443,6 +443,35 @@ describe('sweepChart', () => {
     expect(buildSweep(undefined, grid, 'servers', 'm')).toBeNull()
   })
 
+  it('extracts the 95% CI band only when repeats give real width', () => {
+    // fixture above has ci95_low == ci95_high (degenerate) -> no band
+    expect(buildSweep(summary, grid, 'servers', 'm')?.band).toBeNull()
+    const wide: BatchSummary['combos'] = [
+      { params: { servers: 1, load: 0.5 }, n: 5, metrics: { m: { n: 5, mean: 100, std: 8, p50: 100, p90: 104, ci95_low: 93, ci95_high: 107 } } },
+      { params: { servers: 2, load: 0.5 }, n: 5, metrics: { m: { n: 5, mean: 10, std: 2, p50: 10, p90: 12, ci95_low: 8.2, ci95_high: 11.8 } } },
+      { params: { servers: 4, load: 0.5 }, n: 5, metrics: { m: { n: 5, mean: 1, std: 0.4, p50: 1, p90: 1.5, ci95_low: 0.65, ci95_high: 1.35 } } },
+      { params: { servers: 1, load: 0.9 }, n: 5, metrics: { m: { n: 5, mean: 500, std: 10, p50: 500, p90: 510, ci95_low: 491, ci95_high: 509 } } },
+      { params: { servers: 2, load: 0.9 }, n: 5, metrics: { m: { n: 5, mean: 50, std: 5, p50: 50, p90: 55, ci95_low: 46, ci95_high: 54 } } },
+      { params: { servers: 4, load: 0.9 }, n: 5, metrics: { m: { n: 5, mean: 5, std: 1, p50: 5, p90: 6, ci95_low: 4.1, ci95_high: 5.9 } } },
+    ]
+    const s2 = buildSweep({ combos: wide, sensitivity: [], sensitivity_note: '', ci_note: '' } as BatchSummary, grid, 'servers', 'm')
+    expect(s2?.band?.data).toEqual([
+      [1, 93, 107],
+      [2, 8.2, 11.8],
+      [4, 0.65, 1.35],
+    ])
+    expect(s2?.band?.color).toContain('rgba(37, 99, 235')
+  })
+
+  it('appends CI qualification to jump findings only when decidable', () => {
+    const base = { type: 'jump' as const, param: 'servers', from: 1, to: 2, metric: 'm', value_from: 100, value_to: 10, ratio: 10 }
+    expect(formatFinding({ ...base, ci_overlap: false })).toContain('置信区间不重叠，跳变显著')
+    expect(formatFinding({ ...base, ci_overlap: true })).toContain('可能落在重复间噪声范围内')
+    expect(formatFinding(base)).not.toContain('置信区间')
+    expect(formatFinding({ ...base, ci_overlap: null, ratio: null, value_from: 0, value_to: 5 })).not.toContain('置信区间')
+    expect(formatFinding({ ...base, ci_overlap: false, ratio: null, value_from: 0, value_to: 5 })).toContain('置信区间不重叠，跳变显著')
+  })
+
   it('defaults to the metric named by a jump finding', () => {
     const combos2 = [
       { params: { x: 1 }, n: 1, metrics: { a: { n: 1, mean: 1, std: 0, p50: 1, p90: 1, ci95_low: 1, ci95_high: 1 }, b: { n: 1, mean: 2, std: 0, p50: 2, p90: 2, ci95_low: 2, ci95_high: 2 } } },
