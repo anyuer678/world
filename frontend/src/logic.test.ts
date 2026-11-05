@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { modelTypeLabel, quickPicks, scenarioSpec, statusLabel } from './App'
+import { modelTypeLabel, quickPicks, scenarioSpec } from './App'
+import { statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
@@ -136,6 +137,10 @@ describe('statusLabel', () => {
     expect(statusLabel('error')).toBe('出错')
     expect(statusLabel('step_limit')).toBe('达步数上限')
     expect(statusLabel('wall_timeout')).toBe('超时')
+    expect(statusLabel('queued')).toBe('排队中')
+    expect(statusLabel('pending')).toBe('等待中')
+    expect(statusLabel('failed')).toBe('失败')
+    expect(statusLabel('created')).toBe('已创建')
   })
 
   it('passes unknown statuses through unchanged', () => {

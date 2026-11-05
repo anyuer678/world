@@ -1,3 +1,4 @@
+import { statusLabel } from './labels'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
 import type { BatchDetail, BatchItem, BatchListItem, ModelSpec } from './types'
@@ -340,7 +341,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
                 <td style={td}>{b.id}</td>
                 <td style={td}>{b.name}</td>
                 <td style={td}>{b.model_id}</td>
-                <td style={td}>{b.status}</td>
+                <td style={td}>{statusLabel(b.status)}</td>
                 <td style={td}>
                   {b.done_items}/{b.total_items}
                 </td>
@@ -359,7 +360,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
         <div style={{ marginTop: 16, borderTop: '1px dashed #d1d5db', paddingTop: 12 }}>
           <p style={{ fontSize: 13, color: '#374151' }}>
             批量 #{batch.id}「{batch.name}」 · 模型 {batch.model_id} v{batch.model_version} · 状态{' '}
-            <strong role="status">{batch.status}</strong> · 种子策略 {batch.seed_strategy}（基种子 {batch.seed_base ?? '—'}）
+            <strong role="status">{statusLabel(batch.status)}</strong> · 种子策略 {batch.seed_strategy}（基种子 {batch.seed_base ?? '—'}）
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
             <div style={{ background: '#e5e7eb', borderRadius: 4, height: 10, flex: 1, overflow: 'hidden' }}>
@@ -558,7 +559,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
                         <td style={td}>{it.item_index}</td>
                         <td style={{ ...td, fontFamily: 'monospace', fontSize: 12 }}>{JSON.stringify(it.params)}</td>
                         <td style={td}>{it.seed}</td>
-                        <td style={td}>{it.status}</td>
+                        <td style={td}>{statusLabel(it.status)}</td>
                         <td style={td}>{it.attempts}</td>
                         <td style={td}>{it.steps ?? '—'}</td>
                         <td style={{ ...td, fontFamily: 'monospace', fontSize: 12 }}>

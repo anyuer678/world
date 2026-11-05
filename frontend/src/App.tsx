@@ -4,6 +4,7 @@ import type { ModelInfo, ModelSpec, ScenarioInfo, SessionState } from './types'
 import ParamForm from './ParamForm'
 import TrafficPanel from './TrafficPanel'
 import SimView from './SimView'
+import { statusLabel } from './labels'
 import BatchPanel from './BatchPanel'
 import ComparePanel from './ComparePanel'
 import { summarizeMetrics } from './summary'
@@ -454,7 +455,7 @@ export default function App() {
                   <td style={td}>{h.id}</td>
                   <td style={td}>{h.name}</td>
                   <td style={td}>{h.model_id}</td>
-                  <td style={td}>{h.status}</td>
+                  <td style={td}>{statusLabel(h.status)}</td>
                   <td style={td}>
                     <button onClick={() => loadExperiment(h.id)} style={{ ...btn, padding: '4px 10px', fontSize: 12 }}>
                       载入配置
@@ -495,20 +496,6 @@ export default function App() {
       </details>
     </main>
   )
-}
-
-export function statusLabel(s: string): string {
-  const map: Record<string, string> = {
-    idle: '就绪',
-    running: '运行中',
-    paused: '已暂停',
-    completed: '已完成',
-    cancelled: '已取消',
-    error: '出错',
-    step_limit: '达步数上限',
-    wall_timeout: '超时',
-  }
-  return map[s] ?? s
 }
 
 export function modelTypeLabel(t: string): string {

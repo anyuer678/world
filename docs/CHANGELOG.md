@@ -344,3 +344,13 @@ R30 做过 Docker 复验，但那时还没有 R39（暂停≠取消）与 R40（
 顶部提示与批量提示加 `role="status"`、三处错误横幅（顶部/会话/批量）加 `role="alert"`、
 批量状态加 `role="status"`。浏览器实测：运行时朗读文本「状态 运行中」→ 暂停后「状态 已暂停」，
 422 错误进入 `role=alert` 区域。前端 62/62、tsc/vite 干净。
+
+**R45（2026-11-05）界面状态值统一中文化**
+
+会话状态早已本地化，但实验历史、批量列表、批量详情、批单项、比较面板仍在直接渲染后端
+英文枚举（`completed` / `cancelled` / `queued`…），中文界面里混着英文状态。修法：把
+`statusLabel()` 从 App.tsx 抽到 `frontend/src/labels.ts`（五个界面共用），补齐
+`created/queued/pending/failed` 四个此前会原样漏出的枚举，未知值仍原样返回（不静默吞掉
+新状态）；App 的历史表与 BatchPanel/ComparePanel 全部改为调用它。浏览器实测：实验历史、
+批量列表、批量详情头部均显示「已完成」，`td` 中不再出现任何英文状态；`labels.ts` 已加入
+ARCHITECTURE 清单（文档锁双向校验通过）。前端 62/62（新增 4 条枚举断言）、tsc/vite 干净。

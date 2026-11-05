@@ -99,6 +99,7 @@
   frontend/src/api.ts
   frontend/src/chartRender.ts
   frontend/src/findings.ts
+  frontend/src/labels.ts
   frontend/src/logic.test.ts
   frontend/src/main.tsx
   frontend/src/schema.ts

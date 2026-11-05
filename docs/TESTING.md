@@ -738,3 +738,14 @@
     同时暂停禁用、恢复可用；把步数设成 2000000 触发 422 → `[role=alert]` 出现
     并带后端消息。
     ⑤ 回归：前端 **62/62**、tsc -b/vite build 干净；后端未改动（303/303 沿用）。
+
+56. **R45 界面状态值统一中文化**。
+    ① 盘点：会话状态已本地化，但实验历史（App）、批量列表 / 详情 / 单项（BatchPanel）、
+    比较面板（ComparePanel）共 5 处直接渲染后端英文枚举；`statusLabel` 还缺
+    `created/queued/pending/failed` 四个枚举（会原样漏出英文）。
+    ② 修：抽出 `frontend/src/labels.ts`（未知值原样返回，避免静默吞掉新状态），
+    五处改为调用；`labels.ts` 同步写入 ARCHITECTURE 清单，文档锁的双向校验通过。
+    ③ 单测：`statusLabel` 新增 queued/pending/failed/created 四条断言（前端 62/62）。
+    ④ 浏览器实测：展开批量面板后，`main td` 中英文状态值的集合为空；实验历史、批量列表、
+    批量详情头部 `<strong role=status>` 均为「已完成」。比较面板行未单独打开验证
+    （与其余四处同一函数，由单测覆盖）。

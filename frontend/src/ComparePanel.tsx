@@ -1,3 +1,4 @@
+import { statusLabel } from './labels'
 import { useEffect, useState } from 'react'
 import { api } from './api'
 import type { ExperimentResult } from './types'
@@ -108,7 +109,7 @@ export default function ComparePanel({ history }: { history: HistoryEntry[] }) {
                   </td>
                   <td style={td}>{r.model}</td>
                   <td style={td}>{r.seed}</td>
-                  <td style={td}>{r.status}</td>
+                  <td style={td}>{statusLabel(r.status)}</td>
                   {metricKeys.map((k) => (
                     <td key={k} style={td}>
                       {typeof r.metrics[k] === 'number' ? r.metrics[k].toFixed(4) : '—'}
