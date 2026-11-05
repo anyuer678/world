@@ -1,6 +1,6 @@
 import { statusLabel } from './labels'
 import { useCallback, useEffect, useState } from 'react'
-import { api } from './api'
+import { api, isNotFoundOn } from './api'
 import type { BatchDetail, BatchItem, BatchListItem, ModelSpec } from './types'
 import { formatFinding, type FindingsResponse } from './findings'
 import { buildSweep, defaultSweepSelection, sweepMetricOptions, sweepParamOptions, type SweepSelection } from './sweepChart'
@@ -83,7 +83,12 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const [busy, setBusy] = useState(false)
 
   const refreshBatches = useCallback(() => {
-    api.listBatches().then((r) => setBatches(r.batches)).catch(() => {})
+    // R51：列表拉取失败此前完全静默——服务端不可达时界面只显示「暂无批量」，
+    // 用户会把失败当成「没有数据」。这里至少把原因显示出来。
+    api
+      .listBatches()
+      .then((r) => setBatches(r.batches))
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
 
   useEffect(() => {
@@ -122,8 +127,13 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
           api.getBatchFindings(id).then(setFindings).catch(() => {})
           refreshBatches()
         }
-      } catch {
-        /* transient poll errors ignored */
+      } catch (e) {
+        // 404 不是抖动：批量已不存在（外部删除/库被重置），继续轮询只会永远停在旧数据
+        if (isNotFoundOn(e, '/batches/')) {
+          setError('批量已不存在（可能被外部删除或数据库被重置）')
+          setBatch(null)
+        }
+        /* 其余视为瞬时错误，继续轮询 */
       }
     }, 700)
     return () => clearInterval(t)

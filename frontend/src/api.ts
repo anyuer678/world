@@ -79,6 +79,12 @@ export function errorDetailMessage(status: number, body: unknown): string {
   return obj?.errors?.length ? `${message}：${obj.errors.map((e) => `${e.code} ${e.message}`).join('; ')}` : message
 }
 
+/** 404 + 指定路径段才算「该资源已不在」（R50/R51）。
+ * 不能只看状态码：删实验、删会话都可能是 404，但清空的应当是各自对应的界面状态。 */
+export function isNotFoundOn(e: unknown, pathPart: string): boolean {
+  return e instanceof ApiError && e.status === 404 && e.path.includes(pathPart)
+}
+
 /** 带状态码与请求路径的错误（R50）：调用方需要区分「会话已回收」与其他失败。 */
 export class ApiError extends Error {
   constructor(

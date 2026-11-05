@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ApiError, api } from './api'
+import { api, isNotFoundOn } from './api'
 import type { ModelInfo, ModelSpec, ScenarioInfo, SessionState } from './types'
 import ParamForm from './ParamForm'
 import TrafficPanel from './TrafficPanel'
@@ -78,7 +78,19 @@ export default function App() {
     const onVisible = () => {
       const sid = sessionRef.current
       if (document.visibilityState === 'visible' && sid) {
-        api.getSession(sid).then(setSession).catch(() => {})
+        // R51：这里原先也是空 catch——标签页隐藏期间会话被回收时，回到页面只会继续
+        // 显示过期画面（此时轮询早已停止，没有第二条路径能发现）。与轮询同一套恢复逻辑。
+        api
+          .getSession(sid)
+          .then((s) => {
+            if (sessionRef.current === sid) setSession(s)
+          })
+          .catch((e) => {
+            if (isSessionGone(e) && sessionRef.current === sid) {
+              setSession(null)
+              setNotice('会话已被服务端回收（空闲超时）或删除；请重新开始模拟。')
+            }
+          })
       }
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -548,7 +560,7 @@ export default function App() {
 /** 404 + 会话路径才算「会话已不在」（R50）。不能只看 404：
  * 删除一条实验也会 404，但那不该把当前会话清掉。 */
 export function isSessionGone(e: unknown): boolean {
-  return e instanceof ApiError && e.status === 404 && e.path.includes('/sessions/')
+  return isNotFoundOn(e, '/sessions/')
 }
 
 /** 实验历史的截断口径（R48）：与批量面板的 itemsHeading 同一原则——

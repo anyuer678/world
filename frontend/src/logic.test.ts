@@ -8,7 +8,7 @@ import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
 import { FALLBACK_LIMITS, batchSubmitProblem, itemsHeading } from './BatchPanel'
 import { toggleCompare } from './ComparePanel'
-import { ApiError, errorDetailMessage } from './api'
+import { ApiError, errorDetailMessage, isNotFoundOn } from './api'
 
 describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
   it('rejects repeats above the server max that the old frontend ignored', () => {
@@ -723,6 +723,10 @@ describe('isSessionGone (session TTL recovery, R50)', () => {
     expect(isSessionGone(new ApiError(404, '/api/experiments/1', 'not_found', 'experiment 1 not found'))).toBe(false)
     expect(isSessionGone(new ApiError(409, '/api/sessions/abc', 'conflict', 'stopping'))).toBe(false)
     expect(isSessionGone(new Error('network down'))).toBe(false)
+    // R51：通用版本按路径段区分资源
+    expect(isNotFoundOn(new ApiError(404, '/api/batches/7', 'not_found', 'x'), '/batches/')).toBe(true)
+    expect(isNotFoundOn(new ApiError(404, '/api/batches/7', 'not_found', 'x'), '/sessions/')).toBe(false)
+    expect(isNotFoundOn(new Error('network down'), '/batches/')).toBe(false)
   })
 })
 
