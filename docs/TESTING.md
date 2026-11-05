@@ -697,3 +697,17 @@
     没有发现缺陷——本轮没有为此改动任何代码。
     回归：后端 **302/302**、前端 **62/62**、tsc -b/vite build 干净。
 
+53. **R42 生产形态复验：会话控制语义在容器内复核（R39/R40 之后）**。
+    ① 重新 `docker compose up -d --build`（api 镜像含最新代码，web 经 nginx 反代
+    `/api/` → `api:8000`），全部请求走 `http://localhost:5173/api/...`。
+    ② 256×256 元胞自动机：`POST /pause` **200 / 31.9 ms**，响应体 `running`；轮询到
+    `paused`（step 256）。`POST /reset` **200 / 37.7 ms**，随后落 `idle`（step 0）；
+    再 `POST /step {n:3}` 得 `paused`（step 3）；`DELETE` 204。与本地 uvicorn/浏览器
+    测得的量级一致，说明边界交接语义不依赖运行方式。
+    ③ 配置抵达：一次性容器 `-e WORLDLAB_SESSION_TTL_SECONDS=12.5` 下
+    `Settings.from_env().session_ttl_seconds == 12.5`（默认 3600）。
+    ④ 重启语义：运行中的实验在 `docker compose restart api` 后变为
+    `failed | interrupted: service restarted while run was in progress`；
+    `GET /api/sessions` 返回空列表（会话是内存态，文档已声明重启即失）。
+    ⑤ 负结果：本轮未发现缺陷，未改动任何产品代码；探针实验已从容器库删除，
+    compose 栈已 `down`（保留数据卷）。

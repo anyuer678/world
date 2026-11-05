@@ -309,3 +309,15 @@ R39 把「暂停后不许并发改引擎」立住了，但用的是 join：`paus
 `restore` 保持 API-only 的同步 409（检查点校验失败必须回给调用方）。契约按实更新：
 `pause`/`reset` 的响应是交接前状态，`paused`/`idle` 在 ≤1 个分片内经轮询到达。
 后端 **302/302**、前端 **62/62**、tsc -b/vite build 干净。
+
+**R42（2026-11-05）生产形态复验：R39/R40 的会话控制语义在容器里同样成立**
+
+R30 做过 Docker 复验，但那时还没有 R39（暂停≠取消）与 R40（控制端点边界交接）的改动；
+本轮把 compose 重新构建（api 镜像含最新代码）后经 nginx 反代实测：
+256×256 元胞自动机会话 `POST /pause` **HTTP 200 / 31.9 ms**（`time_total`）且响应体仍是
+`running`，随后轮询到 `paused`（step 256）；`POST /reset` **200 / 37.7 ms**，随后落
+`idle`（step 0），再单步 3 步得 `paused`（step 3）；`DELETE` 204。
+容器内 `WORLDLAB_SESSION_TTL_SECONDS=12.5` 覆盖生效（`Settings.from_env()` 读出 12.5）。
+另验两条**重启语义**：运行中的实验在 `docker compose restart api` 后变
+`failed | interrupted: service restarted while run was in progress`，
+会话列表如约清空（内存态）。本轮未发现缺陷，未改代码；证据记入 `TESTING §53`。
