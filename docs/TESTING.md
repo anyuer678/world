@@ -859,3 +859,14 @@
     → 跑 5 步，断言同 seed 逐位一致、`total=50`、指标键 `{heads, ratio}`。
     ④ 反证：把示例换成伪代码后该测试变红（`assert code` 的文案指明是示例不可运行）；
     还原后全绿。后端 **304/304**。
+
+67. **R56 文档描述的插件启动路径（真实 uvicorn + 环境变量）**。
+    ① 从 PLUGINS.md 抽取示例代码块写成 `backend/_r56_plugins/lottery.py`，按文档命令
+    `WORLDLAB_PLUGIN_MODULES=_r56_plugins.lottery uvicorn app.main:app` 启动（独立临时库）：
+    `GET /api/models` = 9 个（8 内置 + lottery v1.0.0，中文显示名完好）；建会话 + 单步 5 次
+    → `completed`，快照 `{heads:22,total:50,ratio:0.44}`、指标 `{heads,ratio}`。
+    ② 失败路径：`WORLDLAB_PLUGIN_MODULES=no_such_plugin.module` → 启动即失败（exit 1），
+    信息 `plugin module 'no_such_plugin.module' could not be imported: No module named …`，
+    与文档声明一致。
+    ③ 环境备注：sqlite 库放在 git-bash 的 `/tmp` 下会报 `unable to open database file`，
+    探针改用仓库内 `backend/data/` 路径；该库与插件目录跑完即删（工作树干净）。

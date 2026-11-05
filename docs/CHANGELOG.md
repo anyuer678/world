@@ -459,3 +459,14 @@ CA 宽度填 3 → `错误：参数校验失败：width 不能小于 5`（原为
 经 `load_plugin_modules` 注册后跑 5 步，断言同 seed 两次运行逐位一致、`total=50`、指标键为
 `{heads, ratio}`。反证注入：把示例换回伪代码，该测试立即变红（断言文案写明原因）。
 后端 **304/304**。
+
+**R56（2026-11-06）按文档原样起服务：插件启动路径与失败路径均已实测**
+
+R55 只验到加载器层面；本轮把 `PLUGINS.md` 的示例代码块原样抽成 `_r56_plugins/lottery.py`，
+用文档写的 `WORLDLAB_PLUGIN_MODULES=... uvicorn app.main:app` 启动真实服务：
+`GET /api/models` 返回 **9 个模型**（8 内置 + lottery v1.0.0，中文显示名完好）；
+用 `lottery` spec 建会话、单步 5 次 → `completed`，快照 `{heads:22,total:50,ratio:0.44}`，
+指标 `{heads:22.0,ratio:0.44}`。失败路径同样成立：`WORLDLAB_PLUGIN_MODULES=no_such_plugin.module`
+时应用启动即失败（退出码 1），错误信息为
+`plugin module 'no_such_plugin.module' could not be imported: No module named 'no_such_plugin'`
+——与文档「加载失败会让应用启动失败，并指明插件与原因」一致。探针目录与临时库已删除。
