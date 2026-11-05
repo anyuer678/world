@@ -46,7 +46,9 @@ Base URL: `http://localhost:8000`，前缀 `/api`。错误统一：
 - `GET /api/batches/{id}/export.csv` → 逐 item 明细 CSV 附件
 - `GET /api/batches/{id}/findings`（R6）→ `{findings[], note}`：
   两层描述性自动发现——①jump：1-D 扫描相邻点因子 ≥3（触及精确零记
-  `ratio: null`，0→0 不算），②dispersion：n≥3 且 CV ≥0.5；每类截 5 条；
+  `ratio: null`，0→0 不算；R23 起附 `ci_overlap` 三态——false=两段 95% CI
+  不相交（跳变显著）、true=相交（可能落在重复间噪声内）、null=无法判定，
+  含任一侧 n<2 或 fixed 种子导致的零宽退化区间），②dispersion：n≥3 且 CV ≥0.5；每类截 5 条；
   note 固定声明「只描述不因果」
 
 ## 交互会话（阶段 2，进程内，不入库）

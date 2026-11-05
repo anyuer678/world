@@ -374,3 +374,16 @@
    69 倍跳变注「置信区间不重叠，跳变显著」、批 #10（fixed 种子，重复全同零方
    差）→ aria「重复次数不足，无置信带」+图下引导文案，控制台零错误。回归：
    后端 245/245、前端 53/53、tsc -b/vite build 干净。
+34. **R24 巡检轮：文档对账债 + 插件场景契约真缺陷**（决策见 DECISIONS D48）。
+   ① 文档对账：ARCHITECTURE 模型清单补 predator_prey/；API_CONTRACT findings
+   契约补 ci_overlap 三态说明。② 真缺陷修复：PLUGINS.md 此前无 scenarios 契约、
+   注册表场景校验无测试、前端把 seed/stop_condition 当必填（插件省略即炸）。
+   改：ScenarioInfo 两字段可选、scenarioSpec 增 current 表单兜底（非法停止值
+   退 steps/1000、种子留空 null）、PLUGINS.md 新增契约小节。新增测试：后端
+   test_plugins +3（合法场景透传 list、形状不合 RegistryError、id 重复
+   RegistryError）、前端 +1（省略字段兜底与默认）。③ 真插件端到端：临时插件
+   r24_demo（场景刻意省略两字段）经 WORLDLAB_PLUGIN_MODULES 载入 → /api/models
+   9 模型、场景仅含 id/title/description/params → UI 选模型点场景卡 → 会话
+   completed，spec 实测 seed=42、stop=steps/10000（沿用表单值）、count=30000=
+   bump3×10000、无错误横幅；验毕删临时插件、关服务器。回归：后端 248/248、
+   前端 54/54、tsc -b/vite build 干净。

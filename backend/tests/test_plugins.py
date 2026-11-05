@@ -78,6 +78,37 @@ def test_register_rejects_model_type_mismatch():
         _make_cls(reg, DiscreteEventModel, _param_model())
 
 
+_TSM = __import__("app.core.engine.models_base", fromlist=["TimeSteppedModel"]).TimeSteppedModel
+
+
+def test_plugin_scenarios_are_validated_and_listed():
+    reg = ModelRegistry()
+    scenarios = [
+        {"id": "a", "title": "场景 A", "description": "说明 A", "params": {"n": 1}},
+        {"id": "b", "title": "场景 B", "description": "说明 B", "params": {"n": 2}, "seed": 5,
+         "stop_condition": {"type": "steps", "value": 10}},
+    ]
+    _make_cls(reg, _TSM, _param_model(), scenarios=scenarios)
+    entry = reg.list()[0]
+    assert entry["scenarios"] == scenarios
+
+
+def test_register_rejects_malformed_scenarios():
+    reg = ModelRegistry()
+    with pytest.raises(RegistryError, match="scenarios"):
+        _make_cls(reg, _TSM, _param_model(), scenarios=[{"id": "a", "title": "", "description": "d", "params": {}}])
+
+
+def test_register_rejects_duplicate_scenario_ids():
+    reg = ModelRegistry()
+    dup = [
+        {"id": "a", "title": "T1", "description": "d", "params": {}},
+        {"id": "a", "title": "T2", "description": "d", "params": {}},
+    ]
+    with pytest.raises(RegistryError, match="duplicate scenario"):
+        _make_cls(reg, _TSM, _param_model(), scenarios=dup)
+
+
 def test_load_plugin_modules_via_register_hook(tmp_path: Path, monkeypatch):
     plugin_dir = tmp_path / "wlplugtest"
     plugin_dir.mkdir()

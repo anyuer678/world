@@ -180,6 +180,19 @@ describe('scenarioSpec', () => {
     spec.params.servers = 99
     expect(scenario.params.servers).toBe(1)
   })
+
+  it('normalizes scenarios that omit seed/stop_condition via current-form fallback', () => {
+    const bare: ScenarioInfo = { id: 'a', title: 'A', description: 'd', params: { n: 1 } }
+    const withCurrent = scenarioSpec('plug', bare, {
+      stop_condition: { type: 'sim_time', value: 5 },
+      seed: 42,
+    })
+    expect(withCurrent.stop_condition).toEqual({ type: 'sim_time', value: 5 })
+    expect(withCurrent.seed).toBe(42)
+    const defaulted = scenarioSpec('plug', bare)
+    expect(defaulted.stop_condition).toEqual({ type: 'steps', value: 1000 })
+    expect(defaulted.seed).toBeNull()
+  })
 })
 
 describe('summarizeMetrics', () => {

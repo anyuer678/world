@@ -3,8 +3,9 @@ export interface ScenarioInfo {
   title: string
   description: string
   params: Record<string, unknown>
-  seed: number
-  stop_condition: { type: 'steps' | 'sim_time' | 'until_empty'; value?: number }
+  /** 可省略：工作台场景卡点击时沿用当前表单值（无表单值时 seed=null、停止条件 steps/1000） */
+  seed?: number | null
+  stop_condition?: { type: 'steps' | 'sim_time' | 'until_empty'; value?: number }
 }
 
 export interface ModelInfo {

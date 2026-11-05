@@ -27,6 +27,17 @@ WorldLab 的模型库是插件式的：核心引擎、实验管理、API 与前�
 | `visualizer` | `dict` | 可视化适配器声明，必须含字符串 `kind`（前端 `SimView` 按 kind 分发；如 `{"kind": "series", "series": [...]}`、`{"kind": "grid"}`、`{"kind": "gantt"}`、`{"kind": "none"}`） |
 | `param_model` | `type[WorldLabParams]` | Pydantic 参数 Schema（`extra="forbid"`），`model_json_schema()` 驱动前端结构化编辑器 |
 | `dt` | `float` | 仅 time-stepped：每步推进的固定 Δt |
+| `scenarios` | `list[dict]`（**可选**，缺省 `[]`） | 一键场景库；注册时校验形状（见下） |
+
+### 一键场景（`scenarios`，可选）
+
+每一项是一个 dict：`id`/`title`/`description` 为非空字符串、`params` 为 dict；
+`seed` 与 `stop_condition` 可省略——工作台点场景卡时**沿用当前表单值**（表单停止
+值非法或未提供时兜底 `steps/1000`，种子留空则 `null`=每次随机）。注册表强校验：
+形状不合即 `RegistryError`，同模型内 `id` 不得重复。`GET /api/models` 原样透传
+`scenarios`，工作台「模型与参数」区把它们渲染成可点击的场景卡——点卡片即以此
+参数建会话并连续运行。首页「一键运行」快捷入口（QUICK_PICKS）是前端为内置模型
+精选的固定列表，外部插件的场景出现在其自身模型的详情区，而非首页。
 
 ### 实例方法
 

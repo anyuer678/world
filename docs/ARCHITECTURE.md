@@ -39,7 +39,7 @@ backend/
       registry.py plugins.py stats.py
     models/                每个子目录 = 一个模型插件（__init__.py 加一行 import 即接入）
       queueing/ cpu_scheduling/ cache_sim/ cellular_automaton/
-      schelling/ traffic_network/ sir/
+      schelling/ traffic_network/ sir/ predator_prey/
     api/routes.py          全部 REST 路由（会话/批量进度由前端轮询）
     services/ (experiment_service.py session_service.py batch_service.py
                analysis_service.py reporting.py benchmarks.py)

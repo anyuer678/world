@@ -88,13 +88,19 @@ export default function App() {
     setError('')
     setNotice('')
     try {
-      applySpec({
-        model_id: modelId,
-        params: scenario.params,
-        stop_condition: scenario.stop_condition,
-        seed: scenario.seed,
-      })
-      const s = await api.createSession(scenarioSpec(modelId, scenario))
+      const sv = Number(stopValue)
+      const current = {
+        stop_condition:
+          stopType === 'until_empty'
+            ? ({ type: 'until_empty' } as const)
+            : Number.isFinite(sv) && sv > 0
+              ? ({ type: stopType, value: sv } as const)
+              : ({ type: 'steps', value: 1000 } as const),
+        seed: seed === '' ? null : Number(seed),
+      }
+      const spec = scenarioSpec(modelId, scenario, current)
+      applySpec(spec)
+      const s = await api.createSession(spec)
       setSession(s)
       setNotice(`已按场景「${scenario.title}」创建会话，正在连续运行。`)
       simSectionRef.current?.scrollIntoView({ block: 'start' })
@@ -506,13 +512,18 @@ export function modelTypeLabel(t: string): string {
   return t
 }
 
-export function scenarioSpec(modelId: string, scenario: ScenarioInfo): ModelSpec {
+export function scenarioSpec(
+  modelId: string,
+  scenario: ScenarioInfo,
+  current?: { stop_condition: ModelSpec['stop_condition']; seed: number | null },
+): ModelSpec {
+  const stop = scenario.stop_condition ?? current?.stop_condition ?? { type: 'steps', value: 1000 }
   return {
     schema_version: 1,
     model_id: modelId,
     params: structuredClone(scenario.params),
-    stop_condition: structuredClone(scenario.stop_condition),
-    seed: scenario.seed,
+    stop_condition: structuredClone(stop),
+    seed: scenario.seed != null ? scenario.seed : (current?.seed ?? null),
   }
 }
 
