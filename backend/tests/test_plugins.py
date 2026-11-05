@@ -185,3 +185,43 @@ def test_load_plugin_modules_hook_failure(tmp_path: Path, monkeypatch):
     monkeypatch.syspath_prepend(str(tmp_path))
     with pytest.raises(PluginError, match="boom"):
         load_plugin_modules(["badplugmod"], ModelRegistry())
+
+
+def test_documented_plugin_example_is_runnable(tmp_path, monkeypatch):
+    """R55：PLUGINS.md 的示例必须能原样跑起来。
+
+    文档要求每个插件附「可运行示例」，而示例此前是 `# ... 实现各方法` 的伪代码——
+    照抄的学生只会得到一堆抽象方法未实现的报错。这里直接从文档抽取代码块、当成真插件
+    加载并跑 5 步，示例与实现从此不能各自漂移。"""
+    import re
+
+    from app.core.engine.engines import Limits, SimulationEngine
+
+    docs = (Path(__file__).resolve().parents[2] / "docs" / "PLUGINS.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```python\n(.*?)```", docs, flags=re.S)
+    code = next((b for b in blocks if "def register(registry)" in b and "class LotteryModel" in b), None)
+    assert code, "PLUGINS.md 里找不到可运行的示例插件代码块（示例退回伪代码时这条会红）"
+
+    pkg = tmp_path / "my_plugins"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "lottery.py").write_text(code, encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    reg = ModelRegistry()
+    load_plugin_modules(["my_plugins.lottery"], reg)
+    cls = reg.get("lottery")
+    assert cls.model_id == "lottery" and cls.display_name
+
+    def run_once():
+        engine = SimulationEngine(cls({"n": 10}, 7), {"type": "steps", "value": 5},
+                                  limits=Limits(100, 60, 10000, 256))
+        engine.run(max_steps=5)
+        snap = engine.snapshot()
+        return engine.steps, snap.state, snap.metrics
+
+    a, b = run_once(), run_once()
+    assert a == b, "同 seed 两次运行的示例插件必须逐位一致"
+    assert a[0] == 5 and a[1]["total"] == 50
+    assert 0.0 <= a[1]["ratio"] <= 1.0 and set(a[2]) == {"heads", "ratio"}
+

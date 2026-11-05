@@ -849,3 +849,13 @@
     ③ 单测：`params.width` + 英文消息 → 「width 不能小于 5」；不可识别的 `params.gamma ≥0`
     整条回退（前端 **69/69**）。
     ④ 浏览器实测：CA 宽度 3 → `错误：参数校验失败：width 不能小于 5`。
+
+66. **R55 插件文档的示例必须真能跑（文档抽取式测试）**。
+    ① 缺陷：PLUGINS.md 的示例是 `# ... 实现各方法` 伪代码，而同一文档要求插件附「可运行示例」；
+    读者照抄必然缺方法，也看不出契约要求哪五个方法。
+    ② 修：示例改为完整实现（五个必需方法 + 可选 `initialize`），并说明每个方法对应什么契约。
+    ③ 新测试 `test_documented_plugin_example_is_runnable`：正则抽取文档中带 `register(registry)`
+    的代码块 → 写成 `my_plugins/lottery.py` → `load_plugin_modules` 注册进独立 `ModelRegistry`
+    → 跑 5 步，断言同 seed 逐位一致、`total=50`、指标键 `{heads, ratio}`。
+    ④ 反证：把示例换成伪代码后该测试变红（`assert code` 的文案指明是示例不可运行）；
+    还原后全绿。后端 **304/304**。

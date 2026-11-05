@@ -70,26 +70,62 @@ app/models/<plugin_id>/
 
 插件包定义 `register(registry)` 钩子：
 
+下面是一个**完整可运行**的最小插件（R55 起由
+`tests/test_plugins.py::test_documented_plugin_example_is_runnable` 直接从本文档抽取并运行，
+示例与代码不会再各走一路）：
+
 ```python
 # my_plugins/lottery.py
 from app.core.engine.models_base import TimeSteppedModel, WorldLabParams
 
+
 class LotteryParams(WorldLabParams):
-    n: int = 10
+    n: int = 10          # 每步投掷的硬币数
+
 
 class LotteryModel(TimeSteppedModel):
     model_id = "lottery"
-    display_name = "Lottery"
-    description = "Example external plugin."
-    model_type = "time_stepped"
+    display_name = "投硬币（示例插件）"
+    description = "每步投 n 枚硬币，统计正面比例。"
     version = "1.0.0"
-    visualizer = {"kind": "none"}
     param_model = LotteryParams
-    # ... 实现各方法
+    dt = 1.0
+    visualizer = {"kind": "none"}   # 未知 kind 会让前端回落到通用状态表
+
+    def initialize(self, ctx=None):
+        self.heads = 0
+        self.total = 0
+
+    def step(self):
+        for _ in range(self.params.n):
+            if self.rng.random() < 0.5:
+                self.heads += 1
+        self.total += self.params.n
+        self.emit(float(self.total), "tick", f"正面 {self.heads}/{self.total}")
+
+    def dump_state(self):
+        return {"heads": self.heads, "total": self.total}
+
+    def load_state(self, state):
+        self.heads = int(state["heads"])
+        self.total = int(state["total"])
+
+    def snapshot(self):
+        ratio = self.heads / self.total if self.total else 0.0
+        return {"heads": self.heads, "total": self.total, "ratio": ratio}
+
+    def finalize_metrics(self):
+        ratio = self.heads / self.total if self.total else 0.0
+        return {"heads": float(self.heads), "ratio": ratio}
+
 
 def register(registry):
     registry.register(LotteryModel)
 ```
+
+五个必须实现的方法决定了两类契约：`step()`（固定 Δt 推进）、`snapshot()`（前端视图）、
+`dump_state()`/`load_state()`（检查点与恢复）、`finalize_metrics()`（结果指标）；
+`initialize()` 可选。所有状态必须 JSON 安全。
 
 启动时加载（逗号分隔，顺序即加载顺序）：
 

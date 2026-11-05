@@ -448,3 +448,14 @@ R46 只把**数组形状**（FastAPI 请求体规则）的字段消息译成中�
 消息翻译表，规则与数组形状一致（**全部可识别才翻译，否则整条回退原文**）。浏览器实测：
 CA 宽度填 3 → `错误：参数校验失败：width 不能小于 5`（原为
 `参数校验失败：params.width Input should be greater than or equal to 5`）。前端 **69/69**。
+
+**R55（2026-11-06）PLUGINS.md 的示例插件从伪代码变成可运行代码，并由测试绑定**
+
+插件章节是课程交付物里「如何扩展」的主入口，但它的示例是
+`# ... 实现各方法` 的伪代码——同一文档还要求插件必须附「可运行示例」。学生照抄只会得到
+一堆抽象方法未实现的报错，而且看不出该实现哪五个方法。本轮把示例改成完整实现
+（`step`/`snapshot`/`dump_state`/`load_state`/`finalize_metrics`），并新增
+`test_documented_plugin_example_is_runnable`：**直接从 PLUGINS.md 抽取代码块**、写成临时插件、
+经 `load_plugin_modules` 注册后跑 5 步，断言同 seed 两次运行逐位一致、`total=50`、指标键为
+`{heads, ratio}`。反证注入：把示例换回伪代码，该测试立即变红（断言文案写明原因）。
+后端 **304/304**。
