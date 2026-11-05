@@ -136,6 +136,9 @@ WORLDLAB_PLUGIN_MODULES=my_plugins.lottery,other_pkg.models uvicorn app.main:app
 加载失败（模块不存在 / `register()` 抛异常 / 契约校验不过）会让应用启动失败，
 错误信息指明具体插件与原因。
 
+容器部署时，插件模块必须对 `api` 容器内可导入：要么构建进镜像，要么挂载目录并设置
+`PYTHONPATH`，再设 `WORLDLAB_PLUGIN_MODULES`；该变量只负责按名导入，不搬运代码（R58 成文）。
+
 ## 注册表 API（`app/core/registry.py`）
 
 - `registry.register(cls)` — 校验并登记；同 ID+同版本重复注册报错。
