@@ -106,5 +106,6 @@ BENCHMARKS 补口径说明，`test_bench_result_never_reports_zero_throughput` �
 那段长文同时是编辑锚点误删的高发区。
 ⑥ 新增 `.github/workflows/ci.yml`：把 README 教的两条命令（`uv run pytest`、
 `npm ci && npm run test && npm run build`）变成推送后自动门禁。
+首跑已核验（run 42019027707）：后端 job **270 passed / 22.5 s**（ubuntu-latest、`uv sync --frozen` 装的 CPython 3.12.16），前端 job 60 项 + `tsc -b`/vite build 通过——这是本项目**第一次**在 Linux 上跑通整套测试。
 
 回归：后端 **270/270**、前端 **60/60**、tsc -b/vite build 干净。

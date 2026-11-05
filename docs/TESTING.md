@@ -492,4 +492,5 @@
     批量面板展开三态各 **0 违规**，两张 canvas 有 `role=img` + 中文 aria-label。
     ⑤ README R 段逐字外迁 `docs/CHANGELOG.md`（脚本自检内容完整），README 变短 3,190 字符。
     ⑥ 新增 GitHub Actions 门禁（后端 pytest + 前端 vitest/tsc/vite build）。
+    首跑已核验（run 42019027707）：后端 job **270 passed / 22.5 s**（ubuntu-latest、`uv sync --frozen` 装的 CPython 3.12.16），前端 job 60 项 + `tsc -b`/vite build 通过——这是本项目**第一次**在 Linux 上跑通整套测试。
     回归：后端 **270/270**、前端 **60/60**、tsc -b/vite build 干净。

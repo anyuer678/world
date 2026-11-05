@@ -82,6 +82,11 @@ R15 复验停止条件两型，CSV/报告导出为阶段 6 已验链路。
 
 ## 测试与质量保障
 
+- **CI 门禁**（R31 新增）：`.github/workflows/ci.yml` 在推送/PR 时自动跑 README 教的同一套
+  命令——后端 `uv sync --frozen` + `uv run pytest -o addopts=""`，前端 `npm ci` + `vitest` +
+  `tsc -b && vite build`。首跑（run 42019027707）双 job 全绿：后端 **270 passed / 22.5 s**
+  （ubuntu-latest，uv 装的 CPython 3.12.16），前端 60 项 + 构建通过——即测试套并非只在
+  Windows 上成立。
 - **后端 pytest**（24 个测试文件）：引擎时间语义（同刻事件顺序、零延迟链上限）、
   八模型正确性（排队论对照、调度指标手算对照、缓存命中数、CA 规则、谢林同步步
   不变式、SIR 仓室守恒与 R₀ 阈值、捕食者-猎物首次积分守恒与内平衡收敛、交通路网信号相位与守恒）、确定性
