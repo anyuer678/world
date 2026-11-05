@@ -38,8 +38,15 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   `?version=` 可取指定版本；未知 model_id 或未知版本一律 404 `not_found`，
   后者 message 里带 `available: [...]`（R32 实测）
 - `POST /api/models/{model_id}/validate` body=spec（**裸 spec，不包 `{"spec":…}`**）→
-  `{valid, errors[], normalized_spec}`；normalized_spec 另含
-  `model_version/display_name/notes`（迁移补齐后的形态）
+  `{valid, errors[], normalized_spec}`；**normalized_spec 是「补齐后的有效形态」（R33 起名副其实，
+  此前只回吐入参）**：`model_version`= 注册表解析出的实际版本（未钉则数值最新）、
+  `display_name`= 模型显示名、`params`= 套用默认值后的完整参数、`notes`= 迁移说明。
+  该端点对非法输入返回 **200 + `valid:false`**（不是 422），未知版本时
+  `errors[0].code == "unknown_model"`
+- **`spec.model_version` 有实际效力**（R33 探针 + 测试绑定）：它决定校验用哪一版参数 Schema、
+  以及运行用哪一版模型实现；不钉则取数值最新版本。钉了注册表里没有的版本时，
+  `POST /api/experiments` 是 **422 `spec_invalid`**（`errors[].code="unknown_model"`），不是 500。
+  这是「不同模型版本的实验不默认可比」的执行层依据
 
 ## 实验
 - `POST /api/experiments` body=`{name, spec}` → Experiment（status=created）

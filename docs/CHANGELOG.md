@@ -137,3 +137,20 @@ BENCHMARKS 补口径说明，`test_bench_result_never_reports_zero_throughput` �
 本轮另补查三个此前未单独验证的资源类声称（`sim_time` 停止、零延迟链上限、
 批量在途上限——后者由「建批时写入 effective 值 + 线程池上限」双重构造保证，并有实测绑定）。
 Docker 用 R32 代码重建复跑全链路，predator_prey 的 `result_sha256` 与 R30 逐位一致。
+
+
+**R33（2026-11-05）钉版本的实际效力 + `normalized_spec` 契约兑现**
+
+R32 修好了「多版本目录」，本轮把同一能力的下半段验完并补上缺口。探针（临时注册两版**行为可辨**
+的探针模型：γ 默认 0.1/上限 1.0 对 0.4/上限 5.0）给出结论：`spec.model_version` **确实**决定
+校验与执行——γ=3.0 在 1.0.0 被拒而在 2.0.0 通过；同参数不同版本跑出峰值 303.9 对 10.0；
+批量与实验记录 `model_version=1.0.0`；未知版本是 422 `spec_invalid/unknown_model` 而不是 500。
+能力是真的，但**此前一条测试都没有**。
+真缺陷一处：契约承诺 `POST /api/models/{id}/validate` 的 `normalized_spec` 是「迁移补齐后的形态」，
+实测 `model_version`/`display_name` 恒为 None、`params` 原样回吐不含默认值——`validate_spec_only`
+只是把入参 dump 回去，而 `validate_spec` 已经算好的 `model_cls`/参数对象被丢弃。改为给出解析后的
+版本、注册表显示名与套默认值后的完整 params（前端不消费该端点，属 API-only，无 UI 涟漪；
+存储侧的 spec 原文与 params_digest 语义刻意不动，以免影响检查点指纹）。
+新增 4 项回归（normalized_spec 形态、未知版本的两条错误路径、钉版本改变校验边界、钉版本改变
+实际执行且未钉时解析到数值最新），API_CONTRACT 与 README「实验可比性」按实补写。
+后端 **279/279**、前端 **60/60**、tsc -b/vite build 干净。

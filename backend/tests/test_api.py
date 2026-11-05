@@ -95,6 +95,49 @@ def test_invalid_spec_422(client):
     assert any("params.servers" in e["code"] for e in errors)
 
 
+def test_validate_returns_effective_spec(client):
+    """R33：契约承诺 normalized_spec 是「迁移补齐后的形态」——此前它只是把入参原样吐回
+    （model_version/display_name 为 None、params 不含默认值）。"""
+    latest = client.get("/api/models/sir").json()["version"]
+    body = client.post(
+        "/api/models/sir/validate",
+        json={"model_id": "sir", "params": {"beta": 0.5}, "stop_condition": {"type": "steps", "value": 10}},
+    ).json()
+    assert body["valid"] is True
+    n = body["normalized_spec"]
+    assert n["model_version"] == latest, "未钉版本时必须给出解析出的实际版本"
+    assert n["display_name"] == "SIR 传染病模型"
+    assert n["params"]["beta"] == 0.5
+    assert n["params"]["population"] == 10000, "params 必须是补齐默认值后的形态"
+
+    pinned = client.post(
+        "/api/models/sir/validate",
+        json={"model_id": "sir", "model_version": latest, "params": {},
+              "stop_condition": {"type": "steps", "value": 10}},
+    ).json()["normalized_spec"]
+    assert pinned["model_version"] == latest
+
+
+def test_unknown_model_version_is_422_not_500(client):
+    """钉了一个注册表里没有的版本：必须是可读的 422 spec_invalid，不能是 500。"""
+    r = client.post(
+        "/api/experiments",
+        json={"name": "badver", "spec": {"model_id": "sir", "model_version": "9.9.9", "params": {},
+                                         "stop_condition": {"type": "steps", "value": 10}}},
+    )
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert detail["code"] == "spec_invalid"
+    assert any(e["code"] == "unknown_model" for e in detail["errors"]), detail
+    v = client.post(
+        "/api/models/sir/validate",
+        json={"model_id": "sir", "model_version": "9.9.9", "params": {},
+              "stop_condition": {"type": "steps", "value": 10}},
+    )
+    assert v.status_code == 200 and v.json()["valid"] is False
+    assert v.json()["errors"][0]["code"] == "unknown_model"
+
+
 def test_unknown_model_422(client):
     r = client.post("/api/experiments", json={"name": "x", "spec": {"model_id": "ghost", "params": {}}})
     assert r.status_code == 422

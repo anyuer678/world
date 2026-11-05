@@ -500,4 +500,10 @@ class ExperimentService:
 
     def validate_spec_only(self, spec_raw: dict[str, Any]) -> dict[str, Any]:
         spec, model_cls = validate_spec(spec_raw, self.registry)
-        return {"valid": True, "errors": [], "normalized_spec": spec.model_dump()}
+        normalized = spec.model_dump()
+        # 契约承诺 normalized_spec 是「补齐后的形态」（API_CONTRACT R25），但此前它只是
+        # 把入参原样吐回来：model_version/display_name 为 None、params 不含默认值。
+        normalized["model_version"] = model_cls.version
+        normalized["display_name"] = model_cls.display_name
+        normalized["params"] = model_cls.param_model(**spec.params).model_dump()
+        return {"valid": True, "errors": [], "normalized_spec": normalized}

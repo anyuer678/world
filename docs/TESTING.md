@@ -541,3 +541,19 @@
     （Linux 单跑已能捕获断链，双平台翻倍 runner 用量而收益边际）。
     结论：能力、正确性、可复现、文档、门禁、生产形态六个维度上，已无「已知可做且不靠猜」的项；
     剩余全是内容扩充或范围外偏好，需要用户点名才动。
+
+44. **R33 巡检轮：多版本执行路径 + normalized_spec 落实**（决策见 DECISIONS D57）。
+    ① 探针法（同 `model_id` 临时注册两版，γ 默认值与上限不同好让「用了哪版」可观测）：
+    `spec.model_version` 真实决定校验与执行——γ=3.0 在 1.0.0 被拒 / 2.0.0 通过；
+    同参跑出的 `peak_infected` 303.9 vs 10.0；批量与实验记录 `model_version=1.0.0`；
+    钉未知版本 → 422 `spec_invalid` + `errors[].code="unknown_model"`（**不是 500**）。
+    ② 真缺陷：`validate` 的 `normalized_spec` 承诺「迁移补齐后的形态」，实测 `model_version`
+    与 `display_name` 恒 None、`params` 不含默认值（`validate_spec_only` 直接 dump 入参）。
+    修为解析后的版本 + 注册表显示名 + 套默认值的 params；不动 DB 里存的 spec 原文
+    （避免改变 params_digest 与检查点指纹语义）。
+    ③ 新增 4 项回归：`test_api.py::test_validate_returns_effective_spec`、
+    `test_api.py::test_unknown_model_version_is_422_not_500`、
+    `test_model_versions.py::test_pinned_version_selects_which_schema_validates`、
+    `::test_pinned_version_changes_actual_execution`（含未钉版本解析到数值最新）。
+    ④ API_CONTRACT 的 validate 条目与「model_version 有实际效力」段、README 可比性条目按实补写。
+    回归：后端 **279/279**、前端 **60/60**、tsc -b/vite build 干净。
