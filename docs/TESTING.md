@@ -688,5 +688,12 @@
     gate 测试会停在 `running` 且 step 不回 0。
     ④ 契约成文（API_CONTRACT/ARCHITECTURE）：`pause`/`reset` 的响应是交接前状态，
     最终状态经 `GET /api/sessions/{id}` 在 ≤1 个分片内到达；前端 300 ms 轮询无需改动。
+    ⑤ 真实网络栈复验（补 TestClient 不经 TCP 的口径缺口）：uvicorn + curl 打
+    256×256 元胞自动机会话，`POST /pause` 返回 **HTTP 200 / 64 ms**（`time_total`）且
+    响应体仍是 `running`，随后轮询到 `paused`（step 256）约 **2.2 s**；与浏览器内测得的
+    211 ms / 1.44 s 同量级（差异来自分片起点不同，不是实现差异）。
+    ⑥ 同轮的负结果（如实记录）：取消后的批量在 `GET /batches/{id}`、`/items`、`/findings`、
+    `/export.csv` 上全部 200，状态 `cancelled`、计数 `{cancelled:5, step_limit:1}`，
+    没有发现缺陷——本轮没有为此改动任何代码。
     回归：后端 **302/302**、前端 **62/62**、tsc -b/vite build 干净。
 
