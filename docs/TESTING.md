@@ -334,3 +334,28 @@
    served=arrived=10000 零丢弃。④ 决定论：UI 与 API 直建同 spec+seed
    metrics 逐位一致；速读文案自洽。回归：后端 227/227、前端 50/50、
    tsc/build 干净。
+32. **R22 开发轮：第八内置模型「捕食者-猎物」（Lotka-Volterra）**（决策见
+   DECISIONS D46）。① 后端：time_stepped 纯确定性 ODE，RK4 8 子步/时间单位，
+   参数 α/β/δ/γ/两群初值/可选容纳量 K（nullable）。10 条单测全绿：经典版
+   首次积分 δx−γ·ln x+βy−α·ln y 守恒（60 步漂移 1.5e-05）、K=8 收敛内平衡
+   (5.000000, 0.937500)（偏差 1e-15 级，x*=γ/(δβ) 与 K 无关的解析结论入测）、
+   y₀=0 时与指数/逻辑斯谛闭式解对照（<1%）、大振幅周期 > 小信号周期
+   2π/√(αγ)、检查点逐字节恢复、历史抽稀 ≤256、参数边界 7 例、三场景全跑。
+   ② 前端：新 kind `predator_prey`——时间序列双曲线 + 平台首个相平面轨道图
+   （紫轨道/绿起点/红当前/蓝十字平衡点，复用 useCanvas 自绘管线）；速读分
+   「仍在大幅兴衰循环 / 收敛到平衡点稳定共存」两型，新增前端单测（50→51，
+   含 quickPicks 八模型顺序断言）。③ 浏览器 E2E（一键场景卡）：经典循环卡
+   → completed 60 步，DOM 显示平衡点 (5.00, 2.50)、周期 9.0、峰值 7 次，
+   与解析值/小信号下界一致；K=8 卡 → 收敛 (5.00, 0.94) 命中解析平衡点；
+   相平面 canvas 像素探针（轨道 694px、起点 24px、当前 12px、平衡十字 12px、
+   边框 232px）证明真实绘制而非空白；UI 会话与 API 同 spec+seed 复跑
+   metrics 逐位一致；控制台零错误。④ 全链路同步：场景库回归（BUILTIN_IDS
+   第八项）、基准脚本与 BENCHMARKS.md（实测 35,461 steps/s）、回归阈值、
+   README 模型表、SEO meta 描述（八个内置模型）、QUICK_PICKS 快速入口。
+   回归：后端 244/244、前端 51/51、tsc -b/vite build 干净；Docker 生产形态
+   复验另条续记。
+   ⑤ Docker 复验（新模型节奏，R15 后首次）：compose 构建起 api(healthy)+
+   nginx web；容器内 `/api/models` 直连与经 nginx 代理均报 8 模型含
+   predator_prey；生产 index.html 携带「八个内置模型」SEO 描述；经代理在
+   容器内完整跑 predator_prey 会话（K=8、240 步）→ completed，收敛
+   (5.000000, 0.937500) 命中解析平衡点（<1e-6）。验毕 compose down。

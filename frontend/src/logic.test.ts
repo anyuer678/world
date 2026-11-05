@@ -267,6 +267,30 @@ describe('summarizeMetrics', () => {
     expect(clear[0]).toContain('畅通')
   })
 
+  it('summarizes predator-prey cycles vs stable coexistence', () => {
+    const cycling = summarizeMetrics('predator_prey', {
+      prey_peaks: 8,
+      cycle_period: 11.0,
+      distance_to_equilibrium: 0.62,
+      prey_min: 0.8,
+      prey_max: 12.4,
+      predator_min: 0.9,
+      predator_max: 6.1,
+    })
+    expect(cycling[0]).toContain('8 次')
+    expect(cycling[1]).toContain('兴衰循环')
+    expect(cycling[1]).toContain('12.40')
+    const settled = summarizeMetrics('predator_prey', {
+      prey_peaks: 3,
+      cycle_period: 9.5,
+      distance_to_equilibrium: 0.001,
+      equilibrium_prey: 5.0,
+      equilibrium_predator: 0.9375,
+    })
+    expect(settled[1]).toContain('收敛到平衡点')
+    expect(settled[1]).toContain('稳定共存')
+  })
+
   it('summarizes cpu scheduling and unknown kinds yield nothing', () => {
     const out = summarizeMetrics('cpu_schedule', {
       avg_waiting_time: 2.5,
@@ -312,6 +336,7 @@ describe('quickPicks', () => {
       mkModel('traffic_network', ['no-signal']),
       mkModel('schelling', ['mild-preference']),
       mkModel('sir', ['outbreak']),
+      mkModel('predator_prey', ['neutral-cycles']),
       mkModel('cpu_scheduling', ['rr-quantum-too-small']),
       mkModel('cache_sim', ['zipf-hit-ceiling']),
     ]
@@ -321,6 +346,7 @@ describe('quickPicks', () => {
       'queueing',
       'traffic_network',
       'sir',
+      'predator_prey',
       'cpu_scheduling',
       'cache_sim',
     ])

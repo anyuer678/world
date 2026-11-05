@@ -70,6 +70,22 @@ export function summarizeMetrics(kind: string, m: Record<string, number>): strin
       const when = has('peak_time') ? `（第 ${m.peak_time.toFixed(0)} 天）` : ''
       out.push(`感染峰值 ${m.peak_infected.toFixed(0)} 人、占总人口 ${pct(pf)}${when}。`)
     }
+  } else if (kind === 'predator_prey') {
+    if (has('prey_peaks') && m.prey_peaks > 0) {
+      const per = has('cycle_period') && m.cycle_period > 0 ? `，最近周期约 ${f2(m.cycle_period)}` : ''
+      out.push(`猎物兴衰 ${m.prey_peaks.toFixed(0)} 次${per}。`)
+    }
+    if (has('distance_to_equilibrium')) {
+      if (m.distance_to_equilibrium < 0.05) {
+        out.push(
+          `两族群收敛到平衡点（猎物 ${f2(m.equilibrium_prey)}、捕食者 ${f2(m.equilibrium_predator)}）：稳定共存。`,
+        )
+      } else {
+        out.push(
+          `仍在大幅兴衰循环：猎物 ${f2(m.prey_min)}~${f2(m.prey_max)}、捕食者 ${f2(m.predator_min)}~${f2(m.predator_max)}。`,
+        )
+      }
+    }
   } else if (kind === 'cpu_schedule') {
     if (has('avg_waiting_time')) {
       out.push(`作业平均等待 ${f2(m.avg_waiting_time)}、平均周转 ${f2(m.avg_turnaround_time)}。`)

@@ -522,6 +522,7 @@ const QUICK_PICKS: { modelId: string; scenarioId: string }[] = [
   { modelId: 'queueing', scenarioId: 'rush-hour' },
   { modelId: 'traffic_network', scenarioId: 'no-signal' },
   { modelId: 'sir', scenarioId: 'outbreak' },
+  { modelId: 'predator_prey', scenarioId: 'neutral-cycles' },
   { modelId: 'cpu_scheduling', scenarioId: 'rr-quantum-too-small' },
   { modelId: 'cache_sim', scenarioId: 'zipf-hit-ceiling' },
 ]

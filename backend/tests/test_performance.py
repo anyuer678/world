@@ -70,6 +70,12 @@ def test_engine_sir_speed():
     assert res.seconds < 10.0  # 实测 ~0.13s（每步 50 个欧拉子步）
 
 
+def test_engine_predator_prey_speed():
+    res = bench_engine(_spec("predator_prey", 5_000), registry, 5_000)
+    assert res.steps == 5_000
+    assert res.seconds < 10.0  # 实测 ~0.05s（每步 8 个 RK4 子步，纯解析 ODE）
+
+
 def test_api_session_step_latency(client):
     res = bench_session_step_latency(client, _spec("queueing", 1_000_000), calls=20)
     assert res["p95_ms"] < 1000.0  # 实测 ~16ms（TestClient 进程内）

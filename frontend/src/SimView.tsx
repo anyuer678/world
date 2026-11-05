@@ -12,6 +12,7 @@ export default function SimView({ session }: { session: SessionState }) {
   if (visualizer.kind === 'schelling') return <SchellingView state={snapshot.state} />
   if (visualizer.kind === 'traffic') return <TrafficView state={snapshot.state} />
   if (visualizer.kind === 'sir') return <SirView state={snapshot.state} />
+  if (visualizer.kind === 'predator_prey') return <PredatorPreyView state={snapshot.state} />
   return <StateTable state={snapshot.state} />
 }
 
@@ -369,6 +370,97 @@ function SirView({ state }: { state: Record<string, unknown> }) {
         第 {Number(state.day ?? 0).toFixed(0)} 天 · R₀ {r0.toFixed(2)} · 易感 {Number(state.susceptible ?? 0).toFixed(0)} ·
         感染 {Number(state.infected ?? 0).toFixed(0)}（{(Number(state.infected_frac ?? 0) * 100).toFixed(1)}%）· 康复{' '}
         {Number(state.recovered ?? 0).toFixed(0)} · 峰值感染 {peak.toFixed(0)}（第 {peakTime.toFixed(0)} 天）
+      </p>
+    </div>
+  )
+}
+
+function PhasePlane({ history, eqX, eqY, label }: { history: [number, number, number][]; eqX: number; eqY: number; label: string }) {
+  const canvasRef = useCanvas((ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, w, h)
+    if (history.length < 2) return
+    const xs = history.map(([, x]) => x)
+    const ys = history.map(([, , y]) => y)
+    const xMin = Math.min(...xs), xMax = Math.max(...xs)
+    const yMin = Math.min(...ys), yMax = Math.max(...ys)
+    const pad = 26
+    const sx = (x: number) => pad + ((x - xMin) / Math.max(xMax - xMin, 1e-9)) * (w - 2 * pad)
+    const sy = (y: number) => h - pad - ((y - yMin) / Math.max(yMax - yMin, 1e-9)) * (h - 2 * pad)
+    ctx.strokeStyle = '#d1d5db'
+    ctx.strokeRect(pad, pad, w - 2 * pad, h - 2 * pad)
+    ctx.strokeStyle = '#7c3aed'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    history.forEach((p, i) => {
+      if (i) ctx.lineTo(sx(p[1]), sy(p[2]))
+      else ctx.moveTo(sx(p[1]), sy(p[2]))
+    })
+    ctx.stroke()
+    ctx.fillStyle = '#16a34a'
+    ctx.beginPath()
+    ctx.arc(sx(xs[0]), sy(ys[0]), 3, 0, 2 * Math.PI)
+    ctx.fill()
+    ctx.fillStyle = '#dc2626'
+    ctx.beginPath()
+    ctx.arc(sx(xs[xs.length - 1]), sy(ys[ys.length - 1]), 4, 0, 2 * Math.PI)
+    ctx.fill()
+    if (
+      Number.isFinite(eqX) && Number.isFinite(eqY) &&
+      eqX >= xMin && eqX <= xMax && eqY >= yMin && eqY <= yMax
+    ) {
+      ctx.strokeStyle = '#2563eb'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(sx(eqX) - 6, sy(eqY)); ctx.lineTo(sx(eqX) + 6, sy(eqY))
+      ctx.moveTo(sx(eqX), sy(eqY) - 6); ctx.lineTo(sx(eqX), sy(eqY) + 6)
+      ctx.stroke()
+    }
+    ctx.fillStyle = '#6b7280'
+    ctx.font = '11px sans-serif'
+    ctx.fillText('猎物数量 →', w - pad - 60, h - 8)
+    ctx.fillText('↑ 捕食者数量', 4, 14)
+  }, 640, 220)
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 4, marginTop: 6 }}
+      role="img"
+      aria-label={label}
+    />
+  )
+}
+
+function PredatorPreyView({ state }: { state: Record<string, unknown> }) {
+  const history = (state.history as [number, number, number][] | undefined) ?? []
+  const peaks = Number(state.prey_peaks ?? 0)
+  const period = state.period_last == null ? null : Number(state.period_last)
+  const eqX = Number(state.equilibrium_prey ?? 0)
+  const eqY = Number(state.equilibrium_predator ?? 0)
+  const capacity = state.prey_capacity
+  return (
+    <div>
+      <SeriesChart
+        height={180}
+        series={[
+          { name: '猎物', color: '#16a34a', data: history.map(([t, x]) => [t, x] as [number, number]) },
+          { name: '捕食者', color: '#dc2626', data: history.map(([t, , y]) => [t, y] as [number, number]) },
+        ]}
+        label={`捕食者-猎物时间序列：猎物峰值 ${peaks} 次`}
+      />
+      <PhasePlane
+        history={history}
+        eqX={eqX}
+        eqY={eqY}
+        label="相平面轨道图（横轴猎物、纵轴捕食者，蓝十字为平衡点）"
+      />
+      <p style={{ fontSize: 13, color: '#374151', margin: '4px 0' }}>
+        猎物 {Number(state.prey ?? 0).toFixed(2)} · 捕食者 {Number(state.predator ?? 0).toFixed(2)} ·
+        猎物兴衰 {peaks} 次
+        {period != null && Number.isFinite(period) ? ` · 最近周期 ${period.toFixed(1)}` : ''} ·
+        平衡点 ({eqX.toFixed(2)}, {eqY.toFixed(2)}){' '}
+        {capacity ? `· 环境容纳量 K=${Number(capacity)}` : '· 无环境限制（守恒轨道）'}
       </p>
     </div>
   )
