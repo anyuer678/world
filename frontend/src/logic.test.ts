@@ -5,7 +5,7 @@ import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
-import { FALLBACK_LIMITS, batchSubmitProblem } from './BatchPanel'
+import { FALLBACK_LIMITS, batchSubmitProblem, itemsHeading } from './BatchPanel'
 import { errorDetailMessage } from './api'
 
 describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
@@ -42,6 +42,16 @@ describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
       ),
     ).toContain('失败重试需在 0–5 之间')
     expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 10 })).toBeNull()
+  })
+})
+
+describe('itemsHeading (R34：单项结果表头必须交代总数)', () => {
+  it('shows the total when the table only holds the first page', () => {
+    expect(itemsHeading(50, 1200)).toBe('单项结果（显示前 50 / 共 1200 项，其余见「导出 CSV」）')
+  })
+  it('says 全部 when nothing is hidden', () => {
+    expect(itemsHeading(8, 8)).toBe('单项结果（全部 8 项）')
+    expect(itemsHeading(3, 0)).toBe('单项结果（全部 3 项）')  // total 未知时不谎报有隐藏项
   })
 })
 

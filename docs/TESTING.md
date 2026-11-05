@@ -557,3 +557,20 @@
     `::test_pinned_version_changes_actual_execution`（含未钉版本解析到数值最新）。
     ④ API_CONTRACT 的 validate 条目与「model_version 有实际效力」段、README 可比性条目按实补写。
     回归：后端 **279/279**、前端 **60/60**、tsc -b/vite build 干净。
+
+45. **R34 巡检轮：批量透明度 + 网格边界成文**（决策见 DECISIONS D58）。
+    ① 探针一（`schema_version` 七种形态）：省略/=1 通过并落 1；=0 → `migration_error`
+    （v0 需 `model`）；=2/99 → `schema_too_new` 422；字符串 → 类型错；=-1 → `migration_missing`。
+    复核确认 `tests/test_schema.py` 已覆盖迁移与 too_new（**我先前一句 `grep | head -12` 截断
+    导致的"缺测"判断是误读，已纠正**——巡检自己的检索也要防截断）。
+    ② 探针二（`grid` 键边界）：拼错键 / 点号嵌套键 / 空列表 / 未知顶层字段 → 全部 422
+    `spec_invalid`，`code:"grid"` 且 message 列出具体键名；行为对但从未成文与绑定 →
+    API_CONTRACT 补写「只支持顶层参数名，不支持点号路径」+ 2 项后端测试；
+    批量面板同步加该边界提示。
+    ③ 真缺陷（会误导结论）：面板一次取 50 项、表头只写「前 50 项」不写总数 →
+    新增 `itemsHeading(shown,total)`，60 项批次实测文案为「单项结果（显示前 50 / 共 60 项，
+    其余见「导出 CSV」）」，且实测该 CSV 恰含 60 行数据（导出 500/页循环取全量）。
+    ④ 自我缺陷并当场由渲染证据纠正：提示文案用了 markdown `**…**`，JSX 原样显示星号 → 改 `<strong>`。
+    **守则：文案是否成立只能以浏览器 DOM 为准，不能以源码为准。**
+    ⑤ 新增 `items` offset 分页稳定性测试（同序、total 不变、不重不漏）。
+    回归：后端 **281/281**、前端 **62/62**、tsc -b/vite build 干净。

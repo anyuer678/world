@@ -42,6 +42,15 @@ export function batchSubmitProblem(
   return null
 }
 
+/**
+ * 单项结果表头的诚实口径：接口一次最多取一页，必须把「共多少项」一起显示，
+ * 否则 1200 项的批次只出现 50 行会被读成全部数据（完整明细在 CSV 导出里）。
+ */
+export function itemsHeading(shown: number, total: number): string {
+  if (total <= 0 || shown >= total) return `单项结果（全部 ${shown} 项）`
+  return `单项结果（显示前 ${shown} / 共 ${total} 项，其余见「导出 CSV」）`
+}
+
 export function parseValues(raw: string): unknown[] {
   return raw
     .split(/[,\s]+/)
@@ -64,6 +73,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const [batches, setBatches] = useState<BatchListItem[]>([])
   const [batch, setBatch] = useState<BatchDetail | null>(null)
   const [items, setItems] = useState<BatchItem[]>([])
+  const [itemsTotal, setItemsTotal] = useState(0)
   const [findings, setFindings] = useState<FindingsResponse | null>(null)
   const [sweepSel, setSweepSel] = useState<{ param: string; metric: string } | null>(null)
   const [limits, setLimits] = useState<BatchLimits>(FALLBACK_LIMITS)
@@ -105,7 +115,9 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
         const b = await api.getBatch(id)
         setBatch(b)
         if (TERMINAL.has(b.status)) {
-          setItems((await api.listBatchItems(id, 50)).items)
+          const page = await api.listBatchItems(id, 50)
+          setItems(page.items)
+          setItemsTotal(page.total)
           api.getBatchFindings(id).then(setFindings).catch(() => {})
           refreshBatches()
         }
@@ -176,10 +188,13 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
       setBatch(b)
       setFindings(null)
       if (TERMINAL.has(b.status)) {
-        setItems((await api.listBatchItems(id, 50)).items)
+        const page = await api.listBatchItems(id, 50)
+        setItems(page.items)
+        setItemsTotal(page.total)
         api.getBatchFindings(id).then(setFindings).catch(() => {})
       } else {
         setItems([])
+        setItemsTotal(0)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -253,6 +268,10 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
           <p style={{ fontSize: 13, color: '#374151' }}>
             组合数 {comboCount} × 每组重复 {repeatN} = {totalItems} 项
             {problem && <strong style={{ color: '#dc2626' }}>（{problem}）</strong>}
+          </p>
+          <p style={{ fontSize: 12, color: '#6b7280' }}>
+            网格键只能是模型的<strong>顶层参数名</strong>；嵌套字段（如到达/服务过程的子项）
+            不支持点号路径，请先在上方参数面板设好，再用平铺参数做扫描。
           </p>
         </div>
         <div style={{ flex: 1, minWidth: 220 }}>
@@ -519,7 +538,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
 
           {items.length > 0 && (
             <>
-              <h4 style={{ fontSize: 14, marginBottom: 4 }}>单项结果（前 {items.length} 项）</h4>
+              <h4 style={{ fontSize: 14, marginBottom: 4 }}>{itemsHeading(items.length, itemsTotal)}</h4>
               <div style={{ maxHeight: 260, overflowY: 'auto' }}>
                 <table style={table}>
                   <thead>

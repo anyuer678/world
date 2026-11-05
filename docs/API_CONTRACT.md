@@ -82,6 +82,9 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 ## 批量实验（阶段 4 起，后台执行，落库）
 - `POST /api/batches` body=`{name, spec, grid, repeats, seed_strategy?, max_retries?, concurrency?, per_run_wall_seconds?}`
   → 201 Batch（status=pending）。grid 为「参数名 → 取值列表」的笛卡尔积扫描，
+  **参数名必须是该模型的顶层字段：不支持点号嵌套路径**（如 `params.delay_mean`），
+  也不接受空列表——两者都在建批时 422 `spec_invalid` 并指明 `code:"grid"` 与具体键名
+  （静默接受会让「所有组合结果相同」被误读成真的无敏感性，R34 有测试绑定）。
   与 repeats 相乘后超 `MAX_BATCH_ITEMS` 直接 400（限量前移，不物化，R1）
 - `GET /api/batches?limit&offset` → `{total, batches:[概要]}`，概要 =
   `{id, name, model_id, model_version, status, total_items, repeats, seed_strategy,
@@ -91,7 +94,9 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   详情不给 `done_items` 而给 `counts`（状态→数量分桶，进度 = 终态桶求和）
 - `GET /api/batches/{id}` → Batch（含 spec/grid/counts{状态→数}；
   终态含 summary：每组合的聚合指标 `{n, mean, std, p50, p90, ci95_low, ci95_high}`）
-- `GET /api/batches/{id}/items?limit&offset` → `{total, items:[{item_index, combo, repeat_index, seed, status, attempts, steps, sim_time, metrics, result_sha256, error, duration_ms}]}`
+- `GET /api/batches/{id}/items?limit&offset` → `{total, items:[{item_index, combo, repeat_index, seed, status, attempts, steps, sim_time, metrics, result_sha256, error, duration_ms}]}`，按 `item_index` 升序、分页稳定（续读不重不漏）。
+  **`total` 是全量条数**：批量面板一次只取一页（50），因此表头必须写「显示前 N / 共 M 项」并指向
+  CSV 导出（R34，导出走 500/页循环，始终含全部项）
 - `POST /api/batches/{id}/cancel` → Batch（协作式取消；在途上限 = min(concurrency, max_workers)，R1）
 - `GET /api/batches/{id}/export.csv` → 逐 item 明细 CSV 附件
 - `GET /api/batches/{id}/findings`（R6）→ `{findings[], note}`：

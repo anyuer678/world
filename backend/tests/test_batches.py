@@ -345,3 +345,40 @@ def test_batch_api_validation(client):
     assert r.status_code == 422
     r = client.post("/api/batches", json={"spec": _spec(), "grid": {}})
     assert r.status_code == 422  # missing name -> pydantic
+
+
+def test_grid_keys_must_be_top_level_param_names(client):
+    """R34：网格只能扫顶层参数名。嵌套点号键 / 空列表必须在**建批时**说清楚——
+    静默接受会让「所有组合结果相同」被当成真的无敏感性（假结论比报错更坏）。"""
+    nested = client.post(
+        "/api/batches", json={"name": "nested", "spec": _spec(), "grid": {"params.delay_mean": [0.5, 1.0]}}
+    )
+    assert nested.status_code == 422
+    err = nested.json()["detail"]["errors"][0]
+    assert err["code"] == "grid" and "params.delay_mean" in err["message"], err
+
+    empty = client.post("/api/batches", json={"name": "empty", "spec": _spec(), "grid": {"delay_mean": []}})
+    assert empty.status_code == 422
+    assert "non-empty" in empty.json()["detail"]["errors"][0]["message"]
+
+
+def test_batch_items_offset_pages_are_stable_and_ordered(client):
+    """R34：前端靠 total 交代「显示前 N / 共 M」，因此 offset 续读必须给同序不重不漏。"""
+    bid = client.post(
+        "/api/batches", json={"name": "paging", "spec": _spec(), "grid": {"delay_mean": [0.5, 1.0]},
+                              "repeats": 2, "seed_strategy": "fixed"}
+    ).json()["id"]
+    deadline = time.time() + 20
+    g = None
+    while time.time() < deadline:
+        g = client.get(f"/api/batches/{bid}").json()
+        if g["status"] in ("completed", "failed", "cancelled"):
+            break
+        time.sleep(0.05)
+    assert g["status"] == "completed", g
+
+    first = client.get(f"/api/batches/{bid}/items?limit=3&offset=0").json()
+    second = client.get(f"/api/batches/{bid}/items?limit=3&offset=3").json()
+    assert first["total"] == second["total"] == 4
+    assert [it["item_index"] for it in first["items"]] == [0, 1, 2]
+    assert [it["item_index"] for it in second["items"]] == [3]
