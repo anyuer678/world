@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { api } from './api'
+import { ApiError, api } from './api'
 import type { ModelInfo, ModelSpec, ScenarioInfo, SessionState } from './types'
 import ParamForm from './ParamForm'
 import TrafficPanel from './TrafficPanel'
@@ -60,7 +60,14 @@ export default function App() {
         .then((s) => {
           if (sessionRef.current === sid) setSession(s)
         })
-        .catch(() => {})
+        .catch((e) => {
+          // R50：以前这里把错误整个吞掉——会话被 TTL 回收后，界面会永远停在「运行中」
+          // 且不再更新。只剩 404 需要处理；网络闪断继续轮询即可。
+          if (isSessionGone(e) && sessionRef.current === sid) {
+            setSession(null)
+            setNotice('会话已被服务端回收（空闲超时）或删除；请重新开始模拟。')
+          }
+        })
     }, 300)
     return () => clearInterval(t)
   }, [session?.status, session?.session_id])
@@ -147,7 +154,12 @@ export default function App() {
     try {
       setSession(await fn())
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (isSessionGone(e)) {
+        setSession(null)
+        setNotice('会话已被服务端回收（空闲超时）或删除；请重新开始模拟。')
+      } else {
+        setError(e instanceof Error ? e.message : String(e))
+      }
     } finally {
       setBusy(false)
     }
@@ -531,6 +543,12 @@ export default function App() {
       </details>
     </main>
   )
+}
+
+/** 404 + 会话路径才算「会话已不在」（R50）。不能只看 404：
+ * 删除一条实验也会 404，但那不该把当前会话清掉。 */
+export function isSessionGone(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 404 && e.path.includes('/sessions/')
 }
 
 /** 实验历史的截断口径（R48）：与批量面板的 itemsHeading 同一原则——

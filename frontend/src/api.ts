@@ -79,6 +79,19 @@ export function errorDetailMessage(status: number, body: unknown): string {
   return obj?.errors?.length ? `${message}：${obj.errors.map((e) => `${e.code} ${e.message}`).join('; ')}` : message
 }
 
+/** 带状态码与请求路径的错误（R50）：调用方需要区分「会话已回收」与其他失败。 */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly path: string,
+    readonly code: string | undefined,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -86,12 +99,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     let message = `${res.status}`
+    let code: string | undefined
     try {
-      message = errorDetailMessage(res.status, await res.json())
+      const body: unknown = await res.json()
+      message = errorDetailMessage(res.status, body)
+      const detail = (body as { detail?: unknown } | null)?.detail
+      if (detail && !Array.isArray(detail)) code = (detail as { code?: string }).code
     } catch {
       /* keep status code */
     }
-    throw new Error(message)
+    throw new ApiError(res.status, path, code, message)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>

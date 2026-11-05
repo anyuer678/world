@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { historyHeading, modelTypeLabel, quickPicks, scenarioSpec, stepProblem } from './App'
+import { historyHeading, isSessionGone, modelTypeLabel, quickPicks, scenarioSpec, stepProblem } from './App'
 import { statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
@@ -8,7 +8,7 @@ import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
 import { FALLBACK_LIMITS, batchSubmitProblem, itemsHeading } from './BatchPanel'
 import { toggleCompare } from './ComparePanel'
-import { errorDetailMessage } from './api'
+import { ApiError, errorDetailMessage } from './api'
 
 describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
   it('rejects repeats above the server max that the old frontend ignored', () => {
@@ -713,6 +713,16 @@ describe('toggleCompare (visible compare cap, R49)', () => {
     expect(toggleCompare([1, 2, 3, 4], 5, 4)).toEqual([1, 2, 3, 4])
     // 已选项始终可以取消，即使列表恰好在上限
     expect(toggleCompare([1, 2, 3, 4], 1, 4)).toEqual([2, 3, 4])
+  })
+})
+
+describe('isSessionGone (session TTL recovery, R50)', () => {
+  it('only treats 404s on session paths as a gone session', () => {
+    expect(isSessionGone(new ApiError(404, '/api/sessions/abc', 'not_found', 'session not found'))).toBe(true)
+    // 别的资源 404（例如删掉的实验）不能清掉当前会话
+    expect(isSessionGone(new ApiError(404, '/api/experiments/1', 'not_found', 'experiment 1 not found'))).toBe(false)
+    expect(isSessionGone(new ApiError(409, '/api/sessions/abc', 'conflict', 'stopping'))).toBe(false)
+    expect(isSessionGone(new Error('network down'))).toBe(false)
   })
 })
 
