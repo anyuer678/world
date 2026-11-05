@@ -10,7 +10,15 @@ interface HistoryEntry {
   status: string
 }
 
-const MAX_COMPARE = 4
+export const MAX_COMPARE = 4
+
+/** 勾选/取消比较项。达到上限时**保持原样**由调用方负责提示——
+ * 这里不做静默截断之外的任何改变，纯函数便于单测（R49）。 */
+export function toggleCompare(ids: number[], id: number, max: number): number[] {
+  if (ids.includes(id)) return ids.filter((x) => x !== id)
+  if (ids.length >= max) return ids
+  return [...ids, id]
+}
 
 export default function ComparePanel({
   history,
@@ -29,7 +37,7 @@ export default function ComparePanel({
   }, [history])
 
   function toggle(id: number) {
-    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length < MAX_COMPARE ? [...s, id] : s))
+    setSelected((s) => toggleCompare(s, id, MAX_COMPARE))
   }
 
   async function compare() {
@@ -69,18 +77,31 @@ export default function ComparePanel({
               可选范围：最近 {history.length} 条（共 {historyTotal} 条；更早的实验未在界面列出）
             </p>
           )}
+          <p
+            id="compare-cap"
+            style={{ color: selected.length >= MAX_COMPARE ? '#92400e' : '#6b7280', fontSize: 12, margin: '0 0 6px' }}
+          >
+            最多同时比较 {MAX_COMPARE} 个（已选 {selected.length} / {MAX_COMPARE}）
+            {selected.length >= MAX_COMPARE ? '——已达上限，取消一个后可再选' : ''}
+          </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            {history.map((h) => (
-              <label key={h.id} style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(h.id)}
-                  onChange={() => toggle(h.id)}
-                  aria-label={`选择实验 ${h.id}`}
-                />
-                #{h.id} {h.name}（{h.model_id}）
-              </label>
-            ))}
+            {history.map((h) => {
+              const checked = selected.includes(h.id)
+              return (
+                <label key={h.id} style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    // 到顶时禁用未选项：与其让点击无声失败，不如让「不能再选」直接可见
+                    disabled={!checked && selected.length >= MAX_COMPARE}
+                    onChange={() => toggle(h.id)}
+                    aria-label={`选择实验 ${h.id}`}
+                    aria-describedby="compare-cap"
+                  />
+                  #{h.id} {h.name}（{h.model_id}）
+                </label>
+              )
+            })}
           </div>
           <button onClick={compare} disabled={busy || selected.length < 1} style={btn}>
             比较所选实验（≤{MAX_COMPARE} 个）

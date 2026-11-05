@@ -7,6 +7,7 @@ import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
 import { FALLBACK_LIMITS, batchSubmitProblem, itemsHeading } from './BatchPanel'
+import { toggleCompare } from './ComparePanel'
 import { errorDetailMessage } from './api'
 
 describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
@@ -701,6 +702,17 @@ describe('historyHeading (truncation transparency, R48)', () => {
     expect(historyHeading(0, 0)).toBe('实验历史')
     expect(historyHeading(5, 5)).toBe('实验历史（共 5 条）')
     expect(historyHeading(20, 22)).toBe('实验历史（显示最近 20 条 / 共 22 条，更早的未在界面列出）')
+  })
+})
+
+describe('toggleCompare (visible compare cap, R49)', () => {
+  it('adds below the cap, removes when present, and refuses past the cap', () => {
+    expect(toggleCompare([], 1, 4)).toEqual([1])
+    expect(toggleCompare([1, 2], 3, 4)).toEqual([1, 2, 3])
+    expect(toggleCompare([1, 2, 3], 2, 4)).toEqual([1, 3])
+    expect(toggleCompare([1, 2, 3, 4], 5, 4)).toEqual([1, 2, 3, 4])
+    // 已选项始终可以取消，即使列表恰好在上限
+    expect(toggleCompare([1, 2, 3, 4], 1, 4)).toEqual([2, 3, 4])
   })
 })
 
