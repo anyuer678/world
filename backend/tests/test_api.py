@@ -215,8 +215,10 @@ def test_run_events_pagination(client):
 def test_limits_endpoint_tracks_validation_rules(client):
     """R29：/api/limits 暴露的必须是服务端自己的校验规则，不能是第二套硬编码。"""
     from app.services.batch_service import MAX_BATCH_ITEMS
+    from app.services.session_service import MAX_STEP_BATCH
 
     body = client.get("/api/limits").json()
+    assert body["session"]["max_step_batch"] == MAX_STEP_BATCH
     b = body["batch"]
     assert b["max_items"] == MAX_BATCH_ITEMS
     assert (b["repeats_min"], b["repeats_max"]) == (1, 100)

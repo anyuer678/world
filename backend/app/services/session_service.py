@@ -19,6 +19,9 @@ from ..core.registry import ModelRegistry
 from ..core.schema.spec import SpecValidationError, validate_spec
 from .experiment_service import ConflictError, NotFoundError
 
+# 单次 step(n) 的允许上限：校验与 /api/limits 共用这一处（R47）。
+MAX_STEP_BATCH = 1_000_000
+
 
 class _Session:
     def __init__(self, session_id: str, spec: dict[str, Any], engine: SimulationEngine):
@@ -156,8 +159,8 @@ class SessionService:
                 raise ConflictError(f"session already finished ({s.status})")
             if s.status == "error":
                 raise ConflictError("session is in error state; reset before stepping")
-            if n < 1 or n > 1_000_000:
-                raise SpecValidationError.single("n", "n must be between 1 and 1000000")
+            if n < 1 or n > MAX_STEP_BATCH:
+                raise SpecValidationError.single("n", f"n must be between 1 and {MAX_STEP_BATCH}")
             s.pause_event.clear()
             s.cancel_event.clear()
             s.error = None

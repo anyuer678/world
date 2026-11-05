@@ -160,6 +160,7 @@ export interface LimitsResponse {
     concurrency_max: number
   }
   engine: { max_wall_seconds: number; max_workers: number; default_max_steps: number }
+  session: { max_step_batch: number }
 }
 
 export interface BatchItem {

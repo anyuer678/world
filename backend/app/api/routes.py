@@ -12,6 +12,7 @@ from ..services import reporting
 from ..services.analysis_service import analyze_summary
 from ..services.batch_service import MAX_BATCH_ITEMS
 from ..services.experiment_service import ConflictError, NotFoundError
+from ..services.session_service import MAX_STEP_BATCH
 
 
 router = APIRouter(prefix="/api")
@@ -277,6 +278,9 @@ def get_limits(request: Request) -> dict[str, Any]:
             "max_workers": settings.max_workers,
             "default_max_steps": settings.default_max_steps,
         },
+        # R47：会话单次 step(n) 的上限此前只在后端校验，前端只能等 422；
+        # 与校验共用常量，前端据此做 input max 与提交前拦截。
+        "session": {"max_step_batch": MAX_STEP_BATCH},
     }
 
 

@@ -762,3 +762,15 @@
     用孤儿 spec 创建 → `错误：参数校验失败：unknown_model unknown model_id: 'mrp_probe'`。
     ⑤ 单测：`errorDetailMessage` 新增步数上限、`Field required`、不可识别回退三组断言
     （前端 **63/63**）；tsc/vite 干净。
+
+58. **R47 会话单步上限单一事实源（/api/limits → 表单拦截）**。
+    ① 缺陷：`step(n)` 的上限 1,000,000 只存在于后端校验，`/api/limits` 未导出，前端只能
+    把越界值发出去吃 422（R46 只是把错误文案变可读）。
+    ② 修：常量 `session_service.MAX_STEP_BATCH` 同时供校验与 `GET /api/limits` 使用，
+    返回 `session:{max_step_batch}`；`test_limits_endpoint_tracks_validation_rules` 断言
+    端点值与常量一致（两端绑定，不会各写一份）。
+    ③ 前端：步数输入 `min=1 max=max_step_batch`，越界时红字提示 + `aria-invalid` +
+    禁用「单步」；纯函数 `stepProblem()` 覆盖空值/0/负数/小数/超限（单测 4 组）。
+    ④ 浏览器实测：2000000 → 「步数不能超过 1000000」、按钮禁用、`aria-invalid=true`；
+    5 → 提示消失、单步成功到 step 5，无 alert。
+    ⑤ 回归：后端 **303/303**、前端 **65/65**、tsc -b/vite build 干净。

@@ -21,8 +21,10 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 - `GET /api/health` → `{status:"ok", app_version, engine_version}`
 - `GET /api/limits`（R29）→ `{batch:{max_items, name_max_length, repeats_min/max,
   max_retries_min/max, concurrency_min/max}, engine:{max_wall_seconds, max_workers,
-  default_max_steps}}`——值由服务端 pydantic 校验规则与模块常量**现场导出**，
-  前端批量面板据此校验，不再各存一份硬编码上限（有测试绑定两端）。
+  default_max_steps}, session:{max_step_batch}}`——值由服务端 pydantic 校验规则与模块常量
+  **现场导出**，前端批量面板与会话单步输入据此校验，不再各存一份硬编码上限（有测试绑定两端）。
+  `session.max_step_batch` = 单次 `POST /api/sessions/{id}/step` 的 `n` 上限（R47，默认 1000000），
+  与后端校验共用同一常量；前端据此设置 `input max` 并在越界时禁用提交，使该 422 在界面里不可达。
 
 ## 模型
 - `GET /api/models` → `{models: [ModelInfo]}`，**每个 model_id 恰好一条**（列最新版本；

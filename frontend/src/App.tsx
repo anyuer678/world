@@ -21,6 +21,8 @@ export default function App() {
   const [name, setName] = useState('我的实验')
   const [stepN, setStepN] = useState('1')
   const [session, setSession] = useState<SessionState | null>(null)
+  // R47：单次步进上限从 /api/limits 取（取不到时用与后端一致的保守默认值）
+  const [stepMax, setStepMax] = useState(1_000_000)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
@@ -38,6 +40,12 @@ export default function App() {
       })
       .catch((e) => setError(String(e)))
     refreshHistory()
+    api
+      .getLimits()
+      .then((l) => setStepMax(l.session.max_step_batch))
+      .catch(() => {
+        /* 保持保守默认值，不阻塞表单 */
+      })
   }, [])
 
   // 会话运行中时轮询真实状态；状态离开 running 后停止
@@ -142,6 +150,7 @@ export default function App() {
 
   const st = session?.status ?? null
   const canStep = session !== null && (st === 'idle' || st === 'paused')
+  const stepProblemMsg = stepProblem(stepMax, stepN)
   const canRun = session !== null && (st === 'idle' || st === 'paused')
   const canPause = st === 'running'
   const stepCount = session?.snapshot.step ?? 0
@@ -244,15 +253,29 @@ export default function App() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
               <button
                 onClick={() => act(() => api.stepSession(session.session_id, Math.max(1, Number(stepN) || 1)))}
-                disabled={busy || !canStep}
+                disabled={busy || !canStep || stepProblemMsg !== null}
                 style={btn}
+                title={stepProblemMsg ?? undefined}
               >
                 单步 ×{Math.max(1, Number(stepN) || 1)}
               </button>
               <label style={{ ...rowFlex, margin: 0 }}>
                 步数：
-                <input value={stepN} onChange={(e) => setStepN(e.target.value)} style={{ ...control, width: 70 }} />
+                <input
+                  value={stepN}
+                  onChange={(e) => setStepN(e.target.value)}
+                  min={1}
+                  max={stepMax}
+                  aria-invalid={stepProblemMsg !== null}
+                  aria-describedby={stepProblemMsg ? 'step-problem' : undefined}
+                  style={{ ...control, width: 70 }}
+                />
               </label>
+              {stepProblemMsg && (
+                <span id="step-problem" role="alert" style={{ color: '#b91c1c', fontSize: 12 }}>
+                  {stepProblemMsg}
+                </span>
+              )}
               <button onClick={() => act(() => api.runSession(session.session_id))} disabled={busy || !canRun} style={primaryBtn}>
                 ▶ 连续运行
               </button>
@@ -503,6 +526,16 @@ export default function App() {
       </details>
     </main>
   )
+}
+
+/** 单步输入的本地校验（R47）：与 /api/limits 的 session.max_step_batch 同源，
+ * 让越界在提交前就不可达，而不是发出去吃 422。 */
+export function stepProblem(max: number, raw: string): string | null {
+  const n = Number(raw)
+  if (raw.trim() === '' || !Number.isFinite(n) || !Number.isInteger(n) || n < 1)
+    return '步数需为不小于 1 的整数'
+  if (n > max) return `步数不能超过 ${max}`
+  return null
 }
 
 export function modelTypeLabel(t: string): string {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { modelTypeLabel, quickPicks, scenarioSpec } from './App'
+import { modelTypeLabel, quickPicks, scenarioSpec, stepProblem } from './App'
 import { statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
@@ -681,3 +681,18 @@ describe('parseArrayText', () => {
     expect(parseArrayText('not json', undefined)).toBeNull()
   })
 })
+
+describe('stepProblem (server-provided step bound, R47)', () => {
+  it('blocks values the backend would reject and accepts the bound itself', () => {
+    expect(stepProblem(1_000_000, '2000000')).toBe('步数不能超过 1000000')
+    expect(stepProblem(1_000_000, '1000000')).toBeNull()
+    expect(stepProblem(1_000_000, '1')).toBeNull()
+  })
+  it('rejects empty, zero, negative and non-integer input', () => {
+    expect(stepProblem(1_000_000, '')).toContain('不小于 1')
+    expect(stepProblem(1_000_000, '0')).toContain('不小于 1')
+    expect(stepProblem(1_000_000, '-3')).toContain('不小于 1')
+    expect(stepProblem(1_000_000, '2.5')).toContain('整数')
+  })
+})
+
