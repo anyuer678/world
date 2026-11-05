@@ -36,8 +36,12 @@ pydantic 原文，前端横幅逐条显示；实测 `spec_invalid` 即此形状�
 - `POST /api/experiments/{id}/cancel` → Experiment
 - `POST /api/experiments/{id}/rerun` → 202（重置为 pending 并重新排队）
 - `GET /api/experiments/{id}/report?format=markdown|json`（阶段 5）→
-  markdown 时 `text/markdown` 附件下载；json 时返回报告结构
-  （含 `comparability_note` 跨版本可比性说明）
+  markdown 时 `text/markdown` 附件下载（含 spec JSON 块、逐运行指标、聚合均值、
+  result_sha256 说明）；json 时返回报告结构，键为
+  `{report_version: 1, generated_at, software{app_version, engine_version,
+  python_version}, experiment, runs, aggregate, run_list_note, comparability_note}`
+  （`report_version` 是面向未来的结构版本标签，当前只有 1，服务端不做版本协商；
+  报告内容全部来自库中已记录数据，不做二次派生）
 
 ## 运行
 - `GET /api/runs/{run_id}` → RunDetail（status、steps、sim_time、metrics、summary、events 最近 N 条、error、result_sha256）

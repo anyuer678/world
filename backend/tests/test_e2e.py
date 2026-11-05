@@ -17,7 +17,61 @@ from app.core.registry import registry
 from app.core.schema.spec import example_spec_for
 from app.main import create_app
 
-BUILTIN_MODELS = {"queueing", "cpu_scheduling", "cache_sim", "cellular_automaton"}
+BUILTIN_MODELS = {
+    "queueing",
+    "cpu_scheduling",
+    "cache_sim",
+    "cellular_automaton",
+    "schelling",
+    "traffic_network",
+    "sir",
+    "predator_prey",
+}
+
+# 每个模型的步数上限：只够产出指标、又让整套参数化测试在秒级完成
+# （schelling 最贵 ≈288 steps/s，故给到 20 步）
+E2E_STEPS = {
+    "queueing": 500,
+    "cpu_scheduling": 500,
+    "cache_sim": 500,
+    "cellular_automaton": 50,
+    "schelling": 20,
+    "traffic_network": 20,
+    "sir": 50,
+    "predator_prey": 50,
+}
+
+
+@pytest.mark.parametrize("model_id", sorted(BUILTIN_MODELS))
+def test_every_builtin_model_full_chain(client, model_id):
+    """R28：每个内置模型都跑通 建实验 → 运行 → 结果指标 → 报告（md/json）全链路。
+
+    此前端到端只覆盖 4 个模型（R10 时代写死），新增模型从 API 静默消失、
+    或报告链路对某模型报错，都不会被测试抓到。
+    """
+    spec = _spec(model_id, E2E_STEPS[model_id])
+    r = client.post("/api/experiments", json={"name": f"e2e-{model_id}", "spec": spec})
+    assert r.status_code == 201, r.text
+    eid = r.json()["id"]
+
+    rr = client.post(f"/api/experiments/{eid}/run", json={"wait": True})
+    assert rr.status_code == 200, rr.text
+
+    result = client.get(f"/api/experiments/{eid}/result").json()
+    run = result["runs"][0]
+    assert run["status"] == "completed", run
+    assert run["metrics"], "completed run must carry metrics"
+    assert run["result_sha256"], "result_sha256 must be recorded for integrity"
+
+    md = client.get(f"/api/experiments/{eid}/report?format=markdown")
+    assert md.status_code == 200
+    assert md.headers["content-type"].startswith("text/markdown")
+    assert model_id in md.text
+
+    js = client.get(f"/api/experiments/{eid}/report?format=json").json()
+    assert js["report_version"] == 1
+    assert js["runs"][0]["metrics"] == run["metrics"]
+    assert js["comparability_note"]
 
 
 def _spec(model_id: str, steps: int, seed: int | None = 42) -> dict:
@@ -78,7 +132,7 @@ def test_full_api_lifecycle(client):
     assert r.json()["status"] == "ok"
     assert r.json()["engine_version"]
 
-    # 2. model catalog: four built-ins discoverable via API
+    # 2. model catalog: all eight built-ins discoverable via API
     r = client.get("/api/models")
     assert r.status_code == 200
     ids = {m["model_id"] for m in r.json()["models"]}

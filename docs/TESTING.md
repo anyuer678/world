@@ -426,3 +426,15 @@
    一律 409 `conflict`（无 500），message 指明具体项；有效恢复后 status 沿用检查点
    当时值（单步后检查点 → `paused`）；契约原只写「→ SessionState」，现写明拒绝
    条件与状态语义。探针会话已删。回归：后端 **250/250**、前端 54/54（无前端改动）。
+38. **R28 巡检轮：导出链路落实 + 端到端八模型覆盖**（决策见 DECISIONS D52）。
+   ① `reporting.py`/批量 CSV 审计：报告全部取自库内已记录数据（metrics 通用转储，
+   第八模型自动被报告覆盖）、CSV 逐 item 明细含 params/metrics JSON 列 + BOM，
+   与契约一致；报告 JSON 真实键集此前不成文，已补入 API_CONTRACT（并说明
+   `report_version` 仅为结构版本标签、无版本协商）。② 补真覆盖缺口：
+   `test_e2e.BUILTIN_MODELS` 自 R10 起只有 4 个模型，schelling/traffic/sir/
+   predator_prey 从未被端到端断言 → 新增 `test_every_builtin_model_full_chain`
+   （八模型逐个：建实验 → wait 运行 → completed + 非空 metrics + result_sha256 →
+   报告 markdown 200/text-markdown/含 model_id → 报告 json `report_version=1`
+   且 metrics 与运行一致），步数按成本分档（schelling 20、queueing 500）整套
+   秒级；`BUILTIN_MODELS` 扩到 8。回归：后端 **258/258**（+8 参数化）、
+   前端 54/54（无前端改动）。
