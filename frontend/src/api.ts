@@ -10,6 +10,32 @@ import type {
 } from './types'
 import type { FindingsResponse } from './findings'
 
+type SpecError = { code: string; message: string }
+type FastApiError = { loc?: unknown[]; msg?: string; type?: string }
+
+/**
+ * Errors reach us in two shapes: the app's spec validation returns
+ * `detail: {code, message, errors[]}` while FastAPI's own request-body rules
+ * return `detail: [{loc, msg, type}]`. Reading only the first shape made every
+ * body-rule violation render as a bare "422" with no reason.
+ */
+export function errorDetailMessage(status: number, body: unknown): string {
+  const detail = (body as { detail?: unknown } | null)?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const parts = (detail as FastApiError[])
+      .map((item) => {
+        const path = (item.loc ?? []).filter((p) => p !== 'body' && p !== 'query').join('.')
+        return `${path ? path + ' ' : ''}${item.msg ?? item.type ?? '输入不合法'}`
+      })
+      .filter(Boolean)
+    return parts.length ? `${status}: ${parts.join('; ')}` : `${status}`
+  }
+  const obj = detail as { message?: string; errors?: SpecError[] } | undefined
+  const message = obj?.message ?? `${status}`
+  return obj?.errors?.length ? `${message}: ${obj.errors.map((e) => `${e.code} ${e.message}`).join('; ')}` : message
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -18,12 +44,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     let message = `${res.status}`
     try {
-      const body = await res.json()
-      const detail = body.detail
-      message = typeof detail === 'string' ? detail : detail?.message ?? message
-      if (detail?.errors?.length) {
-        message += ': ' + detail.errors.map((e: { code: string; message: string }) => `${e.code} ${e.message}`).join('; ')
-      }
+      message = errorDetailMessage(res.status, await res.json())
     } catch {
       /* keep status code */
     }

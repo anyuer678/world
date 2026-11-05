@@ -6,26 +6,75 @@ import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
 import { FALLBACK_LIMITS, batchSubmitProblem } from './BatchPanel'
+import { errorDetailMessage } from './api'
 
-describe('batchSubmitProblem (server-provided limits, R29)', () => {
+describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
   it('rejects repeats above the server max that the old frontend ignored', () => {
-    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 150, repeats: 150 })).toContain(
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 150, repeats: 150, retries: 0 })).toContain(
       '每组重复需在 1–100 之间',
     )
-    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 0, repeats: 0 })).toContain(
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 0, repeats: 0, retries: 0 })).toContain(
       '每组重复需在 1–100 之间',
     )
   })
 
   it('rejects over-cap grids, blank and overlong names; accepts a sane batch', () => {
-    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 2001, repeats: 3 })).toContain(
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 2001, repeats: 3, retries: 0 })).toContain(
       '总项数 2001 超过上限 2000',
     )
-    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: '   ', totalItems: 3, repeats: 3 })).toBe('批量名称不能为空')
-    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'x'.repeat(201), totalItems: 3, repeats: 3 })).toContain(
-      '批量名称最长 200 字符',
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: '   ', totalItems: 3, repeats: 3, retries: 0 })).toBe(
+      '批量名称不能为空',
     )
-    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'ok', totalItems: 60, repeats: 3 })).toBeNull()
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'x'.repeat(201), totalItems: 3, repeats: 3, retries: 0 }),
+    ).toContain('批量名称最长 200 字符')
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'ok', totalItems: 60, repeats: 3, retries: 0 })).toBeNull()
+  })
+
+  it('rejects retries outside the server window (R30: free-text field used to reach a bare 422)', () => {
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 11 })).toContain(
+      '失败重试需在 0–10 之间（当前 11）',
+    )
+    expect(
+      batchSubmitProblem(
+        { ...FALLBACK_LIMITS, retriesMax: 5 },
+        { name: 'b', totalItems: 3, repeats: 3, retries: 6 },
+      ),
+    ).toContain('失败重试需在 0–5 之间')
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 10 })).toBeNull()
+  })
+})
+
+describe('errorDetailMessage (two 422 shapes, R30)', () => {
+  it('reads the app-level spec validation object shape', () => {
+    expect(
+      errorDetailMessage(422, {
+        detail: { code: 'spec_invalid', message: 'spec validation failed', errors: [{ code: 'params.gamma', message: '≥0' }] },
+      }),
+    ).toBe('spec validation failed: params.gamma ≥0')
+  })
+
+  it('reads FastAPI request-body rule arrays instead of rendering a bare 422', () => {
+    expect(
+      errorDetailMessage(422, {
+        detail: [{ type: 'less_than_equal', loc: ['body', 'repeats'], msg: 'Input should be less than or equal to 100', input: 150 }],
+      }),
+    ).toBe('422: repeats Input should be less than or equal to 100')
+    expect(
+      errorDetailMessage(422, {
+        detail: [
+          { loc: ['body', 'grid'], msg: 'Field required' },
+          { loc: ['query', 'x'], msg: 'Bad x' },
+        ],
+      }),
+    ).toBe('422: grid Field required; x Bad x')
+  })
+
+  it('falls back to plain strings and bare status codes', () => {
+    expect(errorDetailMessage(404, { detail: 'run 9 not found' })).toBe('run 9 not found')
+    expect(errorDetailMessage(500, {})).toBe('500')
+    expect(errorDetailMessage(422, { detail: [] })).toBe('422')
+    expect(errorDetailMessage(400, null)).toBe('400')
   })
 })
 import { buildSweep, defaultSweepSelection, sweepParamOptions } from './sweepChart'

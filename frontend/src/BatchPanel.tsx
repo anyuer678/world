@@ -13,19 +13,30 @@ export interface BatchLimits {
   nameMaxLength: number
   repeatsMin: number
   repeatsMax: number
+  retriesMin: number
+  retriesMax: number
 }
 
 /** Used until /api/limits answers; the server stays the source of truth. */
-export const FALLBACK_LIMITS: BatchLimits = { maxItems: 2000, nameMaxLength: 200, repeatsMin: 1, repeatsMax: 100 }
+export const FALLBACK_LIMITS: BatchLimits = {
+  maxItems: 2000,
+  nameMaxLength: 200,
+  repeatsMin: 1,
+  repeatsMax: 100,
+  retriesMin: 0,
+  retriesMax: 10,
+}
 
 export function batchSubmitProblem(
   limits: BatchLimits,
-  opts: { name: string; totalItems: number; repeats: number },
+  opts: { name: string; totalItems: number; repeats: number; retries: number },
 ): string | null {
   if (!opts.name.trim()) return '批量名称不能为空'
   if (opts.name.length > limits.nameMaxLength) return `批量名称最长 ${limits.nameMaxLength} 字符（当前 ${opts.name.length}）`
   if (opts.repeats < limits.repeatsMin || opts.repeats > limits.repeatsMax)
     return `每组重复需在 ${limits.repeatsMin}–${limits.repeatsMax} 之间（当前 ${opts.repeats}）`
+  if (opts.retries < limits.retriesMin || opts.retries > limits.retriesMax)
+    return `失败重试需在 ${limits.retriesMin}–${limits.retriesMax} 之间（当前 ${opts.retries}）`
   if (opts.totalItems > limits.maxItems)
     return `总项数 ${opts.totalItems} 超过上限 ${limits.maxItems}：请缩小网格或减少重复`
   return null
@@ -78,6 +89,8 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
           nameMaxLength: r.batch.name_max_length,
           repeatsMin: r.batch.repeats_min,
           repeatsMax: r.batch.repeats_max,
+          retriesMin: r.batch.max_retries_min,
+          retriesMax: r.batch.max_retries_max,
         }),
       )
       .catch(() => {})
@@ -125,8 +138,9 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const grid = buildGrid()
   const comboCount = Object.values(grid).reduce((a, v) => a * v.length, 1) || 1
   const repeatN = Math.max(1, Number(repeats) || 1)
+  const retryN = Math.max(0, Number(retries) || 0)
   const totalItems = comboCount * repeatN
-  const problem = batchSubmitProblem(limits, { name, totalItems, repeats: repeatN })
+  const problem = batchSubmitProblem(limits, { name, totalItems, repeats: repeatN, retries: retryN })
 
   async function submit() {
     setBusy(true)
@@ -139,7 +153,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
         grid,
         repeats: repeatN,
         seed_strategy: strategy,
-        max_retries: Math.max(0, Number(retries) || 0),
+        max_retries: retryN,
         per_run_wall_seconds: Math.max(1, Number(wallSec) || 60),
       })
       setBatch(b)
@@ -267,7 +281,14 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
           </label>
           <label style={rowFlex}>
             失败重试：
-            <input value={retries} onChange={(e) => setRetries(e.target.value)} style={control} />
+            <input
+              type="number"
+              min={limits.retriesMin}
+              max={limits.retriesMax}
+              value={retries}
+              onChange={(e) => setRetries(e.target.value)}
+              style={control}
+            />
           </label>
           <label style={rowFlex}>
             单项墙钟（秒）：

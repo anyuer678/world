@@ -1,9 +1,21 @@
-# REST API 契约（全量：阶段 1–6 + R1–R25，逐条实测对齐）
+# REST API 契约（全量：阶段 1–6 + R1–R30，逐条实测对齐）
 
-Base URL: `http://localhost:8000`，前缀 `/api`。错误统一：
-`{"detail": {"code": "...", "message": "..."}}`，校验错误 422，业务错误 400/404/409。
-422 的 `detail` 额外带 `errors: [{code: "params.servers", message: "…"}]`（字段路径 +
-pydantic 原文，前端横幅逐条显示；实测 `spec_invalid` 即此形状）。
+Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错误 400/404/409。
+
+**`detail` 有两种形状，消费方必须都处理（R30 实测固化）**：
+
+1. **对象形状**——应用层抛出的错误与 spec 校验：
+   `{"detail": {"code": "spec_invalid", "message": "spec validation failed", "errors": [{code, message}]}}`。
+   `errors[]` 仅 spec 类 422 携带（字段路径 + pydantic 原文，如 `params.servers`）；
+   400/404/409 同形状但无 `errors`（实测 404 = `{"code":"not_found","message":"run 9 not found"}`）。
+2. **数组形状**——FastAPI 自己的请求体规则校验（`CreateBatchBody` 的 `repeats`/`max_retries`/
+   `concurrency`/`name` 长度等约束越界）：
+   `{"detail": [{"type": "less_than_equal", "loc": ["body", "repeats"], "msg": "…", "input": 150, "ctx": {…}}]}`，
+   **没有** `code`/`message` 键。
+
+两种形状都有测试绑定（`test_api.py::test_422_has_two_distinct_detail_shapes`）。
+前端 `api.ts:errorDetailMessage()` 把两者统一还原成可读文案——只读对象形状时，
+数组形状会退化成裸「422」，用户看不到失败原因（R30 修复的缺陷）。
 
 ## 系统
 - `GET /api/health` → `{status:"ok", app_version, engine_version}`
@@ -58,7 +70,12 @@ pydantic 原文，前端横幅逐条显示；实测 `spec_invalid` 即此形状�
 - `POST /api/batches` body=`{name, spec, grid, repeats, seed_strategy?, max_retries?, concurrency?, per_run_wall_seconds?}`
   → 201 Batch（status=pending）。grid 为「参数名 → 取值列表」的笛卡尔积扫描，
   与 repeats 相乘后超 `MAX_BATCH_ITEMS` 直接 400（限量前移，不物化，R1）
-- `GET /api/batches?limit&offset` → `{total, batches:[Batch 概要]}`
+- `GET /api/batches?limit&offset` → `{total, batches:[概要]}`，概要 =
+  `{id, name, model_id, model_version, status, total_items, repeats, seed_strategy,
+  seed_base, created_at, duration_ms, done_items}`（无 started_at/finished_at）。
+  **进度计数在两个端点形状不同**（R30 实测）：列表用扁平 `done_items`
+  （已到终态项数，含 `step_limit`/`wall_timeout` 这类非成功终态），
+  详情不给 `done_items` 而给 `counts`（状态→数量分桶，进度 = 终态桶求和）
 - `GET /api/batches/{id}` → Batch（含 spec/grid/counts{状态→数}；
   终态含 summary：每组合的聚合指标 `{n, mean, std, p50, p90, ci95_low, ci95_high}`）
 - `GET /api/batches/{id}/items?limit&offset` → `{total, items:[{item_index, combo, repeat_index, seed, status, attempts, steps, sim_time, metrics, result_sha256, error, duration_ms}]}`

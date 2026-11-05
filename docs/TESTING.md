@@ -451,3 +451,30 @@
    ④ 浏览器实测：repeats=150 → 提示「每组重复需在 1–100 之间（当前 150）」且
    按钮 disabled；改回 3 → 提示消失、按钮可用；控制台零错误。回归：后端
    **259/259**、前端 **56/56**、tsc -b/vite build 干净。
+40. **R30 巡检轮：README 命令实跑 + 422 双形状缺陷 + Docker 生产复验**（决策见 D54）。
+   ① 入门命令逐条真跑通过：`uv sync`、`uv run pytest`（260 项）、`uv run uvicorn`
+   （health ok、/docs 200、openapi 31 路径含 `/api/limits`）、`npm run dev|test|build`
+   （脚本名与 package.json 一致）。修 README 四处计数/清单漂移：四模型→八、
+   21→23 个测试文件、六模型正确性→八并补 SIR/LV 描述、Docker 段落改成本轮实测口径；
+   环境变量清单补齐 `WORLDLAB_EVENT_LOG_SIZE`(500)/`WORLDLAB_PLUGIN_MODULES`。
+   工具事实：`pyproject.toml` `addopts="-q"` 再叠加命令行 `-q` = `-qq` 会吞掉通过计数行，
+   需 `-o addopts=""` 才打印「260 passed」。
+   ② **修一处可用性真缺陷**：422 `detail` 有对象形状（应用层 spec 校验）与**数组形状**
+   （FastAPI 请求体规则：repeats/max_retries/concurrency/name 长度）两种，`api.ts` 只读
+   对象形状 → 数组形状横幅退化成裸「422」。UI 可达路径实证：「失败重试」自由文本填 15
+   → 后端数组 422 → 横幅无原因。修：纯函数 `errorDetailMessage()` 还原两种形状 +
+   BatchPanel 消费 `/api/limits` 早已导出的 `max_retries_min/max`（输入框 min/max、
+   提交禁用、红字原因）。浏览器实测：填 15 → 提示「失败重试需在 0–10 之间（当前 15）」
+   且按钮 disabled；页面内 import 真实模块对**活后端**返回的数组 422 调 formatter 得
+   「422: max_retries Input should be less than or equal to 10」，对象形状得
+   「spec validation failed: params.servers Input should be greater than or equal to 1」。
+   后端新增 `test_422_has_two_distinct_detail_shapes` 把两种形状钉成契约；前端 +3 组用例。
+   ③ 契约补写两端点形状不对称：批量列表 `done_items`（含 step_limit/wall_timeout 非成功
+   终态）vs 详情 `counts` 分桶。④ Docker 生产形态复验（R15 后首次、R25–R29 新增面纳入）：
+   `compose build/up` 成功且 healthy，经 **nginx 反代 5173** 实测 health、八模型目录、
+   predator_prey 三场景带 seed/stop_condition、`/api/limits`、实验→运行→指标+sha
+   （K=8：`equilibrium_prey=5.0` 与解析真值 γ/(δβ) 逐位一致、`distance_to_equilibrium=0.0`）、
+   `runs/{id}/events`（total=100、未知 run 404）、报告 md/json 键集、批量→终态→findings→
+   `export.csv`（12 列 + BOM）、repeats=101 → 422；改动后前端镜像重建通过（容器内 `npm ci`
+   + tsc/vite）。⑤ `.gitignore` 补 `pytest-of-*/`（README 的命令会生成该目录污染 status）。
+   回归：后端 **260/260**、前端 **60/60**、tsc -b/vite build 干净。

@@ -68,7 +68,14 @@ API_CONTRACT 逐条实测对齐——落地契约承诺却缺失的 `runs/{id}/e
 4 个模型，现八个内置模型逐个跑通「建实验→运行→指标+SHA→报告 md/json」全链路（见 D52）；R29 消灭
 上限双写——新增 `GET /api/limits`（值现场取自服务端校验规则），批量面板据此禁用与提示
 （此前填 repeats=150 会被前端放行、后端 422），并纠正 BENCHMARKS 里 `default_max_steps`
-的数量级失真（100,000 → 实际默认 1,000,000）（见 D53）。
+的数量级失真（100,000 → 实际默认 1,000,000）（见 D53）；R30 入门文档实跑轮——照 README 逐条
+真跑命令并修四处计数/清单漂移（四→八模型、测试文件数、模型正确性清单、Docker 段落口径，
+环境变量补齐 `WORLDLAB_EVENT_LOG_SIZE`/`WORLDLAB_PLUGIN_MODULES`），修掉一处可用性真缺陷：
+422 的 `detail` 有对象（应用层 spec 校验）与数组（FastAPI 请求体规则）两种形状，前端只读
+对象形状导致数组形状横幅退化成裸「422」——新增 `errorDetailMessage()` 统一还原并让批量面板
+消费 `/api/limits` 早已导出的重试边界，浏览器实测填 15 得到具体红字提示且按钮禁用；同时完成
+R15 后首次 Docker 生产形态复验（八模型目录、nginx 反代、limits/events 分页/404、报告键集、
+批量+CSV 导出、解析真值逐位命中）（见 D54）。
 
 ## 内置模型
 
@@ -95,15 +102,22 @@ API_CONTRACT 逐条实测对齐——落地契约承诺却缺失的 `runs/{id}/e
 ```bash
 cd backend
 uv sync                 # 安装依赖（fastapi/pydantic/numpy/uvicorn + pytest/httpx）
-uv run pytest           # 全部测试：引擎/事件队列/四模型/Schema/迁移/会话/批量/插件/报告/性能/恢复/端到端
+uv run pytest           # 全部测试：引擎/事件队列/八模型/Schema/迁移/会话/批量/插件/报告/性能/恢复/端到端
 uv run python scripts/benchmark.py   # 性能基准（数字写入 docs/BENCHMARKS.md 的口径）
 uv run uvicorn app.main:app --port 8000
 # API: http://localhost:8000/api/health  文档: http://localhost:8000/docs
 ```
 
-可选环境变量：`WORLDLAB_DB`（SQLite 路径，默认 `backend/data/worldlab.db`）、
-`WORLDLAB_MAX_WORKERS`（并发运行上限，默认 2）、`WORLDLAB_MAX_WALL_SECONDS`（单次运行墙钟上限，默认 120）、
-`WORLDLAB_DEFAULT_MAX_STEPS`、`WORLDLAB_CANCEL_POLL_INTERVAL`、`WORLDLAB_ZERO_DELAY_CHAIN_LIMIT`。
+可选环境变量（读源于 `app/config.py:Settings.from_env()`，括号内为默认值）：
+`WORLDLAB_DB`（SQLite 路径，默认 `backend/data/worldlab.db`）、
+`WORLDLAB_MAX_WORKERS`（并发运行上限，2）、
+`WORLDLAB_MAX_WALL_SECONDS`（单次运行墙钟秒上限，120）、
+`WORLDLAB_DEFAULT_MAX_STEPS`（步数上限，1000000）、
+`WORLDLAB_CANCEL_POLL_INTERVAL`（协作式取消检查粒度，256 步）、
+`WORLDLAB_ZERO_DELAY_CHAIN_LIMIT`（同刻零延迟事件链上限，10000）、
+`WORLDLAB_EVENT_LOG_SIZE`（会话事件环形缓冲，500）、
+`WORLDLAB_PLUGIN_MODULES`（插件模块名，逗号/分号分隔，默认为空，见 `docs/PLUGINS.md`）。
+运行时上限的可查询口径由 `GET /api/limits` 统一导出（R29）。
 
 ### 前端（Node 18+）
 
@@ -111,7 +125,8 @@ uv run uvicorn app.main:app --port 8000
 cd frontend
 npm install
 npm run dev             # http://localhost:5173 （/api 代理到 8000）
-npm run test            # 前端单元测试
+npm run test            # 前端单元测试（vitest，60 项纯逻辑用例）
+npm run build           # 类型检查 + 生产构建（tsc -b && vite build）
 ```
 
 界面：模型选择 → 参数配置面板（结构化编辑器，基于 params_schema 生成）→
@@ -129,20 +144,23 @@ docker compose up --build -d
 compose 栈：`api`（FastAPI + uvicorn，healthcheck 探活，数据落在命名卷
 `worldlab-data`）+ `web`（nginx 托管构建产物并反代 `/api`）。依赖用锁文件钉版
 （后端 `uv sync --frozen` + uv.lock，前端 `npm ci` + package-lock.json），
-构建上下文经 .dockerignore 裁剪。R7 复验链路：health、六模型目录、
-场景一键运行（跨环境确定性一致：谢林轻微偏好 382 次搬家/0 不满）、
-批量创建 + 自动发现（含 ratio=null 的坍缩为 0 识别）；CSV/报告导出为
-阶段 6 已验链路。
+构建上下文经 .dockerignore 裁剪。R30 复验的生产形态链路（全部经 nginx 反代 5173 实测）：
+health、八模型目录、`GET /api/limits`、实验创建→运行→指标+`result_sha256`、
+`/api/runs/{id}/events` 分页（含未知 run 的 404）、报告 markdown/JSON、批量创建→终态→
+自动发现→`export.csv`（12 列 + BOM）、请求体规则越界 422。历史轮次：R7 首验六模型目录 +
+场景一键运行（跨环境确定性一致：谢林轻微偏好 382 次搬家/0 不满）与批量发现，
+R15 复验停止条件两型，CSV/报告导出为阶段 6 已验链路。
 
 ## 测试与质量保障
 
-- **后端 pytest**（21 个测试文件）：引擎时间语义（同刻事件顺序、零延迟链上限）、
-  六模型正确性（排队论对照、调度指标手算对照、缓存命中数、CA 规则、谢林同步步
-  不变式、交通路网信号相位与守恒）、确定性
+- **后端 pytest**（23 个测试文件）：引擎时间语义（同刻事件顺序、零延迟链上限）、
+  八模型正确性（排队论对照、调度指标手算对照、缓存命中数、CA 规则、谢林同步步
+  不变式、SIR 仓室守恒与 R₀ 阈值、捕食者-猎物首次积分守恒与内平衡收敛、交通路网信号相位与守恒）、确定性
   （同种子逐位一致，含检查点恢复后续跑）、Schema 迁移、批量（网格/种子策略/取消/重试/并发上限）、
-  统计汇总、自动发现（扫描跳变/离散异常）、插件注册、报告、性能回归阈值、异常恢复
-  （进程重启后续跑、崩溃不丢数据）、端到端全生命周期（HTTP 层走真实 API 契约）。
-- **前端**：vitest 单元测试（spec 编辑、状态映射、批量面板逻辑）。
+  统计汇总、自动发现（扫描跳变/离散异常/CI 重叠三态）、插件注册、报告、性能回归阈值、异常恢复
+  （进程重启后续跑、崩溃不丢数据）、端到端全生命周期（HTTP 层走真实 API 契约，八个模型逐个跑通）。
+- **前端**：vitest 单元测试（spec 编辑、状态映射、速读文案、扫描曲线与 CI 带、批量面板与
+  `/api/limits` 校验、两种 422 形状的文案还原）。
 - **性能基准**：`docs/BENCHMARKS.md` —— 引擎吞吐、API 延迟、批量吞吐与回归阈值，
   全部来自 `scripts/benchmark.py` 实测。
 

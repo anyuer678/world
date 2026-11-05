@@ -100,6 +100,31 @@ def test_unknown_model_422(client):
     assert r.status_code == 422
 
 
+def test_422_has_two_distinct_detail_shapes(client):
+    """R30：422 的 detail 有两种形状，消费方必须都认：
+    FastAPI 请求体规则（repeats/max_retries/concurrency 等）→ 数组；
+    应用层 spec 校验（main.py 异常处理器）→ 对象 {code, message, errors[]}。
+    前端 api.ts 曾只读对象形状，数组形状渲染成裸 "422"，用户看不到原因。"""
+    limits = client.get("/api/limits").json()["batch"]
+    over = client.post(
+        "/api/batches",
+        json={"name": "shape", "spec": dict(QUEUE_SPEC), "grid": {},
+              "max_retries": limits["max_retries_max"] + 1},
+    )
+    assert over.status_code == 422
+    detail = over.json()["detail"]
+    assert isinstance(detail, list), detail
+    assert detail[0]["loc"] == ["body", "max_retries"]
+    assert "less than or equal to" in detail[0]["msg"]
+
+    spec_bad = client.post(
+        "/api/experiments", json={"name": "shape", "spec": {**QUEUE_SPEC, "params": {"servers": 0}}}
+    )
+    assert spec_bad.status_code == 422
+    obj = spec_bad.json()["detail"]
+    assert isinstance(obj, dict) and obj["code"] == "spec_invalid" and obj["errors"]
+
+
 def test_clone_and_override_params(client):
     exp = client.post("/api/experiments", json={"name": "base", "spec": QUEUE_SPEC}).json()
     clone = client.post(
