@@ -1,7 +1,9 @@
-# REST API 契约（全量：阶段 1–6 + R1–R7）
+# REST API 契约（全量：阶段 1–6 + R1–R25，逐条实测对齐）
 
 Base URL: `http://localhost:8000`，前缀 `/api`。错误统一：
 `{"detail": {"code": "...", "message": "..."}}`，校验错误 422，业务错误 400/404/409。
+422 的 `detail` 额外带 `errors: [{code: "params.servers", message: "…"}]`（字段路径 +
+pydantic 原文，前端横幅逐条显示；实测 `spec_invalid` 即此形状）。
 
 ## 系统
 - `GET /api/health` → `{status:"ok", app_version, engine_version}`
@@ -9,9 +11,13 @@ Base URL: `http://localhost:8000`，前缀 `/api`。错误统一：
 ## 模型
 - `GET /api/models` → `{models: [ModelInfo]}`，ModelInfo：
   `{model_id, display_name, description, model_type, version, params_schema(JSON Schema), example_spec, scenarios[]}`
-  （scenarios 为「一键场景」：`{id, title, description, params, seed, stop_condition}`，R3 起；插件模型同样可声明）
+  （scenarios 为「一键场景」：`{id, title, description, params}` 必填非空，
+  `seed`/`stop_condition` **可选**（R24：工作台点卡片时省略即沿用当前表单值）；
+  R3 起，插件模型同样可声明，详见 PLUGINS.md）
 - `GET /api/models/{model_id}` → ModelInfo
-- `POST /api/models/{model_id}/validate` body=spec → `{valid, errors[], normalized_spec}`
+- `POST /api/models/{model_id}/validate` body=spec（**裸 spec，不包 `{"spec":…}`**）→
+  `{valid, errors[], normalized_spec}`；normalized_spec 另含
+  `model_version/display_name/notes`（迁移补齐后的形态）
 
 ## 实验
 - `POST /api/experiments` body=`{name, spec}` → Experiment（status=created）
@@ -23,7 +29,10 @@ Base URL: `http://localhost:8000`，前缀 `/api`。错误统一：
 - `PUT /api/experiments/{id}/tags` body=`{tags:[string]}` → Experiment
 - `POST /api/experiments/{id}/run` body=`{wait?:bool}` → 202 `{experiment_id, runs:[run_id]}`
   或 wait=true 时同步返回终态（阶段 1 前端先用 wait）
-- `GET /api/experiments/{id}/result` → `{experiment, runs:[{run_id, seed, status, metrics, summary, result_sha256, duration_ms, error}], aggregate?}`
+- `GET /api/experiments/{id}/result` → `{experiment, runs:[RunDetail], aggregate?}`；
+  run 条目键为 **`id`**（不是 `run_id`——`run_id` 只出现在 POST run 的 202 响应里），
+  完整形态 `{id, experiment_id, repeat_index, seed, status, steps, sim_time, metrics,
+  summary, result_sha256, duration_ms, started_at, finished_at, error}`
 - `POST /api/experiments/{id}/cancel` → Experiment
 - `POST /api/experiments/{id}/rerun` → 202（重置为 pending 并重新排队）
 - `GET /api/experiments/{id}/report?format=markdown|json`（阶段 5）→
@@ -32,7 +41,10 @@ Base URL: `http://localhost:8000`，前缀 `/api`。错误统一：
 
 ## 运行
 - `GET /api/runs/{run_id}` → RunDetail（status、steps、sim_time、metrics、summary、events 最近 N 条、error、result_sha256）
-- `GET /api/runs/{run_id}/events?limit&offset` → 事件日志分页
+- `GET /api/runs/{run_id}/events?limit=100&offset=0` → `{run_id, total, limit, offset, events}`
+  （R25 实现契约承诺的分页端点；limit 钳到 1..1000，越界 offset 返回空数组，
+  未知 run 404。事件来自落库快照 `events_json`——每个 run 只持久化**最近 100 条**
+  事件，故 `total ≤ 100`；交互会话的内存态另有 500 条环形日志，两者口径不同）
 
 ## 批量实验（阶段 4 起，后台执行，落库）
 - `POST /api/batches` body=`{name, spec, grid, repeats, seed_strategy?, max_retries?, concurrency?, per_run_wall_seconds?}`
@@ -55,7 +67,8 @@ Base URL: `http://localhost:8000`，前缀 `/api`。错误统一：
 - `GET /api/sessions` → `{sessions: [SessionState 概要]}`
 - `POST /api/sessions` body=`{spec}` → 201 SessionState（spec 校验同实验；会话内 spec 固定，改 spec 需重建）
 - `GET /api/sessions/{id}` → SessionState：
-  `{session_id, status, stop_reason, error, model_id, display_name, visualizer, spec, snapshot:{step,sim_time,state,metrics}, events[], chunk_steps}`
+  `{session_id, status, stop_reason, error, model_id, model_version, model_type, display_name, visualizer, spec, snapshot, events[], chunk_steps}`；
+  snapshot 为 `{step, time, status, state, metrics}`（**模拟时间键名是 `time`**，非 sim_time）
 - `DELETE /api/sessions/{id}` → 204
 - `POST /api/sessions/{id}/step` body=`{n?:int=1}` → SessionState（同步步进）
 - `POST /api/sessions/{id}/run` → SessionState（后台线程启动连续运行；status=running）

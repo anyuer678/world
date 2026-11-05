@@ -387,3 +387,15 @@
    completed，spec 实测 seed=42、stop=steps/10000（沿用表单值）、count=30000=
    bump3×10000、无错误横幅；验毕删临时插件、关服务器。回归：后端 248/248、
    前端 54/54、tsc -b/vite build 干净。
+35. **R25 巡检轮：API 契约逐条实测对齐**（决策见 DECISIONS D49）。对
+   API_CONTRACT 每个端点实跑 curl 比对，命中 1 处空头承诺 + 4 处形状漂移：
+   ① `GET /api/runs/{id}/events` 契约有、实现无 → 落地实现（`{run_id,total,
+   limit,offset,events}`；limit 钳 1..1000、越界 offset 空数组、未知 run 404
+   not_found；事件源为落库 events_json，每 run 最近 100 条，total≤100，与会话
+   内存 500 条环形日志分属两套口径）。② 会话 snapshot 时间键实为 `time`（非
+   sim_time）且另有 `status`。③ 422 detail 实带 `errors[]`。④ result.runs[]
+   主键为 `id`（run_id 只在 POST run 202 响应，前端 api.ts 用法本就正确）。
+   另补 validate body 裸 spec 形状与 normalized_spec 附加键，标题范围改 R1–R25。
+   新增 1 条端点测试（分页/续读差异/钳制/越界/404），实测取证后删除全部探针
+   实验（experiments 回到 1–6）。回归：后端 249/249、前端 54/54（未改动）、
+   tsc -b/vite build（未改动，R24 基线仍绿）。

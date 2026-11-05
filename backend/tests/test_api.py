@@ -127,6 +127,23 @@ def test_delete_experiment(client):
     assert client.get(f"/api/experiments/{exp['id']}").status_code == 404
 
 
+def test_run_events_pagination(client):
+    exp = client.post("/api/experiments", json={"name": "ev", "spec": QUEUE_SPEC}).json()
+    client.post(f"/api/experiments/{exp['id']}/run", json={"wait": True})
+    rid = client.get(f"/api/experiments/{exp['id']}/result").json()["runs"][0]["id"]
+
+    page1 = client.get(f"/api/runs/{rid}/events", params={"limit": 5, "offset": 0}).json()
+    assert page1["total"] > 5 and len(page1["events"]) == 5
+    page2 = client.get(f"/api/runs/{rid}/events", params={"limit": 5, "offset": 5}).json()
+    assert page2["total"] == page1["total"]
+    assert page2["events"][0] != page1["events"][-1]
+    tail = client.get(f"/api/runs/{rid}/events", params={"offset": page1["total"] - 2}).json()
+    assert len(tail["events"]) == 2
+    beyond = client.get(f"/api/runs/{rid}/events", params={"offset": page1["total"] + 10}).json()
+    assert beyond["events"] == []
+    assert client.get("/api/runs/987654/events").status_code == 404
+
+
 def test_cancel_non_running_is_safe(client):
     exp = client.post("/api/experiments", json={"name": "c", "spec": QUEUE_SPEC}).json()
     r = client.post(f"/api/experiments/{exp['id']}/cancel")

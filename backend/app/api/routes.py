@@ -154,6 +154,11 @@ def get_run(run_id: int, request: Request, events_limit: int = 50) -> dict[str, 
     return _service(request).get_run(run_id, events_limit)
 
 
+@router.get("/runs/{run_id}/events")
+def get_run_events(run_id: int, request: Request, limit: int = 100, offset: int = 0) -> dict[str, Any]:
+    return _service(request).get_run_events(run_id, limit, offset)
+
+
 # -------------------------------------------------------------------- sessions
 class CreateSessionBody(BaseModel):
     spec: dict[str, Any]

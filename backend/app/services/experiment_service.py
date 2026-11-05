@@ -451,6 +451,25 @@ class ExperimentService:
         finally:
             conn.close()
 
+    def get_run_events(self, run_id: int, limit: int = 100, offset: int = 0) -> dict[str, Any]:
+        conn = self._conn()
+        try:
+            row = conn.execute("SELECT events_json FROM experiment_runs WHERE id=?", (run_id,)).fetchone()
+            if row is None:
+                raise NotFoundError(f"run {run_id} not found")
+            events = json.loads(row["events_json"]) if row["events_json"] else []
+            limit = max(1, min(limit, 1000))
+            offset = max(0, offset)
+            return {
+                "run_id": run_id,
+                "total": len(events),
+                "limit": limit,
+                "offset": offset,
+                "events": events[offset:offset + limit],
+            }
+        finally:
+            conn.close()
+
     # ---------------------------------------------------------------- models
     def list_models(self) -> list[dict[str, Any]]:
         out = []

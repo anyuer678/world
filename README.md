@@ -57,7 +57,9 @@ JSON 分支（CA 指定初始图案）与 TrafficPanel 自定义路网全链路�
 95% CI 阴影带（重复不足或零方差时明示无带），跳变发现加 CI 重叠三态判定
 （显著/可能噪声/无法判定），同一批内双语义并排实证（见 D47）；R24 对账债清偿
 ——补 ARCHITECTURE/API_CONTRACT 滞后条目，修复插件场景契约真缺陷（前端曾把
-seed/停止条件当必填、PLUGINS.md 未写该契约），临时插件端到端实证兜底语义（见 D48）。
+seed/停止条件当必填、PLUGINS.md 未写该契约），临时插件端到端实证兜底语义（见 D48）；R25 把
+API_CONTRACT 逐条实测对齐——落地契约承诺却缺失的 `runs/{id}/events` 分页端点，修正 snapshot
+`time`、422 `errors[]`、runs 主键 `id` 等 4 处形状漂移（见 D49）。
 
 ## 内置模型
 
