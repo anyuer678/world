@@ -8,37 +8,42 @@
 
 | 项 | 值 |
 | --- | --- |
-| 日期 | 2026-10-28（R10 复测，模型覆盖补全至全部内置模型） |
-| Python | 3.11.13 |
+| 日期 | 2026-11-05（R26 复测；上一轮全模型复测为 2026-10-28 的 R10） |
+| Python | 3.12.3 |
 | 引擎版本 | 1.0 |
-| 平台 | Windows-10-10.0.26200-SP0（x64，开发机，非专用基准机） |
-| 运行方式 | `cd backend && uv run python scripts/benchmark.py` |
+| 平台 | Windows-11-10.0.26200-SP0（x64，开发机，非专用基准机） |
+| 运行方式 | `cd backend && python scripts/benchmark.py`（或 `uv run python …`） |
+
+> 下表全部来自**同一次** `benchmark.py` 运行。数字随机器负载浮动（R10 与
+> R26 两轮相差 0–55%：traffic/cache/predator_prey 基本持平，schelling 从
+> ≈186 提升到 ≈288 steps/s），量级与模型间相对排序不变；引用本表数字请
+> 连同上面的日期环境一起引用。
 
 ## 引擎吞吐（进程内，连续 run）
 
 | 模型 | 步数 | 实测耗时 | 吞吐 |
 | --- | ---: | ---: | ---: |
-| queueing（离散事件） | 100,000 | 0.421 s | ≈237,500 steps/s |
-| cache_sim（时间步进） | 100,000 | 0.282 s | ≈354,600 steps/s |
-| cellular_automaton（时间步进） | 500 | 0.140 s | ≈3,570 steps/s |
-| schelling（同步步智能体） | 500 | 2.688 s | ≈186 steps/s |
+| queueing（离散事件） | 100,000 | 0.375 s | ≈266,700 steps/s |
+| cache_sim（时间步进） | 100,000 | 0.281 s | ≈355,900 steps/s |
+| cellular_automaton（时间步进） | 500 | 0.110 s | ≈4,550 steps/s |
+| schelling（同步步智能体） | 500 | 1.734 s | ≈288 steps/s |
 | traffic_network（时间步进） | 500 | 0.078 s | ≈6,410 steps/s |
-| sir（确定性 ODE） | 5,000 | 0.125 s | ≈40,000 steps/s |
-| predator_prey（确定性 ODE） | 5,000 | 0.141 s | ≈35,500 steps/s |
+| sir（确定性 ODE） | 5,000 | 0.110 s | ≈45,500 steps/s |
+| predator_prey（确定性 ODE） | 5,000 | 0.140 s | ≈35,700 steps/s |
 
 说明：
 
 - cellular_automaton 每步要更新整个网格（例：20×20），单步成本远高于
   排队/缓存模型，吞吐低一个数量级属预期，不是回归。
 - **schelling 是目前单步成本最高的模型**：每步对 40×30=1200 个格子做
-  全量邻居扫描与重定位（纯 Python），吞吐仅 ≈186 steps/s——适合它的
-  批量规模要据此控制（默认参数 500 步约 2.7 s/项）。
+  全量邻居扫描与重定位（纯 Python），吞吐仅 ≈288 steps/s——适合它的
+  批量规模要据此控制（默认参数 500 步约 1.7 s/项）。
 - traffic_network 每步成本取决于路网车辆数，示例路网（小图）下车均
   占用低，500 步仅 0.078 s；大路网/高峰场景下单步成本会上升。
-- sir 每步执行 50 个欧拉子步（每子步仅数次乘加），吞吐 ≈40,000
+- sir 每步执行 50 个欧拉子步（每子步仅数次乘加），吞吐 ≈45,500
   steps/s，与人口规模无关（仓室模型不追踪个体）。
 - predator_prey 每步 8 个 RK4 子步 ×4 次斜率评估（32 次/步乘加），
-  吞吐 ≈35,500 steps/s，与种群数量无关；同为纯 ODE 仓室级成本。
+  吞吐 ≈35,700 steps/s，与种群数量无关；同为纯 ODE 仓室级成本。
 - cpu_scheduling 的示例参数（作业集）在约 400 个事件后事件队列为空，
   引擎因“无事件可处理”提前停止，因此其吞吐数字没有意义——该模型的
   步数由作业数量决定，不适用于“固定步数吞吐”基准。正确性由
@@ -48,7 +53,7 @@
 
 | 指标 | 值 |
 | --- | --- |
-| POST /api/sessions/{id}/step（n=1），50 次 | p50 = 7.5 ms，p95 = 16.0 ms，max = 31.0 ms |
+| POST /api/sessions/{id}/step（n=1），50 次 | p50 = 0.0 ms，p95 = 16.0 ms，max = 16.0 ms |
 
 说明：TestClient 不经过真实 TCP/HTTP 栈；真实部署下的延迟由 uvicorn
 另测（见 `docs/` 部署章节的已知限制）。此数字只用于捕捉“单步处理本身”
@@ -58,7 +63,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| cache_sim 网格 4 容量 × 2 重复（fixed 种子），每项 1000 步 | 8 items in 0.188 s ≈ 42.6 items/s，status=completed |
+| cache_sim 网格 4 容量 × 2 重复（fixed 种子），每项 1000 步 | 8 items in 0.172 s ≈ 46.5 items/s，status=completed |
 
 说明：条目极小（1000 步/项），该数字主要反映任务调度与 SQLite 写入
 开销，而非模拟计算本身；大批量场景下的真实吞吐以 per-item 均值×
@@ -71,15 +76,15 @@
 
 | 测试 | 断言 |
 | --- | --- |
-| queueing 5 万步 | > 10,000 steps/s（实测 ≈23.8 万） |
-| cache_sim 5 万步 | > 10,000 steps/s（实测 ≈35.5 万） |
-| cellular_automaton 500 步 | < 10 s（实测 ≈0.14 s） |
-| schelling 500 步 | < 10 s（实测 ≈2.7 s，最贵模型） |
+| queueing 5 万步 | > 10,000 steps/s（实测 ≈26.7 万） |
+| cache_sim 5 万步 | > 10,000 steps/s（实测 ≈35.6 万） |
+| cellular_automaton 500 步 | < 10 s（实测 ≈0.11 s） |
+| schelling 500 步 | < 10 s（实测 ≈1.7 s，最贵模型） |
 | traffic_network 500 步 | < 10 s（实测 ≈0.08 s） |
-| sir 5,000 步 | < 10 s（实测 ≈0.13 s） |
+| sir 5,000 步 | < 10 s（实测 ≈0.11 s） |
 | predator_prey 5,000 步 | < 10 s（实测 ≈0.14 s） |
 | 会话单步 API p95 | < 1000 ms（实测 ≈16 ms） |
-| 4 项批量 | < 60 s 完成（实测 ≈0.19 s） |
+| 4 项批量 | < 60 s 完成（实测 ≈0.17 s） |
 
 ## 已识别的瓶颈与结论
 

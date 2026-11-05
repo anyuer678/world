@@ -77,9 +77,10 @@ pydantic 原文，前端横幅逐条显示；实测 `spec_invalid` 即此形状�
 - `POST /api/sessions/{id}/reset` → SessionState（回到 step=0，同种子同参数 ⇒ 重放结果一致）
 - `POST /api/sessions/{id}/checkpoint` → `{checkpoint}`（JSON，含 RNG state）
 - `POST /api/sessions/{id}/restore` body=`{checkpoint}` → SessionState
-- 会话语义：进程内存储（重启即失），服务重启后 id 404；后台运行按 256 步分片推进；
-  running 期间轮询返回 ≤100ms 节流缓存快照（非实时锁内读）；status ∈
-  idle/running/paused/completed/step_limit/wall_timeout/cancelled/error。
+- 会话语义：进程内存储（重启即失），服务重启后 id 404；后台运行按 256 步分片推进
+  （`session_service.CHUNK_STEPS = 256`）；**running 期间的 GET 直接返回 worker 在
+  分片边界写入的缓存快照**（粒度 = 一个分片，非实时锁内重建），前端每 300 ms 轮询一次；
+  status ∈ idle/running/paused/completed/step_limit/wall_timeout/cancelled/error。
 
 ## 术语
 - Experiment = 一次模型+参数+种子的配置记录；Run = Experiment 的一次实际执行

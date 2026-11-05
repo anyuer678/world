@@ -59,7 +59,9 @@ JSON 分支（CA 指定初始图案）与 TrafficPanel 自定义路网全链路�
 ——补 ARCHITECTURE/API_CONTRACT 滞后条目，修复插件场景契约真缺陷（前端曾把
 seed/停止条件当必填、PLUGINS.md 未写该契约），临时插件端到端实证兜底语义（见 D48）；R25 把
 API_CONTRACT 逐条实测对齐——落地契约承诺却缺失的 `runs/{id}/events` 分页端点，修正 snapshot
-`time`、422 `errors[]`、runs 主键 `id` 等 4 处形状漂移（见 D49）。
+`time`、422 `errors[]`、runs 主键 `id` 等 4 处形状漂移（见 D49）；R26 基准可复现性
+刷新（三张表改为单次运行 + 日期环境声明，修掉 R22 混入的跨机位行）与行为声称核对，
+把「≤100ms 节流」按实测改写为「256 步分片边界缓存快照」（见 D50）。
 
 ## 内置模型
 
