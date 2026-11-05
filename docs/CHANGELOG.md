@@ -225,3 +225,28 @@ schema 侧是 `evolution.py`/`errors.py`）与 `services/run_worker.py`（根本
 把端点写成复数、裸路径改名等）。另修 `visualizer.series` 的口径：内置模型带着它，但前端从不读，
 文档改为明示「只是元数据」而不是暗示能自动出图。
 后端 **292/292**、前端 **62/62**、tsc -b/vite build 干净。
+
+
+**R37（2026-11-05）配置一致性：环境变量对交互会话静默无效 + 三路径 Limits 锁**
+
+① 顺着「配置声称 vs 行为」这条线探到一处真缺陷：`SessionService.create()` 构造
+`Limits` 时只传了 `max_steps`/`max_wall_seconds`，另两项落进 dataclass 默认值——于是
+`WORLDLAB_CANCEL_POLL_INTERVAL` 与 `WORLDLAB_ZERO_DELAY_CHAIN_LIMIT` **对交互会话完全无效**，
+而 `GET /api/limits`（R29 的单一事实源端点）报给前端的却是 Settings 里的值：
+advertising 与执行分叉。实测（`WORLDLAB_CANCEL_POLL_INTERVAL=7 WORLDLAB_ZERO_DELAY_CHAIN_LIMIT=99`）
+Settings 收到 7/99，会话引擎实际仍是 256/10000。修：新增 `SessionService.session_limits()`，
+四项全部取自 Settings，并有行为测试绑定；生产容器内复核
+（`-e WORLDLAB_CANCEL_POLL_INTERVAL=9 -e WORLDLAB_ZERO_DELAY_CHAIN_LIMIT=77` → limits 9/77）。
+② 锁三条（`test_docs_consistency.py`）：README 环境变量清单 ↔ `config.py` 实际读取集合**双向**
+一致（R30 曾漏写两个变量）；清单里写明的默认值逐个等于代码默认值（R29 的数量级病灶）；
+实验/会话/批量三条路径里每个 `Limits(` 构造都必须给全四字段——**对修复前的
+`session_service.py` 跑这条锁会准确报出缺的那两个字段**（已验证）。
+③ 文档纠正：`BENCHMARKS.md` 原写「交互式会话不受 `default_max_steps` 约束」是假的——
+会话引擎的 `max_steps` 就是它，分片只是每次 `run` 至多推进 `CHUNK_STEPS=256` 步；
+README「资源有界」条目按实重写（并去掉前端用例数的硬编码，改为看运行汇总），
+ARCHITECTURE 后台执行段补上三路径一致性说明。
+④ Docker 生产形态复验（R36 代码 + 本轮修复后重建 api 镜像）：原 15 项链路全绿，
+另跑会话生命周期——restore 回到的 `(step=300, time=165.1952)` 与检查点前**逐位一致**，
+继续步进到 310，错配 model_id 的 restore 得 409 `conflict`（message 指明 `'sir' != 'queueing'`），
+delete 204 → 再 GET 404。
+后端 **296/296**、前端 **62/62**、tsc -b/vite build 干净。

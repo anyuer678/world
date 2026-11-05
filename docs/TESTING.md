@@ -612,3 +612,22 @@
     死表谎报、kind 漏写、kind 虚构、端点写成复数 / 裸路径改名）。
     ⑤ PLUGINS.md：`visualizer.series` 改口径为「只是元数据，前端不读取」。
     回归：后端 **292/292**、前端 **62/62**、tsc -b/vite build 干净。
+
+49. **R37 巡检轮：配置→行为一致性（会话 Limits 漏传）+ 环境变量锁 + 生产复验**。
+    ① 缺陷：`SessionService.create()` 只给 `Limits` 传 `max_steps`/`max_wall_seconds`，
+    `zero_delay_chain_limit`/`cancel_poll_interval` 退回 dataclass 默认 →
+    `WORLDLAB_CANCEL_POLL_INTERVAL`、`WORLDLAB_ZERO_DELAY_CHAIN_LIMIT` 对交互会话静默无效，
+    而 `GET /api/limits` 报的是 Settings 值。实测 Settings=7/99 时会话引擎仍为 256/10000。
+    修：`session_limits()` 四项全取 Settings；`test_session_limits_come_from_settings` 绑定
+    （含引擎实例上的实际值）。
+    ② 新锁 3 项：README 环境变量清单↔`config.py`（双向，R30 漏写病灶）、
+    清单默认值↔代码默认值（R29 数量级病灶）、三服务每个 `Limits(` 构造四字段齐全；
+    **用修复前的 `session_service.py` 验证第三条锁能准确报出缺失字段**。四路注入验证前两条会红
+    （漏写变量、多写假变量、默认值改 64、步数上限改一个数量级）。
+    ③ 文档纠正：BENCHMARKS「会话不受 default_max_steps 约束」为假（累计上限就是它，
+    分片只是每次 256 步）；README 资源有界条目重写并去掉前端用例硬编码数；ARCHITECTURE
+    后台执行段补三路径一致性。
+    ④ 生产形态复验（重建 api 镜像后）：15 项 API 链路全绿；会话生命周期经 nginx 反代实测
+    restore 逐位一致 `(300, 165.1952)`、续步 310、错配 409、delete 204→GET 404；
+    容器内 env 覆盖 9/77 抵达会话 Limits。
+    回归：后端 **296/296**、前端 **62/62**、tsc -b/vite build 干净。

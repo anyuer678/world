@@ -62,16 +62,27 @@ class SessionService:
         self._ttl_seconds = 3600.0
 
     # ------------------------------------------------------------- lifecycle
+    def session_limits(self) -> Limits:
+        """会话引擎的资源上限一律取自 Settings。
+
+        以前只传了 max_steps/max_wall_seconds，其余两项落进 `Limits` 的 dataclass
+        默认值（256/10000），于是 `WORLDLAB_CANCEL_POLL_INTERVAL`、
+        `WORLDLAB_ZERO_DELAY_CHAIN_LIMIT` 对交互会话静默无效——而 `GET /api/limits`
+        报的却是 Settings 里的值（ advertise 与行为不一致，R37）。"""
+        return Limits(
+            max_steps=self._settings.default_max_steps,
+            max_wall_seconds=self._settings.max_wall_seconds,
+            zero_delay_chain_limit=self._settings.zero_delay_chain_limit,
+            cancel_poll_interval=self._settings.cancel_poll_interval,
+        )
+
     def create(self, spec_raw: dict[str, Any]) -> dict[str, Any]:
         spec, model_cls = validate_spec(spec_raw, self._registry)
         model = model_cls(spec.params, spec.seed)
         engine = SimulationEngine(
             model,
             spec.stop_condition.model_dump(),
-            limits=Limits(
-                max_steps=self._settings.default_max_steps,
-                max_wall_seconds=self._settings.max_wall_seconds,
-            ),
+            limits=self.session_limits(),
         )
         session = _Session(uuid.uuid4().hex, spec.model_dump(), engine)
         session.status = "idle"

@@ -194,3 +194,40 @@ def test_comparability_guard_is_described_where_it_actually_lives():
     compare_src = (ROOT / "frontend" / "src" / "ComparePanel.tsx").read_text(encoding="utf-8")
     assert "不可直接比较" in compare_src, "不可比提示的实现位置变了，文档要跟着改"
     assert "ComparePanel" in ARCH and "comparability_note" in ARCH
+
+
+# ------------------------------------------- R37：环境变量清单与 Limits 传参完整性
+
+CONFIG = (ROOT / "backend" / "app" / "config.py").read_text(encoding="utf-8")
+SERVICE_FILES = ("experiment_service.py", "session_service.py", "batch_service.py")
+
+
+def test_readme_env_list_matches_config_completely():
+    """README 的环境变量清单必须与 `Settings.from_env()` 读取的变量**双向**一致：
+    少写一个＝特性没人知道（R30 就漏过 EVENT_LOG_SIZE 与 PLUGIN_MODULES）。"""
+    read = set(re.findall(r'"(WORLDLAB_[A-Z_]+)"', CONFIG))
+    documented = set(re.findall(r"`(WORLDLAB_[A-Z_]+)`", README))
+    assert read, "config.py 里读不到任何环境变量？"
+    assert documented == read, (f"README 多的：{sorted(documented - read)}；README 漏的：{sorted(read - documented)}")
+
+
+def test_readme_env_defaults_match_code():
+    """清单里写明的默认值必须等于代码里的真实默认值（数量级写错会误导容量规划，R29 案例）。"""
+    for env, default in re.findall(r'environ\.get\(\s*"(WORLDLAB_[A-Z_]+)",\s*"([^"]+)"', CONFIG):
+        segment = re.search(rf"`{env}`（([^）]*)）", README)
+        assert segment, f"README 未给出 {env} 的默认值说明"
+        text = segment.group(1)
+        claimed = [n.replace(",", "") for n in re.findall(r"\d[\d,]*", text)]
+        assert default in claimed, f"{env} 文档默认值 {text!r} 与代码 {default} 不符"
+
+
+def test_every_service_passes_all_four_limits_fields():
+    """三条执行路径（实验/会话/批量）构造 `Limits` 时都要显式给全四个字段，
+    否则某个 Settings 项会静默退回 dataclass 默认值（R37 会话侧的真实缺陷）。"""
+    for name in SERVICE_FILES:
+        src = (ROOT / "backend/app/services" / name).read_text(encoding="utf-8")
+        for m in re.finditer(r"Limits\(", src):
+            block = src[m.start():m.start() + 400]
+            missing = [f for f in ("max_steps", "max_wall_seconds", "zero_delay_chain_limit",
+                                   "cancel_poll_interval") if f not in block]
+            assert not missing, f"{name} 构造 Limits 时漏传 {missing}"

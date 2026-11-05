@@ -225,3 +225,35 @@ def test_session_list_and_delete(client):
     assert any(s["session_id"] == sid for s in listed)
     assert client.delete(f"/api/sessions/{sid}").status_code == 204
     assert client.get(f"/api/sessions/{sid}").status_code == 404
+
+
+def test_session_limits_come_from_settings():
+    """R37：会话引擎的四项资源上限必须全部取自 Settings。
+
+    此前只传 max_steps/max_wall_seconds，另两项落进 `Limits` 的 dataclass 默认值，
+    于是 `WORLDLAB_CANCEL_POLL_INTERVAL` / `WORLDLAB_ZERO_DELAY_CHAIN_LIMIT`
+    对交互会话静默无效——而 `GET /api/limits` 报的却是 Settings 里的值。"""
+    from app.config import Settings
+    from app.core.registry import registry
+    from app.services.session_service import SessionService
+
+    import app.models  # noqa: F401
+
+    settings = Settings(
+        db_path=":memory:", max_workers=1, default_max_steps=4321, max_wall_seconds=11.0,
+        event_log_size=77, zero_delay_chain_limit=1234, cancel_poll_interval=7, plugin_modules=(),
+    )
+    svc = SessionService(settings, registry)
+    try:
+        limits = svc.session_limits()
+        assert (limits.max_steps, limits.max_wall_seconds) == (4321, 11.0)
+        assert limits.cancel_poll_interval == 7, "取消粒度必须跟随 Settings（会话侧曾漏传）"
+        assert limits.zero_delay_chain_limit == 1234
+
+        created = svc.create({"model_id": "sir", "params": {},
+                              "stop_condition": {"type": "steps", "value": 5}})
+        engine = svc._sessions[created["session_id"]].engine._inner
+        assert engine.limits.cancel_poll_interval == 7
+        assert engine.limits.zero_delay_chain_limit == 1234
+    finally:
+        svc.shutdown()

@@ -118,13 +118,21 @@
    默认 **1,000,000** 步；R29 核对：旧文档误写 100,000）硬截断，
    条目以 `step_limit` 终态结束——这是资源有界的**设计语义**，不是缺陷。
    需要更长运行的模型应调大 `Settings.default_max_steps` 或使用
-   `stop_condition` 显式限步。交互式会话不受此默认值约束（分片推进时
-   不以 `default_max_steps` 截断）。
+   `stop_condition` 显式限步。**交互式会话同样以 `default_max_steps` 为累计上限**
+   （分片推进只是每次 `run` 至多走 `CHUNK_STEPS=256` 步，并不解除总上限；
+   R37 核对：旧文档误写「会话不受此默认值约束」）。
 5. **取消语义存在轮询粒度**：引擎每 `cancel_poll_interval`（默认 256）
    步检查一次取消标志，因此从发出取消到实际停止最多有一个轮询窗口的
    延迟；同时已到终态（如 `step_limit`）的条目不会因迟到取消而改判——
    批量状态由条目终态聚合，`_finalize` 在无 cancelled/failed/pending/running
    条目时输出 `completed`。
+5b. **上限取自配置的一致性（R37 修）**：`Limits` 的四项（`max_steps`、
+   `max_wall_seconds`、`zero_delay_chain_limit`、`cancel_poll_interval`）在**实验、
+   交互会话、批量三条路径**上都必须取自同一份 `Settings`。此前会话侧构造时只传了
+   前两项，后两项静默退回 dataclass 默认值，导致 `WORLDLAB_CANCEL_POLL_INTERVAL`
+   与 `WORLDLAB_ZERO_DELAY_CHAIN_LIMIT` 对会话无效，而 `GET /api/limits` 报的却是
+   Settings 的值。现由 `test_sessions.py::test_session_limits_come_from_settings`
+   与 `test_docs_consistency.py::test_every_service_passes_all_four_limits_fields` 双向绑定。
 
 ### 测试可靠性（已修复的实例）
 

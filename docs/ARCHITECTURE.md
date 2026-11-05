@@ -187,7 +187,9 @@ WAL 模式、`foreign_keys=ON`、`busy_timeout=30000`；每个请求与工作线
 （默认 2）；批量的在途项数上限是 `min(concurrency, max_workers)`，建批时算好落库。
 取消是**进程内的 `threading.Event` 标志**：引擎每 `cancel_poll_interval`（默认 256）步
 检查一次，同时对照 `max_wall_seconds` / `max_steps` 上限，超限即落
-`cancelled/step_limit/wall_timeout` 终态。API 事件循环内从不直接跑模拟。
+`cancelled/step_limit/wall_timeout` 终态。`Limits` 的四个字段在**三条路径上都取自同一份
+`Settings`**（R37：会话侧曾漏传后两项，使两个环境变量对交互会话静默无效，现由测试锁定）。
+API 事件循环内从不直接跑模拟。
 
 ## 可视化
 

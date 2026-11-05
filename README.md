@@ -54,7 +54,7 @@ uv run uvicorn app.main:app --port 8000
 cd frontend
 npm install
 npm run dev             # http://localhost:5173 （/api 代理到 8000）
-npm run test            # 前端单元测试（vitest，60 项纯逻辑用例）
+npm run test            # 前端单元测试（vitest，纯逻辑用例；数量见运行汇总）
 npm run build           # 类型检查 + 生产构建（tsc -b && vite build）
 ```
 
@@ -108,8 +108,11 @@ R15 复验停止条件两型，CSV/报告导出为阶段 6 已验链路。
   校验和；不同模型版本的实验不默认可比（报告中的 `comparability_note` 显式说明）。
   spec 的 `model_version` 决定参数校验与执行实际使用哪一版模型，未指定则取数值最新版本
   （同 `model_id` 注册多版本时的行为有测试绑定，R33）。
-- **资源有界**：max_steps / max_sim_time / 墙钟 / 零延迟链 / 并发 worker 全部可配置且默认开启；
-  批量条目受 `default_max_steps` 与 `per_run_wall_seconds` 双重上限。
+- **资源有界**：`Settings` 的四项上限（`max_steps`／墙钟 `max_wall_seconds`／同刻零延迟事件链
+  `zero_delay_chain_limit`／取消粒度 `cancel_poll_interval`）都可在配置里调，且**实验、交互会话、
+  批量三条执行路径构造引擎时全部取自同一份 Settings**（有测试绑定，R37）；模拟时间与事件排空
+  是逐实验的停止条件而非配置项。批量条目另受 `default_max_steps` 与 `per_run_wall_seconds`
+  双重上限，条目超限时以 `step_limit` 终态收尾而非静默截断。
 - **后台任务**：批量与实验运行可查询状态、协作式取消、失败重试；API 事件循环不被模拟计算阻塞。
 - **插件卸载不吞历史**：模型来自插件模块（`WORLDLAB_PLUGIN_MODULES`）时，若某次运行没有载入该插件，
   库里既有的相关实验**仍可读、仍可出报告**，但 `run`/`rerun`/`clone`/建批一律当场 422
