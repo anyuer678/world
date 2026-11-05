@@ -828,3 +828,15 @@
     `[role=alert]` 文本「错误：batch 22 not found」、详情不显示。CHANGELOG R44 原文已就地
     标注更正。
     ④ 探针批量 #21/#22 均已从库中删除（批量回到 19）；前端 tsc/vite 干净。
+
+64. **R53 生产镜像重建 + R44–R52 改动在容器内的核验**。
+    ① 背景：镜像最后构建于 R42，其后 R44–R52 的前端改动与 R47 的 `/api/limits` 字段均未进镜像。
+    ② `docker compose up -d --build` 后经 nginx 核验：`/api/limits` 含
+    `session.max_step_batch=1000000`；打包产物名与本地构建一致（`index-D_pFbmaR.js`），
+    bundle 内含五个新文案（步数不能超过 / 会话已被服务端回收 / 最多同时比较 / 显示最近 /
+    参数校验失败）。
+    ③ 容器页面实测：步数输入 `max=1000000`、越界提示 + 禁用；历史标题「共 3 条」；
+    状态与提示位于 `role=status`；非法参数（CA width=3）提交后 `role=alert` 出现，
+    文案「参数校验失败：params.width Input should be greater than or equal to 5」。
+    ④ 新发现（下一轮处理）：对象形状的 spec 错误只翻译顶层 code，嵌套 pydantic 消息仍为英文，
+    与数组形状（R46 已翻译）形成不对称。
