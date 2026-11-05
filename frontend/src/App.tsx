@@ -196,9 +196,11 @@ export default function App() {
       <h1 style={{ borderBottom: '2px solid #2563eb', paddingBottom: 8 }}>WorldLab 模拟工作台</h1>
 
       {error && (
-        <p style={{ color: '#dc2626', background: '#fef2f2', padding: '8px 12px', borderRadius: 6 }}>错误：{error}</p>
+        <p role="alert" style={{ color: '#dc2626', background: '#fef2f2', padding: '8px 12px', borderRadius: 6 }}>错误：{error}</p>
       )}
-      {notice && <p style={{ color: '#166534', background: '#f0fdf4', padding: '8px 12px', borderRadius: 6 }}>{notice}</p>}
+      {notice && (
+        <p role="status" style={{ color: '#166534', background: '#f0fdf4', padding: '8px 12px', borderRadius: 6 }}>{notice}</p>
+      )}
 
       <section style={card} ref={simSectionRef}>
         <h2>1. 实时模拟视图</h2>
@@ -224,9 +226,12 @@ export default function App() {
         ) : (
           <>
             <p style={{ fontSize: 13, color: '#374151' }}>
-              会话 <code>{session.session_id.slice(0, 8)}…</code> · 模型 {session.display_name} · 状态{' '}
-              <strong>{statusLabel(session.status)}</strong>
-              {session.stop_reason ? `（${session.stop_reason}）` : ''}
+              会话 <code>{session.session_id.slice(0, 8)}…</code> · 模型 {session.display_name} ·{' '}
+              {/* role=status：状态由 300ms 轮询异步变化，读屏用户需要被告知「运行中→已暂停」 */}
+              <span role="status">
+                状态 <strong>{statusLabel(session.status)}</strong>
+                {session.stop_reason ? `（${session.stop_reason}）` : ''}
+              </span>
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
               <button
@@ -258,7 +263,7 @@ export default function App() {
             </div>
 
             {session.error && (
-              <p style={{ color: '#dc2626', background: '#fef2f2', padding: '6px 10px', borderRadius: 6, fontSize: 13 }}>
+              <p role="alert" style={{ color: '#dc2626', background: '#fef2f2', padding: '6px 10px', borderRadius: 6, fontSize: 13 }}>
                 模拟错误：{session.error}
               </p>
             )}

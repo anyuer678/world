@@ -333,3 +333,14 @@ R30 做过 Docker 复验，但那时还没有 R39（暂停≠取消）与 R40（
 补：`API_CONTRACT` 的建批条目写明两个钳制公式与「回显生效值」，并新增
 `test_batch_records_effective_limits_not_requested` 绑定该语义（请求 64/3600 →
 记录 2/60）。本轮无产品代码改动。
+
+**R44（2026-11-05）工作台可访问性实测：补上异步状态的朗读**
+
+对工作台做了一轮「人怎么用」的审计：525 个文本节点的对比度全部达标（0 处低于 AA），
+81 个可聚焦控件全部有可访问名，无正向 tabindex、无 `outline:none`，真实 Tab 按键下
+`:focus-visible` 生效且 UA 焦点环可见。**发现一处真缺陷**：会话状态由 300 ms 轮询异步变化
+（运行中→已暂停→已完成），但页面没有任何 live region，读屏用户按下「暂停」后得不到任何反馈；
+错误横幅也只有 TrafficPanel 有 `role="alert"`。修：会话状态改为 `<span role="status">`、
+顶部提示与批量提示加 `role="status"`、三处错误横幅（顶部/会话/批量）加 `role="alert"`、
+批量状态加 `role="status"`。浏览器实测：运行时朗读文本「状态 运行中」→ 暂停后「状态 已暂停」，
+422 错误进入 `role=alert` 区域。前端 62/62、tsc/vite 干净。

@@ -232,7 +232,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
           错误：{error}
         </p>
       )}
-      {notice && <p style={{ color: '#166534', fontSize: 13 }}>{notice}</p>}
+      {notice && <p role="status" style={{ color: '#166534', fontSize: 13 }}>{notice}</p>}
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: 2, minWidth: 320 }}>
           <h3 style={{ fontSize: 14 }}>参数网格（留空网格 = 纯重复试验；值用逗号分隔）</h3>
@@ -359,7 +359,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
         <div style={{ marginTop: 16, borderTop: '1px dashed #d1d5db', paddingTop: 12 }}>
           <p style={{ fontSize: 13, color: '#374151' }}>
             批量 #{batch.id}「{batch.name}」 · 模型 {batch.model_id} v{batch.model_version} · 状态{' '}
-            <strong>{batch.status}</strong> · 种子策略 {batch.seed_strategy}（基种子 {batch.seed_base ?? '—'}）
+            <strong role="status">{batch.status}</strong> · 种子策略 {batch.seed_strategy}（基种子 {batch.seed_base ?? '—'}）
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
             <div style={{ background: '#e5e7eb', borderRadius: 4, height: 10, flex: 1, overflow: 'hidden' }}>
@@ -394,7 +394,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
                 .join(' · ')}
             </p>
           )}
-          {batch.error && <p style={{ color: '#dc2626', fontSize: 13 }}>批量错误：{batch.error}</p>}
+          {batch.error && <p role="alert" style={{ color: '#dc2626', fontSize: 13 }}>批量错误：{batch.error}</p>}
 
           {batch.summary && batch.summary.combos.length > 0 && (
             <>
