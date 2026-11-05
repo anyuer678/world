@@ -227,6 +227,197 @@ def test_session_list_and_delete(client):
     assert client.get(f"/api/sessions/{sid}").status_code == 404
 
 
+def test_pause_leaves_the_session_resumable(client):
+    """R39 实跑发现的 P0：⏸ 暂停把会话写成了 cancelled 终态。
+
+    `_stop_thread` 过去无条件同时置 cancel_event 与 pause_event，而 `_run_loop`
+    先查 cancel——所以「暂停」= 取消。前端「继续」只在 status=paused 时点亮、
+    单步/运行也只认 idle|paused，用户按暂停后既不能继续也不能单步，只能重置丢进度。
+
+    用 toy_slow_step（0.5 ms/步，分片 ≈128 ms）确保暂停落在运行中间而非收尾。"""
+    spec = _spec(model_id="toy_slow_step", params={}, stop_condition={"type": "steps", "value": 200000})
+    sid = _create(client, spec)["session_id"]
+    assert client.post(f"/api/sessions/{sid}/run").status_code == 200
+    time.sleep(0.25)
+    assert client.post(f"/api/sessions/{sid}/pause").status_code == 200
+
+    status = _wait_status(client, sid, {"paused", "cancelled", "completed"}, timeout=10)
+    body = client.get(f"/api/sessions/{sid}").json()
+    assert status == "paused", f"暂停应当落 paused，实得 {status}（stop_reason={body.get('stop_reason')}）"
+    assert body["stop_reason"] is None
+    steps_at_pause = body["snapshot"]["step"]
+    assert steps_at_pause > 0
+
+    # paused 是可用态：单步与继续都必须放行（这正是旧实现坏掉的地方）
+    assert client.post(f"/api/sessions/{sid}/step", json={"n": 3}).status_code == 200
+    assert client.get(f"/api/sessions/{sid}").json()["snapshot"]["step"] == steps_at_pause + 3
+    assert client.post(f"/api/sessions/{sid}/resume").status_code == 200
+    _wait_status(client, sid, {"running"}, timeout=10)
+    time.sleep(0.2)
+    client.post(f"/api/sessions/{sid}/pause")
+    _wait_status(client, sid, {"paused"}, timeout=10)
+    assert client.get(f"/api/sessions/{sid}").json()["snapshot"]["step"] > steps_at_pause + 3
+
+
+def test_pause_during_chunk_never_mutates_the_running_engine(tmp_path):
+    """R39：join 超时后不许改 engine——它此刻仍归运行线程所有。
+
+    旧实现 `join(timeout=5.0)` 失败后照样把状态写成 paused，然后 step/reset/checkpoint
+    继续动同一个引擎，restore 更是在锁内 join；分片期间是不加 s.lock 的（为了让轮询
+    能进），于是两个线程并发改同一个事件堆。
+
+    用 gate 把 worker 卡在分片内部，而不是靠 sleep 赌时序。"""
+    import threading
+    import time
+
+    from app.config import Settings
+    from app.core.registry import registry
+    from app.services.experiment_service import ConflictError
+    from app.services.session_service import SessionService
+
+    import app.models  # noqa: F401
+
+    svc = SessionService(
+        Settings(db_path=str(tmp_path / "race.db"), max_workers=1, default_max_steps=100000,
+                 max_wall_seconds=60, event_log_size=50, zero_delay_chain_limit=10000,
+                 cancel_poll_interval=256, session_ttl_seconds=3600.0, plugin_modules=()),
+        registry,
+    )
+    svc._join_timeout = 0.05
+    entered, release = threading.Event(), threading.Event()
+    try:
+        sid = svc.create({"model_id": "toy_slow_step", "params": {},
+                          "stop_condition": {"type": "steps", "value": 100000}, "seed": 1})["session_id"]
+        engine = svc._sessions[sid].engine
+        real_run = engine.run
+
+        def gated_run(max_steps=None):
+            entered.set()
+            assert release.wait(timeout=10), "测试未能放行 worker 线程"
+            return real_run(max_steps=max_steps)
+
+        engine.run = gated_run
+        svc.run(sid)
+        assert entered.wait(timeout=10), "worker 没有进入分片"
+
+        st = svc.pause(sid)
+        s = svc._sessions[sid]
+        assert s.stopping is True, "join 超时必须标 stopping，而不是假装已经暂停"
+        assert st["status"] == "running", "线程还在跑时对外仍应是 running（状态由它自己收尾）"
+        for call in (lambda: svc.step(sid, 1), lambda: svc.checkpoint(sid), lambda: svc.run(sid)):
+            with pytest.raises(ConflictError):
+                call()
+        # reset/restore 是本轮真正新增守卫的两条路径：它们原先只看 status，join 失败
+        # 也照样动 engine。断言报错来源，避免被「already running」之类的旧检查蒙混通过。
+        with pytest.raises(ConflictError, match="stopping"):
+            svc.reset(sid)
+        with pytest.raises(ConflictError, match="stopping"):
+            svc.restore(sid, {"checkpoint": {}})
+        assert s.engine.steps == 0, "被拒绝的调用不能在分片结束前推动引擎"
+
+        release.set()
+        deadline = time.time() + 10
+        while time.time() < deadline and svc._sessions[sid].stopping:
+            time.sleep(0.02)
+        assert svc._sessions[sid].stopping is False, "线程退出后必须清掉 stopping"
+        assert svc._sessions[sid].status == "paused", "暂停不是取消：worker 退出后应落 paused"
+        # 线程真正退出后，reset/step 才重新被允许，且此时是独占访问
+        assert svc._sessions[sid].engine.steps >= 1, "worker 的分片应当确实跑过"
+        assert svc.reset(sid)["snapshot"]["step"] == 0
+        assert svc.step(sid, 1)["snapshot"]["step"] >= 1
+    finally:
+        release.set()
+        svc.shutdown()
+
+
+def test_stopping_session_returns_conflict_over_http(settings):
+    """R39：同一状态在 HTTP 层的对外形状——409 `conflict` + 可读 message。
+
+    前端在暂停的瞬间仍可能把「单步/重置/检查点」请求发出去（按钮按 status 点亮，
+    而 stopping 不体现在 status 里），所以用户必须拿到可解释的 409，而不是 500
+    或把引擎改坏之后的错乱状态。"""
+    import threading
+
+    app = create_app(settings)
+    with TestClient(app) as c:
+        svc = app.state.sessions
+        svc._join_timeout = 0.05
+        entered, release = threading.Event(), threading.Event()
+        try:
+            sid = c.post("/api/sessions", json={"spec": _spec(model_id="toy_slow_step", params={})}).json()["session_id"]
+            engine = svc._sessions[sid].engine
+            real_run = engine.run
+            engine.run = lambda max_steps=None: (entered.set(), release.wait(timeout=10), real_run(max_steps=max_steps))[-1]
+            assert c.post(f"/api/sessions/{sid}/run").status_code == 200
+            assert entered.wait(timeout=10)
+            assert c.post(f"/api/sessions/{sid}/pause").status_code == 200
+
+            for path in ("step", "reset", "checkpoint", "restore"):
+                body = {"checkpoint": {"model_id": "toy_slow_step"}} if path == "restore" else {}
+                r = c.post(f"/api/sessions/{sid}/{path}", json=body)
+                assert r.status_code == 409, f"{path}: {r.status_code} {r.text}"
+                assert r.json()["detail"]["code"] == "conflict"
+                message = r.json()["detail"]["message"]
+                # step/checkpoint 由既有守卫拦住（"session is running…"、
+                # "pause the session before…"）；reset/restore 只能由本轮新增的
+                # stopping 守卫拦住。分别断言来源，免得两处守卫互相顶替后测试仍全绿。
+                if path in ("reset", "restore"):
+                    assert "stopping" in message, r.text
+                assert message, r.text
+                assert engine.steps == 0, f"{path} 在分片结束前推动了引擎"
+            assert c.get(f"/api/sessions/{sid}").json()["status"] == "running"
+
+            release.set()
+            # pause 只置 pause 标志（R39），放行后必然落 paused，而不是 cancelled 终态
+            _wait_status(c, sid, ("paused",), timeout=10)
+            r = c.post(f"/api/sessions/{sid}/step", json={"n": 1})
+            assert r.status_code == 200, r.text
+            assert svc._sessions[sid].stopping is False
+        finally:
+            release.set()
+
+
+def test_session_ttl_is_configurable_and_enforced(monkeypatch, tmp_path):
+    """R39：会话空闲回收时限取自 Settings（此前硬编码 3600 秒且无任何文档，
+    用户回来只见 404 无从解释）。"""
+    from app.config import Settings
+    from app.core.registry import registry
+    from app.services.session_service import SessionService
+
+    monkeypatch.delenv("WORLDLAB_SESSION_TTL_SECONDS", raising=False)
+    assert Settings.from_env().session_ttl_seconds == 3600.0
+    monkeypatch.setenv("WORLDLAB_SESSION_TTL_SECONDS", "12.5")
+    assert Settings.from_env().session_ttl_seconds == 12.5
+
+    def svc(ttl: float) -> SessionService:
+        return SessionService(
+            Settings(db_path=str(tmp_path / f"ttl{ttl}.db"), max_workers=1, default_max_steps=100000,
+                     max_wall_seconds=60, event_log_size=50, zero_delay_chain_limit=10000,
+                     cancel_poll_interval=256, session_ttl_seconds=ttl, plugin_modules=()),
+            registry,
+        )
+
+    import app.models  # noqa: F401
+
+    spec = {"model_id": "sir", "params": {}, "stop_condition": {"type": "steps", "value": 5}, "seed": 1}
+    tight = svc(0.05)
+    try:
+        old = tight.create(spec)["session_id"]
+        time.sleep(0.2)
+        tight.create(spec)  # 任意会话操作会先回收过期会话
+        assert old not in tight._sessions, "超过 TTL 的会话应被回收"
+    finally:
+        tight.shutdown()
+
+    patient = svc(3600.0)
+    try:
+        sid = patient.create(spec)["session_id"]
+        patient.create(spec)
+        assert sid in patient._sessions, "未超时的会话不能被误回收"
+    finally:
+        patient.shutdown()
+
+
 def test_session_limits_come_from_settings():
     """R37：会话引擎的四项资源上限必须全部取自 Settings。
 
@@ -241,7 +432,8 @@ def test_session_limits_come_from_settings():
 
     settings = Settings(
         db_path=":memory:", max_workers=1, default_max_steps=4321, max_wall_seconds=11.0,
-        event_log_size=77, zero_delay_chain_limit=1234, cancel_poll_interval=7, plugin_modules=(),
+        event_log_size=77, zero_delay_chain_limit=1234, cancel_poll_interval=7,
+        session_ttl_seconds=3600.0, plugin_modules=(),
     )
     svc = SessionService(settings, registry)
     try:

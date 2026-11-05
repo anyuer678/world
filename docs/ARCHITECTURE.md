@@ -185,11 +185,18 @@ WAL 模式、`foreign_keys=ON`、`busy_timeout=30000`；每个请求与工作线
 没有独立的 worker 模块：**三个服务各自持有自己的 `ThreadPoolExecutor`**
 （`ExperimentService`、`BatchService`、`SessionService`），并发规模取 `Settings.max_workers`
 （默认 2）；批量的在途项数上限是 `min(concurrency, max_workers)`，建批时算好落库。
+会话的停止有两个互斥意图（R39 前只有一个）：**暂停**（`pause_event`，worker 在分片边界落
+`paused`，可继续可单步）与**取消**（`cancel_event`，落 `cancelled` 终态，只用于
+`DELETE`/空闲回收/进程关停这类丢弃路径）。线程未离开当前分片时 `stopping` 标志为真，
+五个会变动引擎的入口一律返回可重试的 409，所有权交接（落状态 + 清标志）在一次加锁内完成。
 取消是**进程内的 `threading.Event` 标志**：引擎每 `cancel_poll_interval`（默认 256）步
 检查一次，同时对照 `max_wall_seconds` / `max_steps` 上限，超限即落
 `cancelled/step_limit/wall_timeout` 终态。`Limits` 的四个字段在**三条路径上都取自同一份
 `Settings`**（R37：会话侧曾漏传后两项，使两个环境变量对交互会话静默无效，现由测试锁定）。
 API 事件循环内从不直接跑模拟。
+交互会话是**内存态**资源：`SessionService` 在每次会话操作前回收空闲超过
+`Settings.session_ttl_seconds`（`WORLDLAB_SESSION_TTL_SECONDS`，默认 3600 秒）的会话并停其线程，
+被回收的会话后续访问返回 404（R39 成文）。
 
 ## 可视化
 

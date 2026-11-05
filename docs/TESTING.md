@@ -644,3 +644,32 @@
     p50≤p95≤max、环境块必须含解释器版本与命令归属；五路注入验证会红
     （混入他轮 8% 数字、只改耗时、批量数不自洽、max<p95、缺解释器）。
     回归：后端 **297/297**、前端 **62/62**、tsc -b/vite build 干净。
+
+51. **R39 巡检轮：会话「暂停=取消」的 P0 语义缺陷 + 引擎所有权交接 + 可配置 TTL**。
+    ① **实跑抓到的产品级缺陷**：HTTP 探针（toy_slow_step 运行 0.25 s 后 `POST /pause`）
+    显示会话落 `cancelled` 终态，`resume`/`step` 一律 409「session already finished」，
+    只有「重置」能继续而重置会清空进度——即工作台主打的「播放 → 暂停 → 继续」在浏览器里
+    从未走通。根因：`_stop_thread()` 无条件同时置 `cancel_event` 和 `pause_event`，
+    `_run_loop` 先查 cancel。修复：停止入口按意图分派（`cancel=False` 给 pause/reset/restore，
+    `cancel=True` 给 delete/TTL 回收/shutdown），暂停落 `paused`、可继续可单步。
+    ② **旧测试为什么没抓到**：`test_session_pause_and_resume` 的等待集合是
+    `{paused, completed}`，运行在暂停前就自然完成，于是永远走 completed 分支。把代码
+    注入回旧行为后这条测试**也变红**，证明它此前未真正执行暂停路径——这是本轮最有价值的
+    元信息：绿色测试集 + 在册的「暂停恢复 E2E」条目，仍然掩住了一个从阶段 2 就存在的缺陷。
+    ③ **引擎所有权交接**：join 超时后不得再动 engine。新增 `stopping` 标志 +
+    `_finish_run()` 单锁交接；`step/run/checkpoint` 报 409「session is stopping…」、
+    `reset/restore` 报 409「session is still stopping; retry in a moment」。
+    两条新测试用 gate 把 worker 卡在分片内部（不靠 sleep 赌时序），断言五个入口全部拒绝、
+    且 `engine.steps` 在分片结束前保持 0；`git` 反证（还原 reset/restore）使
+    `DID NOT RAISE ConflictError` 精确复现旧行为。
+    ④ **TTL 可配置**：会话空闲回收从硬编码 3600 秒改为 `WORLDLAB_SESSION_TTL_SECONDS`
+    （默认 3600），测试覆盖默认值、env 覆盖（12.5）与到期回收/未到期不误回收。
+    ⑤ **新文档锁**：`test_every_decision_reference_points_to_a_real_row` 校验全部文档的
+    「见 D5x」指针命中 DECISIONS 真实行；注入一个不存在的编号即变红。
+    ⑥ **间歇性 Windows 崩溃取证**：`tests/test_sessions.py` 在本机三次连跑出现
+    faulthandler「Windows fatal exception: access violation」2/2/0 次（测试结果始终
+    16 passed），栈帧散落在 `tempfile`、`typing`、anyio `queue.get`、`random.expovariate`
+    等互不相关位置；Linux CI 三个后端 job 日志 0 次。按环境噪音记入 BENCHMARKS 已知限制，
+    不宣称已归因，也不据此声称修掉了它。
+    回归：后端 **302/302**、前端 **62/62**、tsc -b/vite build 干净。
+

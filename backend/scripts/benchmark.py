@@ -101,6 +101,7 @@ def main() -> None:
             event_log_size=500,
             zero_delay_chain_limit=10000,
             cancel_poll_interval=256,
+            session_ttl_seconds=3600.0,
             plugin_modules=(),
         )
         service = ExperimentService(bench_settings, registry)

@@ -145,3 +145,10 @@
    测试改用 `toy_slow_des`（每事件 sleep 0.5 ms，释放 GIL，且天然死亡
    时间 ≈50 s 不可达），使取消确定性地先于自然终态生效。修复后连续
    30 次运行 0 失败。生产代码语义不变。
+7. **本机 `tests/test_sessions.py` 间歇出现 faulthandler「Windows fatal exception:
+   access violation」（R39 记录，未归因）**：三次连跑分别为 2/2/0 次，**测试结果始终全绿**
+   （16 passed），崩溃转储的栈帧散落在 `tempfile`、`typing`、anyio `queue.get`、
+   `random.expovariate` 等互不相关位置；同一轮在 Linux CI 的三个后端 job 日志里出现 0 次。
+   本轮确实定位并修掉了一个真实的并发缺陷（join 超时后主线程仍改 engine，见 D64，
+   有确定性 gate 测试绑定），但**没有证据表明该缺陷就是这些转储的来源**，因此此处只登记
+   现象与「不据此声称已修复」的口径；如需归因需在 Linux 下复现或拿到可稳定复现的最小用例。

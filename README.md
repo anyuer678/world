@@ -45,6 +45,7 @@ uv run uvicorn app.main:app --port 8000
 `WORLDLAB_CANCEL_POLL_INTERVAL`（协作式取消检查粒度，256 步）、
 `WORLDLAB_ZERO_DELAY_CHAIN_LIMIT`（同刻零延迟事件链上限，10000）、
 `WORLDLAB_EVENT_LOG_SIZE`（会话事件环形缓冲，500）、
+`WORLDLAB_SESSION_TTL_SECONDS`（会话空闲回收秒数，3600；超时后该会话被回收，再访问返回 404）、
 `WORLDLAB_PLUGIN_MODULES`（插件模块名，逗号/分号分隔，默认为空，见 `docs/PLUGINS.md`）。
 运行时上限的可查询口径由 `GET /api/limits` 统一导出（R29）。
 

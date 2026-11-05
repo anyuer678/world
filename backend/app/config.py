@@ -16,6 +16,7 @@ class Settings:
     event_log_size: int
     zero_delay_chain_limit: int
     cancel_poll_interval: int
+    session_ttl_seconds: float
     plugin_modules: tuple[str, ...]
 
     @staticmethod
@@ -30,6 +31,7 @@ class Settings:
             event_log_size=int(os.environ.get("WORLDLAB_EVENT_LOG_SIZE", "500")),
             zero_delay_chain_limit=int(os.environ.get("WORLDLAB_ZERO_DELAY_CHAIN_LIMIT", "10000")),
             cancel_poll_interval=int(os.environ.get("WORLDLAB_CANCEL_POLL_INTERVAL", "256")),
+            session_ttl_seconds=float(os.environ.get("WORLDLAB_SESSION_TTL_SECONDS", "3600")),
             plugin_modules=tuple(
                 m.strip()
                 for m in os.environ.get("WORLDLAB_PLUGIN_MODULES", "").replace(";", ",").split(",")

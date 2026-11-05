@@ -117,13 +117,25 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 ## 交互会话（阶段 2，进程内，不入库）
 - `GET /api/sessions` → `{sessions: [SessionState 概要]}`
 - `POST /api/sessions` body=`{spec}` → 201 SessionState（spec 校验同实验；会话内 spec 固定，改 spec 需重建）
+  - **会话是内存态、按空闲时长回收**：距最后一次访问超过 `Settings.session_ttl_seconds`
+    （环境变量 `WORLDLAB_SESSION_TTL_SECONDS`，默认 3600 秒）后，会话在下次任意会话操作时被清除
+    并停止其后台线程，之后 `GET`/`POST` 一律 **404 `not_found`**（R39 成文；要长期保存结果请
+    「存配置为新实验」落库，而非依赖会话常驻）
 - `GET /api/sessions/{id}` → SessionState：
   `{session_id, status, stop_reason, error, model_id, model_version, model_type, display_name, visualizer, spec, snapshot, events[], chunk_steps}`；
   snapshot 为 `{step, time, status, state, metrics}`（**模拟时间键名是 `time`**，非 sim_time）
 - `DELETE /api/sessions/{id}` → 204
 - `POST /api/sessions/{id}/step` body=`{n?:int=1}` → SessionState（同步步进）
 - `POST /api/sessions/{id}/run` → SessionState（后台线程启动连续运行；status=running）
-- `POST /api/sessions/{id}/pause` → SessionState（协作式暂停，生效粒度 ≤ 一个分片）
+- `POST /api/sessions/{id}/pause` → SessionState（协作式暂停，生效粒度 ≤ 一个分片）。
+  暂停**落 `paused`**（可 `resume`、可 `step`），不是 `cancelled`（R39 修：此前 `_stop_thread`
+  同时置 cancel/pause 两个标志，运行循环先查 cancel，于是暂停实为取消——`resume`/`step`
+  一律 409「session already finished」，只能重置丢进度）。`cancelled` 只在丢弃路径出现
+  （`DELETE`、空闲回收、进程关停）
+  - 后台线程尚未离开当前分片时（`stopping` 窗口），会变动引擎的端点一律 **409 `conflict`**：
+    `step`/`run`/`checkpoint` → "session is stopping; wait for the running chunk to finish"，
+    `reset`/`restore` → "session is still stopping; retry in a moment"。这是可重试错误，
+    粒度同样 ≤ 一个分片；不返回 500，也不在半路改动引擎（R39）
 - `POST /api/sessions/{id}/resume` → SessionState
 - `POST /api/sessions/{id}/reset` → SessionState（回到 step=0，同种子同参数 ⇒ 重放结果一致）
 - `POST /api/sessions/{id}/checkpoint` → `{checkpoint}`；checkpoint 是 JSON 字典，键为

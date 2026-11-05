@@ -272,3 +272,28 @@ API 单步 p50 0 / p95 16 / max 31 ms；批量 8 项 0.203 s ≈39.41 items/s。
 `uv run python scripts/benchmark.py` 的命令归属。五路注入全部变红，包括
 「把上一轮的 8% 差值数字混进来」「只改耗时不改吞吐」这类真实的混机位症状。
 后端 **297/297**、前端 **62/62**、tsc -b/vite build 干净。
+
+**R39（2026-11-05）会话控制语义：暂停不再等于取消 + 引擎所有权交接 + 会话 TTL 可配置**
+
+本轮按「能力声称只在顺利路径上被执行过」这条老线索巡检，用一次 HTTP 探针抓到了自阶段 2
+以来一直存在的 P0：⏸ 暂停把会话写成 `cancelled` 终态。实跑（toy_slow_step 运行 0.25 s 后
+暂停）显示 `status='cancelled'`、`resume` 与 `step` 全部 409「session already finished」，
+唯一出路是「重置」——也就是丢掉整段进度。根因在停止入口而不在状态机：
+`_stop_thread()` 无条件同时置 `cancel_event` 与 `pause_event`，而运行循环先检查 cancel。
+修法是把「暂停」和「丢弃」拆成两个意图：`pause/reset/restore` 只置 pause 标志（worker 在
+分片边界落 `paused`，可继续、可单步），`delete`/空闲回收/进程关停才置 cancel。
+值得注意的是旧 `test_session_pause_and_resume` 一直绿：它的等待集合含 `completed`，
+运行总在暂停前就自然结束，于是从未真正走过暂停——把代码注入回旧行为后它也变红，
+这条元信息比修复本身更值得记下（绿色测试集 ≠ 功能可用）。
+
+② 引擎所有权交接：join 超时后旧实现照样改状态并放行 step/reset/checkpoint，
+而分片期间是故意不持锁的（否则前端轮询会被卡住），两个线程因此并发改同一台引擎。
+新增 `stopping` 标志与 `_finish_run()`（状态落定与清标志在同一次加锁里完成），
+五个入口在交接完成前一律返回可重试的 409；两条新测试用 gate 卡住 worker，
+不靠 sleep 赌时序，并断言 `engine.steps` 在被拒期间保持 0。
+③ 会话空闲回收时限从硬编码 3600 秒改为 `WORLDLAB_SESSION_TTL_SECONDS`，
+README / API_CONTRACT / ARCHITECTURE 三处成文（此前用户离开一小时后只拿到无解释的 404）。
+④ 新文档锁：全部「见 D5x」指针必须命中 DECISIONS 真实行号。
+⑤ 间歇性 Windows faulthandler access violation 按环境噪音如实记录（三次连跑 2/2/0 次、
+测试始终全绿、Linux CI 日志 0 次、栈帧散落在无关 stdlib），不宣称归因。
+后端 **302/302**、前端 **62/62**、tsc -b/vite build 干净。

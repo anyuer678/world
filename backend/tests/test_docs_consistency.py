@@ -18,6 +18,7 @@ CONTRACT = (ROOT / "docs" / "API_CONTRACT.md").read_text(encoding="utf-8")
 BENCHMARKS = (ROOT / "docs" / "BENCHMARKS.md").read_text(encoding="utf-8")
 ARCH = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
 PLUGINS = (ROOT / "docs" / "PLUGINS.md").read_text(encoding="utf-8")
+DECISIONS = (ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
 SIMVIEW = (ROOT / "frontend" / "src" / "SimView.tsx").read_text(encoding="utf-8")
 
 CN_NUMERAL = {1: "一", 2: "两", 3: "三", 4: "四", 5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十"}
@@ -185,6 +186,24 @@ def test_architecture_endpoint_literals_exist_in_openapi():
     assert claimed, "架构文档里一个端点都没提，这条锁变成空锁"
     assert len(real) > 10 and len(set(claimed)) >= 3, f"匹配数异常少（{len(set(claimed))}），检查正则是否失效"
     assert not ghost, f"ARCHITECTURE 引用了不存在的端点：{ghost}"
+
+
+def test_every_decision_reference_points_to_a_real_row():
+    """R39：文档里到处是「（见 D53）」这类指针。写错一个数字，读者就顺着断链找不到依据，
+    而这类错误肉眼很难发现——所以逐条解析并核对 DECISIONS 的行号。"""
+    rows = set(re.findall(r"^\| (D\d+) \|", DECISIONS, flags=re.M))
+    assert rows, "DECISIONS.md 里没解析到任何决策行，锁本身失效了"
+    broken = []
+    for name in ("README.md", "docs/ARCHITECTURE.md", "docs/API_CONTRACT.md", "docs/PLUGINS.md",
+                 "docs/TESTING.md", "docs/CHANGELOG.md", "docs/BENCHMARKS.md", "docs/DECISIONS.md"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        for ref in re.findall(r"(?:见|由|见 D|参见)\s*(D\d+)\b", text):
+            if ref not in rows:
+                broken.append(f"{name}→{ref}")
+        for ref in re.findall(r"\bD\d+\b", text):
+            if ref not in rows:
+                broken.append(f"{name}~{ref}")
+    assert not broken, f"指向不存在的决策行：{sorted(set(broken))}"
 
 
 def test_benchmarks_are_internally_consistent_and_attributed():
