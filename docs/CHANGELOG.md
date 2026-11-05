@@ -495,3 +495,13 @@ R55 只验到加载器层面；本轮把 `PLUGINS.md` 的示例代码块原样�
 
 **审计结论**：能力、正确性、可复现、文档、门禁、生产形态六个维度上，**没有「已知可做且不靠猜」的剩余项**；
 剩下的均为内容扩充或范围外偏好（第 9 个模型、WebSocket、鉴权、分页 UI 等），需要用户点名才动。
+
+**R59（2026-11-06）分页参数补边界：`limit=-1` 曾等于「无上限」，`events_limit=0` 曾返回全部事件**
+
+实跑取证：`/api/experiments?limit=-1` 返回**全部 52 条**（SQLite 的 `LIMIT -1` 即无上限）、
+`limit=999999` 同样全量、`offset=-5` 被当成 0；会话的 `events_limit=0` 返回 **49 条**事件
+（`[-0:]` 等于 `[0:]`），`events_limit=-1` 返回「除第一条外的全部」。修：所有列表端点的
+`limit` 用 `Query(ge=1, le=1000)`、`offset` 用 `Query(ge=0)`，`events_limit` 用 `Query(ge=0, le=500)`，
+越界一律 422；`_build_state` 对 `events_limit=0` 明确返回空列表；`/api/limits` 新增
+`pagination:{max_limit, max_events}` 作为单一事实源。实跑复核：三个越界值全部 422、
+`events_limit=0` 返回 0 条、`=2` 返回 2 条。后端 **306/306**。

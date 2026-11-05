@@ -459,3 +459,17 @@ def test_session_limits_come_from_settings():
         assert engine.limits.zero_delay_chain_limit == 1234
     finally:
         svc.shutdown()
+
+
+def test_session_events_limit_is_validated_and_zero_means_none(client):
+    """R59：`events_limit=0` 的切片 `[-0:]` 会返回**全部**事件（实测 49 条），
+    `events_limit=-1` 返回「除第一条外的全部」。0 应表示不返回事件，负数应 422。"""
+    spec = _spec(model_id="queueing", params={}, stop_condition={"type": "steps", "value": 30})
+    sid = _create(client, spec)["session_id"]
+    assert client.post(f"/api/sessions/{sid}/step", json={"n": 30}).status_code == 200
+
+    assert client.get(f"/api/sessions/{sid}?events_limit=0").json()["events"] == []
+    assert len(client.get(f"/api/sessions/{sid}?events_limit=2").json()["events"]) == 2
+    for q in ("events_limit=-1", "events_limit=501"):
+        assert client.get(f"/api/sessions/{sid}?{q}").status_code == 422, q
+

@@ -357,7 +357,8 @@ class SessionService:
     def _build_state(self, s: _Session, events_limit: int = 50) -> dict[str, Any]:
         engine = s.engine
         snap = engine.snapshot()
-        events = engine.event_log[-events_limit:]
+        # `[-0:]` 等于 `[0:]`（全部事件），`[-1:]` 等于「最后一条」——都不是调用方要的语义
+        events = engine.event_log[-events_limit:] if events_limit > 0 else []
         status = s.status
         if status == "running":
             display_status = "running"

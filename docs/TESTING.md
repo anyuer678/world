@@ -890,3 +890,17 @@
     插件热加载（重启是受支持路径，热加载引入模块状态与信任边界问题）。
     ④ 本轮补的文档缺口：PLUGINS 未说明容器内插件需可导入（构建进镜像或挂载 + PYTHONPATH），已补。
     ⑤ 结论：六个维度上无「已知可做且不靠猜」的剩余项；剩余属内容扩充/范围外偏好，需用户点名。
+
+70. **R59 分页参数边界（未校验的 `limit=-1` 等于无上限）**。
+    ① 实跑取证：`/api/experiments?limit=-1` → 全部 52 条；`limit=999999` → 全部；
+    `offset=-5` 被当 0；会话 `events_limit=0` → 49 条（`[-0:]` 等于 `[0:]`）、
+    `events_limit=-1` → 48 条（除第一条外全部）。
+    ② 修：experiments/batches/items/runs-events 的 `limit` = `Query(ge=1, le=1000)`、
+    `offset` = `Query(ge=0)`；`events_limit` = `Query(ge=0, le=500)`；越界 422。
+    `_build_state` 在 `events_limit=0` 时返回空列表；`/api/limits` 新增
+    `pagination:{max_limit,max_events}`。
+    ③ 新测试：`test_pagination_bounds_are_enforced`（两个列表端点 × 4 个越界值 → 422，
+    合法值 200）；`test_session_events_limit_is_validated_and_zero_means_none`（0→空、2→2 条、
+    -1/501→422）。
+    ④ 实跑复核（重启服务后）：limit=-1/0/999999、offset=-5 → 422；limit=20 → 200；
+    events_limit 0/2 → 0/2 条、-1 → 422；`/api/limits.pagination` 呈现。后端 **306/306**。

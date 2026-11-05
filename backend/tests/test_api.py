@@ -280,3 +280,16 @@ def test_v0_spec_accepted_and_migrated(client):
     spec = r.json()["spec"]
     assert spec["schema_version"] == 1
     assert spec["stop_condition"] == {"type": "steps", "value": 1000}
+
+
+def test_pagination_bounds_are_enforced(client):
+    """R59：不校验时 SQLite 的 `LIMIT -1` 是「无上限」——`/api/experiments?limit=-1`
+    会返回全部记录（实测 52/52）。所有列表端点必须拒绝越界分页参数。"""
+    for path in ("/api/experiments", "/api/batches"):
+        for q in ("limit=0", "limit=-1", "limit=1001", "offset=-1"):
+            r = client.get(f"{path}?{q}")
+            assert r.status_code == 422, (path, q, r.status_code)
+            assert isinstance(r.json()["detail"], list), r.text
+    assert client.get("/api/experiments?limit=1").status_code == 200
+    assert client.get("/api/batches?limit=1000").status_code == 200
+

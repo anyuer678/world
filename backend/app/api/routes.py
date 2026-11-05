@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from .. import APP_VERSION
@@ -16,6 +16,11 @@ from ..services.session_service import MAX_STEP_BATCH
 
 
 router = APIRouter(prefix="/api")
+
+# 分页/事件数量上限（R59）：不校验时 SQLite 的 `LIMIT -1` 是「无上限」，
+# `events_limit=0` 的切片 `[-0:]` 反而会返回全部事件。所有列表端点统一用这里的边界。
+MAX_PAGE_SIZE = 1000
+MAX_EVENTS_LIMIT = 500
 
 
 class CreateExperimentBody(BaseModel):
@@ -90,8 +95,8 @@ def create_experiment(request: Request, body: CreateExperimentBody) -> dict[str,
 @router.get("/experiments")
 def list_experiments(
     request: Request,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
     model_id: Optional[str] = None,
     tag: Optional[str] = None,
 ) -> dict[str, Any]:
@@ -159,12 +164,19 @@ def get_experiment_report(
 
 # ----------------------------------------------------------------------- runs
 @router.get("/runs/{run_id}")
-def get_run(run_id: int, request: Request, events_limit: int = 50) -> dict[str, Any]:
+def get_run(
+    run_id: int, request: Request, events_limit: int = Query(50, ge=0, le=MAX_EVENTS_LIMIT)
+) -> dict[str, Any]:
     return _service(request).get_run(run_id, events_limit)
 
 
 @router.get("/runs/{run_id}/events")
-def get_run_events(run_id: int, request: Request, limit: int = 100, offset: int = 0) -> dict[str, Any]:
+def get_run_events(
+    run_id: int,
+    request: Request,
+    limit: int = Query(100, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+) -> dict[str, Any]:
     return _service(request).get_run_events(run_id, limit, offset)
 
 
@@ -192,7 +204,9 @@ def create_session(request: Request, body: CreateSessionBody) -> dict[str, Any]:
 
 
 @router.get("/sessions/{session_id}")
-def get_session(session_id: str, request: Request, events_limit: int = 50) -> dict[str, Any]:
+def get_session(
+    session_id: str, request: Request, events_limit: int = Query(50, ge=0, le=MAX_EVENTS_LIMIT)
+) -> dict[str, Any]:
     return _service(request).sessions.state(session_id, events_limit)
 
 
@@ -281,6 +295,8 @@ def get_limits(request: Request) -> dict[str, Any]:
         # R47：会话单次 step(n) 的上限此前只在后端校验，前端只能等 422；
         # 与校验共用常量，前端据此做 input max 与提交前拦截。
         "session": {"max_step_batch": MAX_STEP_BATCH},
+        # R59：列表分页与事件数量的边界（同一个常量供校验与契约使用）
+        "pagination": {"max_limit": MAX_PAGE_SIZE, "max_events": MAX_EVENTS_LIMIT},
     }
 
 
@@ -303,7 +319,11 @@ def create_batch(request: Request, body: CreateBatchBody) -> dict[str, Any]:
 
 
 @router.get("/batches")
-def list_batches(request: Request, limit: int = 50, offset: int = 0) -> dict[str, Any]:
+def list_batches(
+    request: Request,
+    limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
+) -> dict[str, Any]:
     return _batches(request).list_batches(limit, offset)
 
 
@@ -320,7 +340,10 @@ def batch_findings(batch_id: int, request: Request) -> dict[str, Any]:
 
 @router.get("/batches/{batch_id}/items")
 def list_batch_items(
-    batch_id: int, request: Request, limit: int = 200, offset: int = 0
+    batch_id: int,
+    request: Request,
+    limit: int = Query(200, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
     return _batches(request).list_items(batch_id, limit, offset)
 

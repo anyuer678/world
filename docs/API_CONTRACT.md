@@ -21,10 +21,15 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 - `GET /api/health` → `{status:"ok", app_version, engine_version}`
 - `GET /api/limits`（R29）→ `{batch:{max_items, name_max_length, repeats_min/max,
   max_retries_min/max, concurrency_min/max}, engine:{max_wall_seconds, max_workers,
-  default_max_steps}, session:{max_step_batch}}`——值由服务端 pydantic 校验规则与模块常量
-  **现场导出**，前端批量面板与会话单步输入据此校验，不再各存一份硬编码上限（有测试绑定两端）。
+  default_max_steps}, session:{max_step_batch}, pagination:{max_limit, max_events}}`——值由服务端
+  pydantic 校验规则与模块常量**现场导出**，前端批量面板与会话单步输入据此校验，不再各存一份
+  硬编码上限（有测试绑定两端）。
   `session.max_step_batch` = 单次 `POST /api/sessions/{id}/step` 的 `n` 上限（R47，默认 1000000），
   与后端校验共用同一常量；前端据此设置 `input max` 并在越界时禁用提交，使该 422 在界面里不可达。
+  **分页参数有边界**（R59）：所有列表端点（`/experiments`、`/batches`、`/batches/{id}/items`、
+  `/runs/{id}/events`）的 `limit` 必须 `1..1000`、`offset` 必须 `≥0`，越界一律 422；
+  事件数量 `events_limit` 取 `0..500`，`0` 表示**不返回事件**。此前未校验时 `limit=-1`
+  在 SQLite 里等于无上限（实测返回全部 52 条），`events_limit=0` 的切片 `[-0:]` 反而返回全部事件。
 
 ## 模型
 - `GET /api/models` → `{models: [ModelInfo]}`，**每个 model_id 恰好一条**（列最新版本；
