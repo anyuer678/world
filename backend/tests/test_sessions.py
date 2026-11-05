@@ -161,11 +161,15 @@ def test_session_reset_while_running(client):
         if client.get(f"/api/sessions/{sid}").json()["snapshot"]["step"] >= 100:
             break
         time.sleep(0.02)
+    # R40：运行中点重置不再阻塞等待分片，而是排到边界由 worker 自己做。
+    # 响应里仍是交接前的状态，但必须在极短时间内落 idle/step 0。
+    t0 = time.time()
     r = client.post(f"/api/sessions/{sid}/reset")
     assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["status"] == "idle", body["status"]
-    assert body["snapshot"]["step"] == 0
+    assert time.time() - t0 < 0.5, "reset 不该把请求阻塞到分片结束"
+    _wait_status(client, sid, ["idle"], timeout=10)
+    body = client.get(f"/api/sessions/{sid}").json()
+    assert body["status"] == "idle" and body["snapshot"]["step"] == 0, body
     r = client.post(f"/api/sessions/{sid}/run")
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "running"
@@ -307,23 +311,23 @@ def test_pause_during_chunk_never_mutates_the_running_engine(tmp_path):
         for call in (lambda: svc.step(sid, 1), lambda: svc.checkpoint(sid), lambda: svc.run(sid)):
             with pytest.raises(ConflictError):
                 call()
-        # reset/restore 是本轮真正新增守卫的两条路径：它们原先只看 status，join 失败
-        # 也照样动 engine。断言报错来源，避免被「already running」之类的旧检查蒙混通过。
-        with pytest.raises(ConflictError, match="stopping"):
-            svc.reset(sid)
+        # restore 仍拒绝（API-only，检查点校验失败必须回 409 给调用方）；
+        # reset 改为排队：请求立刻返回，动作由 worker 在边界执行，engine 不被并发触碰。
         with pytest.raises(ConflictError, match="stopping"):
             svc.restore(sid, {"checkpoint": {}})
-        assert s.engine.steps == 0, "被拒绝的调用不能在分片结束前推动引擎"
+        st = svc.reset(sid)
+        assert s.pending_action == ("reset", None), "运行中的重置必须排队而不是硬闯"
+        assert st["status"] == "running", "排队期间对外仍是交接前的状态"
+        assert s.engine.steps == 0, "被拒绝/排队的调用不能在分片结束前推动引擎"
 
         release.set()
         deadline = time.time() + 10
         while time.time() < deadline and svc._sessions[sid].stopping:
             time.sleep(0.02)
         assert svc._sessions[sid].stopping is False, "线程退出后必须清掉 stopping"
-        assert svc._sessions[sid].status == "paused", "暂停不是取消：worker 退出后应落 paused"
-        # 线程真正退出后，reset/step 才重新被允许，且此时是独占访问
-        assert svc._sessions[sid].engine.steps >= 1, "worker 的分片应当确实跑过"
-        assert svc.reset(sid)["snapshot"]["step"] == 0
+        # 排队的 reset 在边界被 worker 执行 → idle（而不是 paused）
+        assert svc._sessions[sid].status == "idle", svc._sessions[sid].status
+        assert svc._sessions[sid].engine.steps == 0
         assert svc.step(sid, 1)["snapshot"]["step"] >= 1
     finally:
         release.set()
@@ -352,24 +356,30 @@ def test_stopping_session_returns_conflict_over_http(settings):
             assert entered.wait(timeout=10)
             assert c.post(f"/api/sessions/{sid}/pause").status_code == 200
 
-            for path in ("step", "reset", "checkpoint", "restore"):
+            for path in ("step", "checkpoint", "restore"):
                 body = {"checkpoint": {"model_id": "toy_slow_step"}} if path == "restore" else {}
                 r = c.post(f"/api/sessions/{sid}/{path}", json=body)
                 assert r.status_code == 409, f"{path}: {r.status_code} {r.text}"
                 assert r.json()["detail"]["code"] == "conflict"
                 message = r.json()["detail"]["message"]
-                # step/checkpoint 由既有守卫拦住（"session is running…"、
-                # "pause the session before…"）；reset/restore 只能由本轮新增的
-                # stopping 守卫拦住。分别断言来源，免得两处守卫互相顶替后测试仍全绿。
-                if path in ("reset", "restore"):
+                # step/checkpoint 由既有守卫拦住；restore 由 R39 的 stopping 守卫拦住。
+                # reset 不在这里：R40 起是 200 + 边界排队。
+                if path == "restore":
                     assert "stopping" in message, r.text
                 assert message, r.text
                 assert engine.steps == 0, f"{path} 在分片结束前推动了引擎"
             assert c.get(f"/api/sessions/{sid}").json()["status"] == "running"
 
+            t0 = time.time()
+            r = c.post(f"/api/sessions/{sid}/reset")
+            assert r.status_code == 200, r.text
+            assert time.time() - t0 < 0.2, "reset 不该阻塞到分片结束"
+            assert r.json()["status"] == "running", "排队期间仍是交接前状态"
+
             release.set()
-            # pause 只置 pause 标志（R39），放行后必然落 paused，而不是 cancelled 终态
-            _wait_status(c, sid, ("paused",), timeout=10)
+            # pause 只置 pause 标志（R39）；排队的 reset 在边界执行 → idle
+            _wait_status(c, sid, ("idle",), timeout=10)
+            assert c.get(f"/api/sessions/{sid}").json()["snapshot"]["step"] == 0
             r = c.post(f"/api/sessions/{sid}/step", json={"n": 1})
             assert r.status_code == 200, r.text
             assert svc._sessions[sid].stopping is False

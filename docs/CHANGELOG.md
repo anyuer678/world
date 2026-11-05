@@ -297,3 +297,15 @@ README / API_CONTRACT / ARCHITECTURE 三处成文（此前用户离开一小时�
 ⑤ 间歇性 Windows faulthandler access violation 按环境噪音如实记录（三次连跑 2/2/0 次、
 测试始终全绿、Linux CI 日志 0 次、栈帧散落在无关 stdlib），不宣称归因。
 后端 **302/302**、前端 **62/62**、tsc -b/vite build 干净。
+
+**R40（2026-11-05）会话控制端点不再等待分片：pause/reset/delete 改为边界交接**
+
+R39 把「暂停后不许并发改引擎」立住了，但用的是 join：`pause` 最多阻塞 5 秒。本轮实测
+256×256 元胞自动机（参数上限）的 256 步分片要 **4.28 s**——暂停请求会挂住近 5 秒再返回
+「仍在运行」，按钮看着像坏了；`reset` 在 join 超时后回 409 让用户重试，等于逼人大网格上连点；
+`DELETE` 与 TTL 回收也在请求里同步等别人的分片，把一个用户的操作算到另一个用户头上。
+改为边界交接：`pause` 只置标志立即返回；运行中的 `reset` 排进 `pending_action`，由 worker 在
+分片边界执行（交接与清 `stopping` 在同一次加锁里，避免孤儿动作）；`DELETE`/TTL 回收摘除即返回。
+`restore` 保持 API-only 的同步 409（检查点校验失败必须回给调用方）。契约按实更新：
+`pause`/`reset` 的响应是交接前状态，`paused`/`idle` 在 ≤1 个分片内经轮询到达。
+后端 **302/302**、前端 **62/62**、tsc -b/vite build 干净。

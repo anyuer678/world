@@ -673,3 +673,20 @@
     不宣称已归因，也不据此声称修掉了它。
     回归：后端 **302/302**、前端 **62/62**、tsc -b/vite build 干净。
 
+52. **R40 巡检轮：控制端点的等待语义（pause/reset/delete 不再阻塞分片）**。
+    ① 起点是 R39 引入的 join：`pause` 最多等 5 s。实测参数上限 256×256 元胞自动机的
+    256 步分片 **4.28 s**——暂停请求会挂住近 5 秒后仍返回「运行中」；`reset` 超时回 409
+    要求重试；`DELETE`/TTL 回收在请求里同步等别人的分片（TTL 回收挂在任意会话操作上，
+    会拖慢无关请求）。
+    ② 改为边界交接：`pause` 置标志立即返回；运行中 `reset` 排队到 `pending_action`，
+    由 worker 在边界执行；`DELETE` 先摘除再置 cancel；`restore` 保留同步 409。
+    `_finish_run()` 统一做「落状态 + 清 stopping + 执行排队动作 + 清缓存快照」，一次加锁完成，
+    同时堵住 R39 的 409 误报窗口与「排队后 worker 恰好退出 → 重置被吞」的孤儿动作。
+    ③ 测试：`test_session_reset_while_running` 断言调用 <0.5 s 且随后 idle/step 0；
+    两个 gate 测试改为断言「运行中 reset = 200 + 排队」「engine.steps 在分片结束前为 0」；
+    e2e 的 pause 改轮询（旧断言依赖阻塞语义）。反证：把 `_finish_run` 的排队分支删掉，
+    gate 测试会停在 `running` 且 step 不回 0。
+    ④ 契约成文（API_CONTRACT/ARCHITECTURE）：`pause`/`reset` 的响应是交接前状态，
+    最终状态经 `GET /api/sessions/{id}` 在 ≤1 个分片内到达；前端 300 ms 轮询无需改动。
+    回归：后端 **302/302**、前端 **62/62**、tsc -b/vite build 干净。
+

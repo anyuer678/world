@@ -187,8 +187,10 @@ WAL 模式、`foreign_keys=ON`、`busy_timeout=30000`；每个请求与工作线
 （默认 2）；批量的在途项数上限是 `min(concurrency, max_workers)`，建批时算好落库。
 会话的停止有两个互斥意图（R39 前只有一个）：**暂停**（`pause_event`，worker 在分片边界落
 `paused`，可继续可单步）与**取消**（`cancel_event`，落 `cancelled` 终态，只用于
-`DELETE`/空闲回收/进程关停这类丢弃路径）。线程未离开当前分片时 `stopping` 标志为真，
-五个会变动引擎的入口一律返回可重试的 409，所有权交接（落状态 + 清标志）在一次加锁内完成。
+`DELETE`/空闲回收/进程关停这类丢弃路径）。线程未离开当前分片时 `stopping` 标志为真，`step`/`run`/`checkpoint`/`restore` 返回可重试的 409，
+所有权交接（落状态 + 清标志 + 执行排队动作）在一次加锁内完成。**控制端点不等待分片**（R40）：
+`pause` 只置标志立即返回，`reset` 在运行中排队到边界由 worker 执行，`DELETE` 摘除即返回；
+否则一个 4.3 s 的大网格分片会把 HTTP 请求和无关会话的 TTL 回收一起拖住。
 取消是**进程内的 `threading.Event` 标志**：引擎每 `cancel_poll_interval`（默认 256）步
 检查一次，同时对照 `max_wall_seconds` / `max_steps` 上限，超限即落
 `cancelled/step_limit/wall_timeout` 终态。`Limits` 的四个字段在**三条路径上都取自同一份

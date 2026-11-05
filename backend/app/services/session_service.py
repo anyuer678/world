@@ -38,6 +38,9 @@ class _Session:
         # left its in-flight chunk: the engine is still owned by that thread, so
         # step/reset/checkpoint must not touch it (R39 race fix).
         self.stopping = False
+        # 在分片边界由 worker 自己执行的请求（目前只有 reset）：引擎归 worker 时
+        # 别的路径不能碰它，而让 HTTP 请求等到边界会把响应拖到一整片那么久。
+        self.pending_action: tuple[str, object] | None = None
         self.stop_reason: str | None = None
         self.error: str | None = None
         self.created_at = time.time()
@@ -115,17 +118,21 @@ class SessionService:
 
     def delete(self, session_id: str) -> None:
         s = self._get(session_id)
-        with s.lock:
-            self._stop_thread(s, cancel=True)
         with self._global_lock:
             self._sessions.pop(session_id, None)
+        # 不 join：会话已从字典摘掉，没人能再拿到它，worker 跑完自己那片自然结束。
+        # 在别的请求里等别人的分片，等于把一个用户的删除算到另一个用户头上。
+        self._request_stop(s, cancel=True)
 
     def shutdown(self) -> None:
         with self._global_lock:
             sessions = list(self._sessions.values())
         for s in sessions:
-            with s.lock:
-                self._stop_thread(s, cancel=True)
+            self._request_stop(s, cancel=True)
+        for s in sessions:  # 进程要退了，这里才等：只等一次超时，不逐个长等
+            thread = s.thread
+            if thread is not None and thread.is_alive():
+                thread.join(timeout=self._join_timeout)
 
     def _purge_expired(self) -> None:
         now = time.time()
@@ -133,8 +140,9 @@ class SessionService:
         for sid in expired:
             s = self._sessions.pop(sid, None)
             if s is not None:
-                with s.lock:
-                    self._stop_thread(s, cancel=True)
+                # 同上：TTL 回收挂在「任意一次会话操作」上，绝不能阻塞去等被回收会话
+                # 的分片，否则一个过期会话会拖慢无关请求。
+                self._request_stop(s, cancel=True)
 
     # ------------------------------------------------------------- stepping
     def step(self, session_id: str, n: int = 1) -> dict[str, Any]:
@@ -194,6 +202,7 @@ class SessionService:
                 raise ConflictError("session is in error state; reset before running")
             s.pause_event.clear()
             s.cancel_event.clear()
+            s.pending_action = None
             s.error = None
             s.status = "running"
             s.last_state = self._build_state(s)
@@ -205,6 +214,9 @@ class SessionService:
         t0 = time.monotonic()
         last_push = 0.0
         while True:
+            if s.pending_action is not None:
+                self._finish_run(s, "paused")
+                return
             if s.cancel_event.is_set():
                 self._finish_run(s, "cancelled")
                 return
@@ -243,45 +255,60 @@ class SessionService:
                     last_push = now
 
     def _finish_run(self, s: _Session, status: str, reason: str | None = None) -> None:
-        """Worker 交出引擎所有权：状态落定与 `stopping` 清零必须在同一次加锁里。
+        """Worker 交出引擎所有权：状态落定、`stopping` 清零、排队动作执行必须在**同一次
+        加锁**里。
 
-        分两次写会留一个窗口——status 已是 paused、stopping 还挂着，期间一次
-        「单步」会吃到本可避免的 409。调用方都已持有或即将获取 s.lock。"""
+        分两次写会留一个窗口——status 已是 paused、stopping 还挂着，期间一次「单步」
+        会吃到本可避免的 409；而把排队动作（reset）放在交接之外执行，则可能出现
+        「重置已排队但 worker 恰好在这之后退出」的孤儿动作，用户的重置被静默吞掉。"""
         with s.lock:
-            s.status = status
-            if reason is not None:
-                s.stop_reason = reason
+            action, s.pending_action = s.pending_action, None
+            if action is not None and action[0] == "reset":
+                s.engine.reset()
+                s.status = "idle"
+                s.stop_reason = None
+                s.error = None
+            else:
+                s.status = status
+                if reason is not None:
+                    s.stop_reason = reason
             s.stopping = False
             s.thread = None
+            s.last_state = None
 
     def pause(self, session_id: str) -> dict[str, Any]:
+        """请求暂停：只置标志，**不等线程**。
+
+        R39 在这里 join 最多 5 秒——256×256 的元胞自动机一片实测 4.3 s，于是
+        「点暂停 → 请求挂住数秒 → 仍然运行中」，按钮看着像坏了。分片存在的意义就是
+        让暂停在边界自然生效（粒度 ≤ 一个分片），所以立即返回，worker 退出时落 paused。"""
         s = self._get(session_id)
-        exited = self._stop_thread(s)
         with s.lock:
-            if not exited:
-                # 线程还在分片里跑：engine 归它所有。这里不改 status、不碰 engine，
-                # 只留 stopping 标记；线程自己收尾时把状态写成 paused/cancelled。
+            alive = self._request_stop(s)
+            if alive:
                 if s.status == "running":
                     s.stopping = True
-                return self.state(session_id)
-            if s.status == "running":
+            elif s.status == "running":
                 s.status = "paused"
-            elif s.status in ("completed", "step_limit", "wall_timeout", "cancelled", "error", "paused"):
-                pass
-        return self.state(session_id)
+            return self.state(session_id)
 
     def resume(self, session_id: str) -> dict[str, Any]:
         return self.run(session_id)
 
     def reset(self, session_id: str) -> dict[str, Any]:
         s = self._get(session_id)
-        # Join the run thread BEFORE taking the lock: the thread's exit path
-        # writes s.status under s.lock, so holding the lock during join would
-        # deadlock until the join timeout and let the thread's "cancelled"
-        # write land after reset's "idle" (the stuck state seen in R13).
-        if not self._stop_thread(s):
-            raise ConflictError("session is still stopping; retry in a moment")
         with s.lock:
+            # 排队条件只看「引擎是否仍被后台线程使用」：running = 正在分片里改引擎；
+            # stopping = 已请求停止但还没交接。终态（completed/step_limit/…）下线程已经
+            # 不会再碰引擎，直接同步重置——否则刚跑完就点重置的用户会看到旧步数。
+            if s.status == "running" or s.stopping:
+                # 引擎归 worker：把重置排到分片边界由它自己做（_apply_pending）。
+                # 旧做法是 join 后硬闯（R13 卡死）或 join 超时回 409 让用户重试——
+                # 大网格上一片 4.3 s，重试等于逼用户连点。
+                s.pending_action = ("reset", None)
+                s.stopping = True
+                return self.state(session_id)
+            s.pending_action = None
             s.engine.reset()
             s.status = "idle"
             s.stop_reason = None
@@ -300,12 +327,13 @@ class SessionService:
 
     def restore(self, session_id: str, checkpoint: dict[str, Any]) -> dict[str, Any]:
         s = self._get(session_id)
-        # Join BEFORE the lock, like reset(): until the worker leaves its chunk the
-        # engine belongs to that thread, and restoring underneath it corrupts both
-        # the in-flight run and the checkpoint being applied.
-        if not self._stop_thread(s):
-            raise ConflictError("session is still stopping; retry in a moment")
         with s.lock:
+            # restore 是 API-only 路径，保留「停下来再改」的同步语义：检查点校验失败
+            # 必须回 409 给调用方（D27 口径），不能像 reset 那样推到边界。
+            if self._request_stop(s) or s.stopping:
+                s.stopping = True
+                raise ConflictError(
+                    "session is stopping; wait for the running chunk to finish, then retry restore")
             try:
                 s.engine.restore(checkpoint)
             except Exception as exc:  # noqa: BLE001 - restore failure keeps session usable
@@ -353,8 +381,8 @@ class SessionService:
         inner = s.engine._inner  # noqa: SLF001 - service owns the engine lifecycle
         return inner._stop_reason(time.monotonic())
 
-    def _stop_thread(self, s: _Session, *, cancel: bool = False) -> bool:
-        """请求线程离开当前分片；返回线程是否真的退出。
+    def _request_stop(self, s: _Session, *, cancel: bool = False) -> bool:
+        """请求线程离开当前分片；返回请求发出时 worker 是否存活（= 引擎仍归它）。
 
         `cancel=False`（pause/reset/restore）只置 pause 标志：worker 会在分片边界
         落 `paused`，会话仍可「继续」。`cancel=True`（delete/purge/shutdown 这类
@@ -370,16 +398,10 @@ class SessionService:
         if cancel:
             s.cancel_event.set()
         thread = s.thread
-        exited = True
-        if thread is not None and thread.is_alive():
-            thread.join(timeout=self._join_timeout)
-            exited = not thread.is_alive()
-        if exited:
+        alive = thread is not None and thread.is_alive()
+        if not alive:
             s.thread = None
-        else:
-            with s.lock:
-                s.stopping = True
-        return exited
+        return alive
 
     def _run_loop_guarded(self, s: _Session) -> None:
         try:

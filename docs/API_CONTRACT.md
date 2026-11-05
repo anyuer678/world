@@ -124,20 +124,26 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 - `GET /api/sessions/{id}` → SessionState：
   `{session_id, status, stop_reason, error, model_id, model_version, model_type, display_name, visualizer, spec, snapshot, events[], chunk_steps}`；
   snapshot 为 `{step, time, status, state, metrics}`（**模拟时间键名是 `time`**，非 sim_time）
-- `DELETE /api/sessions/{id}` → 204
+- `DELETE /api/sessions/{id}` → 204（立即返回；若该会话正在运行，后台线程跑完当前分片自行结束，
+  不再同步等待——R40）
 - `POST /api/sessions/{id}/step` body=`{n?:int=1}` → SessionState（同步步进）
 - `POST /api/sessions/{id}/run` → SessionState（后台线程启动连续运行；status=running）
 - `POST /api/sessions/{id}/pause` → SessionState（协作式暂停，生效粒度 ≤ 一个分片）。
+  **立即返回**（R40）：响应体是请求前的状态（通常仍是 `running`），`paused` 在 ≤1 个分片内
+  由后台线程落定，客户端按 `GET /api/sessions/{id}` 轮询即可——前端本就 300 ms 轮询。
+  旧实现（R39）会阻塞到线程退出：256×256 元胞自动机实测一片 4.3 s，暂停请求随之挂住数秒。
   暂停**落 `paused`**（可 `resume`、可 `step`），不是 `cancelled`（R39 修：此前 `_stop_thread`
   同时置 cancel/pause 两个标志，运行循环先查 cancel，于是暂停实为取消——`resume`/`step`
   一律 409「session already finished」，只能重置丢进度）。`cancelled` 只在丢弃路径出现
   （`DELETE`、空闲回收、进程关停）
-  - 后台线程尚未离开当前分片时（`stopping` 窗口），会变动引擎的端点一律 **409 `conflict`**：
-    `step`/`run`/`checkpoint` → "session is stopping; wait for the running chunk to finish"，
-    `reset`/`restore` → "session is still stopping; retry in a moment"。这是可重试错误，
-    粒度同样 ≤ 一个分片；不返回 500，也不在半路改动引擎（R39）
+  - 后台线程尚未离开当前分片时（`stopping` 窗口），`step`/`run`/`checkpoint`/`restore`
+    一律 **409 `conflict`**（message 含 "session is stopping…" / "pause the session before…"），
+    可重试、粒度 ≤ 一个分片；不返回 500，也不在半路改动引擎（R39）。`reset` 自 R40 起
+    不再报错而是排队（见下），`pause` 自 R40 起不再阻塞（见上）
 - `POST /api/sessions/{id}/resume` → SessionState
-- `POST /api/sessions/{id}/reset` → SessionState（回到 step=0，同种子同参数 ⇒ 重放结果一致）
+- `POST /api/sessions/{id}/reset` → SessionState（回到 step=0，同种子同参数 ⇒ 重放结果一致）。
+  运行中调用时**立即返回、在分片边界由后台线程执行**（R40）：响应仍是交接前的状态，
+  `idle`/step 0 在 ≤1 个分片内出现；期间引擎不被并发触碰。终态（completed 等）下同步完成。
 - `POST /api/sessions/{id}/checkpoint` → `{checkpoint}`；checkpoint 是 JSON 字典，键为
   `{engine_version, model_id, model_version, model_type, params_digest, step, clock,
   status, rng, model_state, engine}`（R27 实测列出，防手写形状失真）

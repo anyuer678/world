@@ -170,10 +170,19 @@ def test_full_api_lifecycle(client):
     sid2 = r.json()["session_id"]
     r = client.post(f"/api/sessions/{sid2}/run")
     assert r.status_code == 200 and r.json()["status"] == "running"
+    # R40：/pause 立即返回（响应是请求前的状态），暂停在 ≤1 个分片内落地，
+    # 与前端 300 ms 轮询看到的一致；旧断言依赖「请求阻塞到线程退出」。
+    import time
+
     r = client.post(f"/api/sessions/{sid2}/pause")
     assert r.status_code == 200
-    paused = r.json()
-    assert paused["status"] == "paused"
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        paused = client.get(f"/api/sessions/{sid2}").json()
+        if paused["status"] == "paused":
+            break
+        time.sleep(0.05)
+    assert paused["status"] == "paused", paused["status"]
     assert 0 < paused["snapshot"]["step"] < 10_000
     r = client.post(f"/api/sessions/{sid2}/resume")
     assert r.status_code == 200
