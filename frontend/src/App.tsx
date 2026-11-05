@@ -27,6 +27,8 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState<{ id: number; name: string; model_id: string; status: string }[]>([])
+  // R48：历史只取最近一页，必须把总数一起显示，否则用户会以为看到的就是全部
+  const [historyTotal, setHistoryTotal] = useState(0)
   const sessionRef = useRef<string | null>(null)
   const simSectionRef = useRef<HTMLElement | null>(null)
   sessionRef.current = session?.session_id ?? null
@@ -122,7 +124,10 @@ export default function App() {
   }
 
   function refreshHistory() {
-    api.listExperiments().then((r) => setHistory(r.experiments))
+    api.listExperiments().then((r) => {
+      setHistory(r.experiments)
+      setHistoryTotal(r.total)
+    })
   }
 
   function buildSpec(): ModelSpec {
@@ -465,7 +470,7 @@ export default function App() {
       )}
 
       <section style={card}>
-        <h2>4. 实验历史</h2>
+        <h2>4. {historyHeading(history.length, historyTotal)}</h2>
         {history.length === 0 ? (
           <p style={{ color: '#6b7280' }}>暂无实验。在上方保存会话配置为实验。</p>
         ) : (
@@ -521,11 +526,19 @@ export default function App() {
           <h3 style={{ fontSize: 14 }}>批量实验与参数搜索</h3>
           <BatchPanel spec={buildSpec()} />
           <h3 style={{ fontSize: 14, marginTop: 16 }}>结果比较</h3>
-          <ComparePanel history={history} />
+          <ComparePanel history={history} historyTotal={historyTotal} />
         </div>
       </details>
     </main>
   )
+}
+
+/** 实验历史的截断口径（R48）：与批量面板的 itemsHeading 同一原则——
+ * 只展示一页时必须同时给出总数，否则「最近 20 条」会被误读成「全部 20 条」。 */
+export function historyHeading(shown: number, total: number): string {
+  if (total <= 0) return '实验历史'
+  if (shown >= total) return `实验历史（共 ${total} 条）`
+  return `实验历史（显示最近 ${shown} 条 / 共 ${total} 条，更早的未在界面列出）`
 }
 
 /** 单步输入的本地校验（R47）：与 /api/limits 的 session.max_step_batch 同源，

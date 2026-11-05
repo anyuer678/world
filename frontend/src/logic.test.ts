@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { modelTypeLabel, quickPicks, scenarioSpec, stepProblem } from './App'
+import { historyHeading, modelTypeLabel, quickPicks, scenarioSpec, stepProblem } from './App'
 import { statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
@@ -693,6 +693,14 @@ describe('stepProblem (server-provided step bound, R47)', () => {
     expect(stepProblem(1_000_000, '0')).toContain('不小于 1')
     expect(stepProblem(1_000_000, '-3')).toContain('不小于 1')
     expect(stepProblem(1_000_000, '2.5')).toContain('整数')
+  })
+})
+
+describe('historyHeading (truncation transparency, R48)', () => {
+  it('names the total when everything is shown and the cut when it is not', () => {
+    expect(historyHeading(0, 0)).toBe('实验历史')
+    expect(historyHeading(5, 5)).toBe('实验历史（共 5 条）')
+    expect(historyHeading(20, 22)).toBe('实验历史（显示最近 20 条 / 共 22 条，更早的未在界面列出）')
   })
 })
 

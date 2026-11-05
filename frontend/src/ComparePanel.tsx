@@ -12,7 +12,13 @@ interface HistoryEntry {
 
 const MAX_COMPARE = 4
 
-export default function ComparePanel({ history }: { history: HistoryEntry[] }) {
+export default function ComparePanel({
+  history,
+  historyTotal = history.length,
+}: {
+  history: HistoryEntry[]
+  historyTotal?: number
+}) {
   const [selected, setSelected] = useState<number[]>([])
   const [results, setResults] = useState<ExperimentResult[]>([])
   const [error, setError] = useState('')
@@ -58,6 +64,11 @@ export default function ComparePanel({ history }: { history: HistoryEntry[] }) {
         <p style={{ color: '#6b7280' }}>暂无实验可比较。</p>
       ) : (
         <>
+          {history.length < historyTotal && (
+            <p style={{ color: '#92400e', fontSize: 12, margin: '0 0 6px' }}>
+              可选范围：最近 {history.length} 条（共 {historyTotal} 条；更早的实验未在界面列出）
+            </p>
+          )}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             {history.map((h) => (
               <label key={h.id} style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
