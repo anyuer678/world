@@ -13,6 +13,7 @@ export default function SimView({ session }: { session: SessionState }) {
   if (visualizer.kind === 'traffic') return <TrafficView state={snapshot.state} />
   if (visualizer.kind === 'sir') return <SirView state={snapshot.state} />
   if (visualizer.kind === 'predator_prey') return <PredatorPreyView state={snapshot.state} />
+  if (visualizer.kind === 'sandpile') return <SandpileView state={snapshot.state} />
   return <StateTable state={snapshot.state} />
 }
 
@@ -47,6 +48,57 @@ function GanttChart({ segments, label }: { segments: [number, number, number][];
 function AccessStrip({ bits, label }: { bits: number[]; label: string }) {
   const canvasRef = useCanvas((ctx, w, h) => drawAccessStrip(ctx, { width: w, height: h, bits }), 640, 32)
   return <canvas ref={canvasRef} style={{ maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 4 }} role="img" aria-label={label} />
+}
+
+function SandpileView({ state }: { state: Record<string, unknown> }) {
+  const heights = (state.heights as number[][] | undefined) ?? []
+  const width = Number(state.width ?? 0)
+  const height = Number(state.height ?? 0)
+  const threshold = Math.max(2, Number(state.threshold ?? 4))
+  const history = (state.history as number[] | undefined) ?? []
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || heights.length === 0 || width === 0) return
+    const cell = Math.max(2, Math.floor(600 / width))
+    canvas.width = width * cell
+    canvas.height = height * cell
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    // 0..threshold-1 由浅到深；到阈值就会崩塌，所以渲染时不会出现该值
+    const palette = ['#f8fafc', '#dbeafe', '#93c5fd', '#60a5fa', '#2563eb', '#1e3a8a', '#111827', '#030712']
+    heights.forEach((row, i) => {
+      row.forEach((h, j) => {
+        ctx.fillStyle = palette[Math.min(h, palette.length - 1)]
+        ctx.fillRect(j * cell, i * cell, cell, cell)
+      })
+    })
+  })
+
+  if (heights.length === 0) return <p style={{ color: '#6b7280' }}>尚未初始化（点击「创建会话」后开始模拟）。</p>
+
+  return (
+    <div>
+      <canvas
+        ref={canvasRef}
+        style={{ maxWidth: '100%', border: '1px solid #d1d5db', borderRadius: 4 }}
+        role="img"
+        aria-label={`沙堆第 ${Number(state.drops ?? 0)} 次落沙，最大一次雪崩 ${Number(
+          state.max_avalanche ?? 0,
+        )} 次崩塌，阈值 ${threshold}`}
+      />
+      <SeriesChart
+        series={[{ name: '雪崩规模（崩塌次数）', color: '#2563eb', data: history.map((v, i) => [i, v] as [number, number]) }]}
+        label={`最近 ${history.length} 次雪崩规模曲线`}
+        height={140}
+      />
+      <p style={{ fontSize: 13, color: '#374151', margin: '4px 0' }}>
+        落沙 {Number(state.drops ?? 0)} · 雪崩 {Number(state.avalanches ?? 0)} 次 · 最大{' '}
+        {Number(state.max_avalanche ?? 0)} 次崩塌 · 边界流失 {Number(state.lost ?? 0)} 粒
+      </p>
+    </div>
+  )
 }
 
 function TrafficView({ state }: { state: Record<string, unknown> }) {

@@ -31,6 +31,7 @@ E2E_STEPS = {
     "traffic_network": 20,
     "sir": 50,
     "predator_prey": 50,
+    "sandpile": 50,
 }
 
 

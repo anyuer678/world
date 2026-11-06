@@ -109,3 +109,16 @@ def test_batch_small_throughput(client):
     assert res["status"] == "completed"
     assert res["items"] == 4
     assert res["seconds"] < 60.0
+
+
+def test_engine_sandpile_speed():
+    """R76：第 9 个模型也要有量级回归阈值（5,000 步 << 10 s）。"""
+    from app.core.schema.spec import example_spec_for
+    from app.models.sandpile.model import SandpileModel
+    from app.services.benchmarks import bench_engine
+
+    spec = example_spec_for(SandpileModel)
+    result = bench_engine(spec, registry, 5_000)
+    assert result.steps == 5_000
+    assert result.seconds < 10.0, result.seconds
+

@@ -1061,3 +1061,17 @@
     ③ 浏览器实测（25 条数据）：初始 20 行 + 「还有 5 条」→ 点击后 25 行、按钮消失、「共 25 条」；
     探针实验已删（回到 13 条）。
     ④ 单测：`historyMoreLabel` 三例；前端 **71/71**、tsc/vite 干净。
+
+87. **R76 新内置模型「沙堆（自组织临界）」全链路交付**。
+    ① 模型：BTW 沙堆（随机落沙 + 阈值崩塌级联，开放边界耗散），指标 drops/avalanches/
+    topplings/lost/max_avalanche/mean_avalanche；两个场景；visualizer kind `sandpile`。
+    ② 测试 `tests/test_sandpile.py`（7 项）：参数约束（initial_grains < threshold）、
+    守恒（网格+流失 == 落沙数）、每步稳定（max < threshold）、雪崩发生且历史恰 128 条、
+    同 seed 确定性、引擎检查点逐位一致、停止条件 counts。
+    ③ 开发中修掉的两个自身缺陷：环形边界无耗散导致无限级联（冒烟卡死）；
+    `del history[:128]` 一次清空历史（浏览器曲线只剩 5 条）。均有断言绑定。
+    ④ 文档/清单同步：README 模型表与「九个内置模型」、PLUGINS kind、ARCHITECTURE 文件清单、
+    BENCHMARKS 9 模型表（同一次运行：sandpile 20,000 步 0.718 s ≈27,900 steps/s）、
+    BENCH_STEPS、e2e 预算、QUICK_PICKS、性能阈值——所有文档锁通过。
+    ⑤ 浏览器实测：场景卡运行到 3000 步，画布与曲线/数字一致；API 复核 history=128。
+    后端 **331/331**、前端 **71/71**。

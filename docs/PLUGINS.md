@@ -24,7 +24,7 @@ WorldLab 的模型库是插件式的：核心引擎、实验管理、API 与前�
 | `description` | `str` | 非空说明（前端模型选择器展示） |
 | `model_type` | `str` | `"time_stepped"` 或 `"discrete_event"`，**必须与基类一致**（注册时校验） |
 | `version` | `str` | 语义化版本；同 ID 不同版本可共存，跨版本结果默认不可直接比较 |
-| `visualizer` | `dict` | 可视化适配器声明，必须含字符串 `kind`。前端 `SimView` 对以下 kind 有专用视图：`queue`、`cpu_schedule`、`cache`、`ca`、`schelling`、`traffic`、`sir`、`predator_prey`；**其余任意 kind 自动落到通用状态表 `StateTable`**（数据照样能看，只是没有定制图形），所以插件可以先声明新 kind 再接视图。`series` 键只是元数据（内置模型附带曲线名列表），**前端当前不读取它**，不要依赖它自动出图 |
+| `visualizer` | `dict` | 可视化适配器声明，必须含字符串 `kind`。前端 `SimView` 对以下 kind 有专用视图：`queue`、`cpu_schedule`、`cache`、`ca`、`schelling`、`traffic`、`sir`、`predator_prey`、`sandpile`；**其余任意 kind 自动落到通用状态表 `StateTable`**（数据照样能看，只是没有定制图形），所以插件可以先声明新 kind 再接视图。`series` 键只是元数据（内置模型附带曲线名列表），**前端当前不读取它**，不要依赖它自动出图 |
 | `param_model` | `type[WorldLabParams]` | Pydantic 参数 Schema（`extra="forbid"`），`model_json_schema()` 驱动前端结构化编辑器 |
 | `dt` | `float` | 仅 time-stepped：每步推进的固定 Δt |
 | `scenarios` | `list[dict]`（**可选**，缺省 `[]`） | 一键场景库；注册时校验形状（见下） |

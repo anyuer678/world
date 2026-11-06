@@ -647,6 +647,7 @@ const QUICK_PICKS: { modelId: string; scenarioId: string }[] = [
   { modelId: 'predator_prey', scenarioId: 'neutral-cycles' },
   { modelId: 'cpu_scheduling', scenarioId: 'rr-quantum-too-small' },
   { modelId: 'cache_sim', scenarioId: 'zipf-hit-ceiling' },
+  { modelId: 'sandpile', scenarioId: 'sandpile-critical' },
 ]
 
 export function quickPicks(models: ModelInfo[]): { model: ModelInfo; scenario: ScenarioInfo }[] {

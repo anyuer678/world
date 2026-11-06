@@ -68,6 +68,8 @@
   backend/app/models/cpu_scheduling/params.py
   backend/app/models/predator_prey/model.py
   backend/app/models/predator_prey/params.py
+  backend/app/models/sandpile/model.py
+  backend/app/models/sandpile/params.py
   backend/app/models/queueing/model.py
   backend/app/models/queueing/params.py
   backend/app/models/schelling/model.py

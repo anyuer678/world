@@ -474,6 +474,7 @@ describe('quickPicks', () => {
       mkModel('predator_prey', ['neutral-cycles']),
       mkModel('cpu_scheduling', ['rr-quantum-too-small']),
       mkModel('cache_sim', ['zipf-hit-ceiling']),
+      mkModel('sandpile', ['sandpile-critical']),
     ]
     expect(quickPicks(models).map((p) => p.model.model_id)).toEqual([
       'schelling',
@@ -484,6 +485,7 @@ describe('quickPicks', () => {
       'predator_prey',
       'cpu_scheduling',
       'cache_sim',
+      'sandpile',
     ])
     expect(quickPicks(models)[0].scenario.id).toBe('mild-preference')
   })

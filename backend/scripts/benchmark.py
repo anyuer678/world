@@ -38,6 +38,7 @@ BENCH_STEPS = {
     "traffic_network": 500,
     "sir": 5_000,
     "predator_prey": 5_000,
+    "sandpile": 20_000,
 }
 
 
