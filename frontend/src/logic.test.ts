@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { metricColumns } from './ResultPanel'
+import { aggregateHeading, metricColumns } from './ResultPanel'
 import { canCancel, canRerun, EXPERIMENT_STATUSES, filterSummary, historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, parseTags, quickPicks, resultViewAfterLifecycle, scenarioSpec, stepProblem, versionOptions } from './App'
 import { modelVersionLabel, statusLabel } from './labels'
 import { formatValue } from './SimView'
@@ -952,6 +952,19 @@ describe('canRerun / canCancel (experiment actions, R84)', () => {
     expect(canCancel('running')).toBe(true)
     expect(canCancel('completed')).toBe(false)
     expect(canCancel('created')).toBe(false)
+  })
+})
+
+describe('aggregateHeading (aggregate scope matches backend, R112)', () => {
+  const ok = { status: 'completed', metrics: { m: 1 } }
+  it('says all only when every run is counted; otherwise states the completed count', () => {
+    expect(aggregateHeading([ok, ok])).toBe('汇总指标（全部 2 次运行）')
+    expect(aggregateHeading([ok, { status: 'failed', metrics: null }])).toBe(
+      '汇总指标（仅 1 次已完成运行，共 2 次）',
+    )
+    expect(aggregateHeading([{ status: 'completed', metrics: {} }, ok])).toBe(
+      '汇总指标（仅 1 次已完成运行，共 2 次）',
+    )
   })
 })
 

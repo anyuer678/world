@@ -1412,3 +1412,13 @@
     ② 实现：三处统一 `get_batch(...)`（默认含 summary），前端取消路径删除二次 `getBatch`。
     ③ 测试：服务层 create/retry/cancel 响应均含 `summary`；HTTP 建批响应含 `summary`；批量 **27/27**。
     ④ 回归：后端全量 **348/348**、前端 **91/91**、tsc -b / vite build 干净；文档锁 21/21。
+
+123. **R112 修复：结果汇总标题与聚合口径一致（前端）**。
+    ① 缺口：后端 aggregate 只含 completed 且有指标的运行，UI 标题写「全部运行」；混合状态实验
+    会被误读为失败 run 也参与平均。
+    ② 实现：`aggregateHeading(runs)`——全部可计入写「全部 N 次运行」，否则写
+    「仅 K 次已完成运行，共 N 次」；K 的判据与后端一致（completed + metrics 非空）。
+    ③ 单测：全完成/含失败/空 metrics 三种输入；前端 **92/92**。
+    ④ 浏览器：dev 前后端（临时库）建 2 次运行的实验，SQL 把第 2 次改为 failed 且清空 metrics；
+    打开结果面板 → DOM 标题为「汇总指标（仅 1 次已完成运行，共 2 次）」，失败运行的指标列全为「—」。
+    ⑤ 回归：tsc -b / vite build 干净；后端 **348/348** 无改动。

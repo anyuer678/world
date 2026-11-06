@@ -9,6 +9,16 @@ export function metricColumns(runs: { metrics: Record<string, number> | null }[]
   return [...new Set(runs.flatMap((r) => Object.keys(r.metrics ?? {})))].sort()
 }
 
+/** 汇总口径（R112）：后端 aggregate 只平均 `completed` 且有指标的运行。
+ * 标题不能写「全部运行」——混合状态时那会把失败/取消的 run 也算进去（与实现不符）。 */
+export function aggregateHeading(runs: { status: string; metrics: Record<string, number> | null }[]): string {
+  const countable = runs.filter(
+    (r) => r.status === 'completed' && r.metrics && Object.keys(r.metrics).length > 0,
+  ).length
+  if (countable === runs.length) return `汇总指标（全部 ${runs.length} 次运行）`
+  return `汇总指标（仅 ${countable} 次已完成运行，共 ${runs.length} 次）`
+}
+
 export default function ResultPanel({ result, onClose }: { result: ExperimentResult; onClose: () => void }) {
   const { experiment, runs, aggregate } = result
   const cols = metricColumns(runs)
@@ -51,7 +61,7 @@ export default function ResultPanel({ result, onClose }: { result: ExperimentRes
         <p style={{ color: '#6b7280' }}>该实验还没有运行记录。到「载入配置」后点「存配置为新实验并运行」即可产生结果。</p>
       ) : (
         <>
-          <h3 style={{ fontSize: 14 }}>汇总指标（全部运行）</h3>
+          <h3 style={{ fontSize: 14 }}>{aggregateHeading(runs)}</h3>
           {aggregate && Object.keys(aggregate).length > 0 ? (
             <table style={{ borderCollapse: 'collapse', fontSize: 13, marginBottom: 12 }}>
               <thead>
