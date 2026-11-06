@@ -51,6 +51,8 @@ export function batchSubmitProblem(
  * 否则「10 条」会被当成「全部 10 条」（与 R48 的历史口径一致）。 */
 /** 批量列表每页条数（R78，与实验历史的 20 条相互独立）。 */
 export const BATCH_PAGE_SIZE = 10
+// R86：批单项一次取 50 条；超过时用「加载更多」按 offset 续读（与列表分页同一交互）
+export const ITEMS_PAGE_SIZE = 50
 
 export function batchesHeading(shown: number, total: number): string {
   if (total <= 0) return '批量实验'
@@ -60,7 +62,7 @@ export function batchesHeading(shown: number, total: number): string {
 
 export function itemsHeading(shown: number, total: number): string {
   if (total <= 0 || shown >= total) return `单项结果（全部 ${shown} 项）`
-  return `单项结果（显示前 ${shown} / 共 ${total} 项，其余见「导出 CSV」）`
+  return `单项结果（显示前 ${shown} / 共 ${total} 项，可继续加载或导出 CSV）`
 }
 
 export function parseValues(raw: string): unknown[] {
@@ -128,6 +130,21 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     }
   }
 
+  async function loadMoreItems() {
+    if (!batch) return
+    setBusy(true)
+    try {
+      const page = await api.listBatchItems(batch.id, ITEMS_PAGE_SIZE, items.length)
+      const seen = new Set(items.map((it) => it.id))
+      setItems([...items, ...page.items.filter((it) => !seen.has(it.id))])
+      setItemsTotal(page.total)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // 提交上限取自服务端 /api/limits（R29）：取不到时用 FALLBACK_LIMITS，不阻塞表单
   useEffect(() => {
     api
@@ -154,7 +171,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
         const b = await api.getBatch(id)
         setBatch(b)
         if (TERMINAL.has(b.status)) {
-          const page = await api.listBatchItems(id, 50)
+          const page = await api.listBatchItems(id, ITEMS_PAGE_SIZE)
           setItems(page.items)
           setItemsTotal(page.total)
           api.getBatchFindings(id).then(setFindings).catch(() => {})
@@ -213,6 +230,9 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
         per_run_wall_seconds: Math.max(1, Number(wallSec) || 60),
       })
       setBatch(b)
+      // 新批量的 items 尚未产生；不清空会把上一个批量的明细继续显示在下面
+      setItems([])
+      setItemsTotal(0)
       setNotice(`批量 #${b.id} 已创建（${b.total_items} 项），运行中…`)
       refreshBatches()
     } catch (e) {
@@ -232,7 +252,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
       setBatch(b)
       setFindings(null)
       if (TERMINAL.has(b.status)) {
-        const page = await api.listBatchItems(id, 50)
+        const page = await api.listBatchItems(id, ITEMS_PAGE_SIZE)
         setItems(page.items)
         setItemsTotal(page.total)
         api.getBatchFindings(id).then(setFindings).catch(() => {})
@@ -640,6 +660,11 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
                   </tbody>
                 </table>
               </div>
+              {moreLabel(items.length, itemsTotal) && (
+                <button onClick={loadMoreItems} disabled={busy} style={{ ...smallBtn, marginTop: 8 }}>
+                  {moreLabel(items.length, itemsTotal)}
+                </button>
+              )}
             </>
           )}
         </div>
