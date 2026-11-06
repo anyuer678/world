@@ -320,3 +320,41 @@ def test_session_event_ring_is_bounded(settings):
     finally:
         ses_svc.shutdown()
 
+
+def test_session_thread_churn_leaves_no_live_worker(settings):
+    """R68：会话建/跑/删循环后，每个会话的 worker 线程都必须已退出。
+
+    不依赖全局 `threading.active_count()`（其它测试的后台线程会干扰），而是保留
+    `_Session` 引用逐个检查：删除后线程要么已被清空，要么不再存活。"""
+    import time
+
+    from app.core.registry import registry
+    from app.services.session_service import SessionService
+
+    svc = SessionService(settings, registry)
+    try:
+        spec = {
+            "schema_version": 1,
+            "model_id": "sir",
+            "params": {},
+            "stop_condition": {"type": "steps", "value": 50},
+            "seed": 1,
+        }
+        sessions = []
+        for _ in range(20):
+            sid = svc.create(spec)["session_id"]
+            sessions.append(svc._sessions[sid])  # noqa: SLF001 - 断言对象生命周期
+            svc.run(sid)
+            time.sleep(0.01)
+            svc.delete(sid)
+        deadline = time.time() + 10
+        while time.time() < deadline and any(
+            s.thread is not None and s.thread.is_alive() for s in sessions
+        ):
+            time.sleep(0.02)
+        alive = [s.id for s in sessions if s.thread is not None and s.thread.is_alive()]
+        assert not alive, f"会话 worker 线程未退出：{alive[:3]}"
+        assert svc._sessions == {}, f"会话泄漏：{len(svc._sessions)}"
+    finally:
+        svc.shutdown()
+
