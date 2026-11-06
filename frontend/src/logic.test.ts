@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { metricColumns } from './ResultPanel'
 import { historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, quickPicks, scenarioSpec, stepProblem, versionOptions } from './App'
 import { statusLabel } from './labels'
 import { formatValue } from './SimView'
@@ -782,6 +783,19 @@ describe('historyMoreLabel (history paging, R75)', () => {
     expect(historyMoreLabel(20, 25)).toBe('加载更多（还有 5 条）')
     expect(historyMoreLabel(25, 25)).toBeNull()
     expect(historyMoreLabel(0, 0)).toBeNull()
+  })
+})
+
+describe('metricColumns (experiment result view, R82)', () => {
+  it('unions metrics across runs, tolerates failed runs and sorts the columns', () => {
+    expect(
+      metricColumns([
+        { metrics: { utilization: 0.9, avg_wait: 1.2 } },
+        { metrics: null },
+        { metrics: { dropped: 3, avg_wait: 2.0 } },
+      ]),
+    ).toEqual(['avg_wait', 'dropped', 'utilization'])
+    expect(metricColumns([])).toEqual([])
   })
 })
 

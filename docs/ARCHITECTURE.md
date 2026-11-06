@@ -96,6 +96,7 @@
   frontend/src/BatchPanel.tsx
   frontend/src/ComparePanel.tsx
   frontend/src/ParamForm.tsx
+  frontend/src/ResultPanel.tsx
   frontend/src/SimView.tsx
   frontend/src/TrafficPanel.tsx
   frontend/src/api.ts

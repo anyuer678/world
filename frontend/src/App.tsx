@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, isNotFoundOn } from './api'
-import type { ModelInfo, ModelSpec, ScenarioInfo, SessionState } from './types'
+import type { ExperimentResult, ModelInfo, ModelSpec, ScenarioInfo, SessionState } from './types'
 import ParamForm from './ParamForm'
 import TrafficPanel from './TrafficPanel'
 import SimView from './SimView'
+import ResultPanel from './ResultPanel'
 import { moreLabel, statusLabel } from './labels'
 import BatchPanel from './BatchPanel'
 import ComparePanel from './ComparePanel'
@@ -41,6 +42,9 @@ export default function App() {
   const [historyTotal, setHistoryTotal] = useState(0)
   // R75：历史分页——「加载更多」按 offset 追加，直到取满总数
   const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE_SIZE)
+  // R82：实验结果查看（结果端点此前只被「载入配置」顺手用到，没显示过指标）
+  const [resultView, setResultView] = useState<ExperimentResult | null>(null)
+  const [viewingId, setViewingId] = useState<number | null>(null)
   const sessionRef = useRef<string | null>(null)
   const simSectionRef = useRef<HTMLElement | null>(null)
   sessionRef.current = session?.session_id ?? null
@@ -268,6 +272,8 @@ export default function App() {
       await api.deleteExperiment(h.id)
       setHistory((list) => list.filter((x) => x.id !== h.id))
       setHistoryTotal((n) => Math.max(0, n - 1))
+      // 正在查看的就是被删实验时立即收起，避免界面继续展示已不存在的数据
+      setResultView((r) => (r?.experiment.id === h.id ? null : r))
       setNotice(`已删除实验 #${h.id}「${h.name}」及其运行记录。`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -355,8 +361,22 @@ export default function App() {
     }
   }
 
-  async function loadExperiment(id: number) {
-    setBusy(true)
+  async function viewResult(id: number) {
+    setViewingId(id)
+    setError('')
+    setNotice('')
+    try {
+      const r = await api.getResult(id)
+      setResultView(r)
+      setNotice(`已载入实验 #${id} 的结果：${r.runs.length} 次运行。`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setViewingId(null)
+    }
+  }
+
+  async function loadExperiment(id: number) {    setBusy(true)
     setError('')
     setNotice('')
     try {
@@ -709,6 +729,14 @@ export default function App() {
                   <td style={td}>{h.model_id}</td>
                   <td style={td}>{statusLabel(h.status)}</td>
                   <td style={td}>
+                    <button
+                      onClick={() => viewResult(h.id)}
+                      disabled={viewingId !== null}
+                      aria-label={`查看实验 ${h.id} 的结果`}
+                      style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
+                    >
+                      {viewingId === h.id ? '加载中…' : '查看结果'}
+                    </button>{' '}
                     <button onClick={() => loadExperiment(h.id)} style={{ ...btn, padding: '4px 10px', fontSize: 12 }}>
                       载入配置
                     </button>{' '}
@@ -754,6 +782,7 @@ export default function App() {
           </button>
         )}
       </section>
+      {resultView && <ResultPanel result={resultView} onClose={() => setResultView(null)} />}
       <details style={{ ...card, padding: 0 }}>
         <summary style={{ padding: '12px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 15 }}>
           高级：批量实验与结果比较
