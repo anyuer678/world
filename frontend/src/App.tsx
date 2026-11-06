@@ -23,6 +23,9 @@ export default function App() {
   const [session, setSession] = useState<SessionState | null>(null)
   // R47：单次步进上限从 /api/limits 取（取不到时用与后端一致的保守默认值）
   const [stepMax, setStepMax] = useState(1_000_000)
+  // R80：工作台内的检查点（保存在浏览器内存，不落库；存结果请用「存配置为新实验」）
+  const [checkpoint, setCheckpoint] = useState<Record<string, unknown> | null>(null)
+  const [checkpointStep, setCheckpointStep] = useState<number | null>(null)
   // R60：实验名称上限由服务端导出，输入框直接拦住超长名称
   const [nameMax, setNameMax] = useState(200)
   const [error, setError] = useState('')
@@ -154,6 +157,38 @@ export default function App() {
       setHistory(r.experiments)
       setHistoryTotal(r.total)
     })
+  }
+
+  async function saveCheckpoint() {
+    if (!session) return
+    setBusy(true)
+    setError('')
+    try {
+      const r = await api.checkpointSession(session.session_id)
+      const step = Number(r.checkpoint.step ?? session.snapshot.step)
+      setCheckpoint(r.checkpoint)
+      setCheckpointStep(step)
+      setNotice(`已保存检查点（step ${step}）`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function restoreCheckpoint() {
+    if (!session || !checkpoint) return
+    setBusy(true)
+    setError('')
+    try {
+      const s = await api.restoreSession(session.session_id, checkpoint)
+      setSession(s)
+      setNotice(`已从检查点恢复（step ${checkpointStep ?? '?'}）`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function removeExperiment(h: { id: number; name: string }) {
@@ -355,6 +390,22 @@ export default function App() {
               </button>
               <button onClick={() => act(() => api.resetSession(session.session_id))} disabled={busy} style={btn}>
                 ↺ 重置
+              </button>
+              <button
+                onClick={saveCheckpoint}
+                disabled={busy || st === 'running'}
+                title="保存当前步的检查点（浏览器内存；后端会校验版本与参数指纹）"
+                style={btn}
+              >
+                🗂 保存检查点{checkpointStep !== null ? `（step ${checkpointStep}）` : ''}
+              </button>
+              <button
+                onClick={restoreCheckpoint}
+                disabled={busy || !checkpoint || st === 'running'}
+                title={checkpoint ? `恢复到 step ${checkpointStep}` : '先保存一个检查点'}
+                style={btn}
+              >
+                ⤺ 恢复检查点
               </button>
               <button onClick={saveAndRunExperiment} disabled={busy || !selected} style={btn}>
                 💾 存配置为新实验并运行

@@ -1100,3 +1100,11 @@
     ③ 浏览器实测（桩替换 confirm）：`false` → 行仍在、文案正确；`true` → 行消失、
     `GET /api/experiments/112` = 404、提示「已删除实验 #112……」出现。探针实验即测即删。
     ④ 前端 **71/71**、tsc/vite 干净；后端无改动。
+
+91. **R80 功能：工作台检查点／恢复按钮**。
+    ① 缺口：checkpoint/restore 端点早已存在，UI 无入口（README 却把「检查点」列在控制里）。
+    ② 实现：「保存检查点」存进浏览器内存并显示 `（step N）`；「恢复检查点」调 restore 并替换会话；
+    运行中两者禁用（后端 running → 409）。不落库，持久化仍由「存配置为新实验」承担。
+    ③ 浏览器实测：单步到 20 → 保存 → 单步到 30 → 恢复 → **step 20、paused**；
+    运行中 `saveDisabled=true/restoreDisabled=true`。
+    ④ 前端 **71/71**、tsc/vite 干净；后端无改动。

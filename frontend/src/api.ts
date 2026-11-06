@@ -162,6 +162,15 @@ export const api = {
   pauseSession: (id: string) => request<SessionState>(`/api/sessions/${id}/pause`, { method: 'POST' }),
   resumeSession: (id: string) => request<SessionState>(`/api/sessions/${id}/resume`, { method: 'POST' }),
   resetSession: (id: string) => request<SessionState>(`/api/sessions/${id}/reset`, { method: 'POST' }),
+  checkpointSession: (id: string) =>
+    request<{ session_id: string; checkpoint: Record<string, unknown> }>(`/api/sessions/${id}/checkpoint`, {
+      method: 'POST',
+    }),
+  restoreSession: (id: string, checkpoint: Record<string, unknown>) =>
+    request<SessionState>(`/api/sessions/${id}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ checkpoint }),
+    }),
   createBatch: (body: {
     name: string
     spec: unknown
