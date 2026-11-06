@@ -216,6 +216,7 @@ export const api = {
     repeats: number
     seed_strategy: string
     max_retries: number
+    concurrency?: number
     per_run_wall_seconds: number
   }) => request<BatchDetail>('/api/batches', { method: 'POST', body: JSON.stringify(body) }),
   listBatches: (limit = 10, offset = 0, modelId?: string, status?: string) => {

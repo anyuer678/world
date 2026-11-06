@@ -16,6 +16,9 @@ export interface BatchLimits {
   repeatsMax: number
   retriesMin: number
   retriesMax: number
+  concurrencyMin: number
+  concurrencyMax: number
+  maxWorkers: number
 }
 
 /** Used until /api/limits answers; the server stays the source of truth. */
@@ -26,11 +29,14 @@ export const FALLBACK_LIMITS: BatchLimits = {
   repeatsMax: 100,
   retriesMin: 0,
   retriesMax: 10,
+  concurrencyMin: 1,
+  concurrencyMax: 64,
+  maxWorkers: 2,
 }
 
 export function batchSubmitProblem(
   limits: BatchLimits,
-  opts: { name: string; totalItems: number; repeats: number; retries: number },
+  opts: { name: string; totalItems: number; repeats: number; retries: number; concurrency?: number },
 ): string | null {
   if (!opts.name.trim()) return '批量名称不能为空'
   if (opts.name.length > limits.nameMaxLength) return `批量名称最长 ${limits.nameMaxLength} 字符（当前 ${opts.name.length}）`
@@ -38,6 +44,11 @@ export function batchSubmitProblem(
     return `每组重复需在 ${limits.repeatsMin}–${limits.repeatsMax} 之间（当前 ${opts.repeats}）`
   if (opts.retries < limits.retriesMin || opts.retries > limits.retriesMax)
     return `失败重试需在 ${limits.retriesMin}–${limits.retriesMax} 之间（当前 ${opts.retries}）`
+  if (
+    opts.concurrency != null &&
+    (opts.concurrency < limits.concurrencyMin || opts.concurrency > limits.concurrencyMax)
+  )
+    return `并发数需在 ${limits.concurrencyMin}–${limits.concurrencyMax} 之间（当前 ${opts.concurrency}）`
   if (opts.totalItems > limits.maxItems)
     return `总项数 ${opts.totalItems} 超过上限 ${limits.maxItems}：请缩小网格或减少重复`
   return null
@@ -125,6 +136,8 @@ export default function BatchPanel({
   const [strategy, setStrategy] = useState('fixed')
   const [retries, setRetries] = useState('0')
   const [wallSec, setWallSec] = useState('60')
+  // R100：并发数此前只有后端字段，表单无法设置；上限来自 /api/limits
+  const [concurrency, setConcurrency] = useState('2')
   const [batches, setBatches] = useState<BatchListItem[]>([])
   // R57：列表固定取最近 10 条，必须同时显示总数（与 R48 的实验历史同一口径）
   const [batchesTotal, setBatchesTotal] = useState(0)
@@ -262,6 +275,9 @@ export default function BatchPanel({
           repeatsMax: r.batch.repeats_max,
           retriesMin: r.batch.max_retries_min,
           retriesMax: r.batch.max_retries_max,
+          concurrencyMin: r.batch.concurrency_min,
+          concurrencyMax: r.batch.concurrency_max,
+          maxWorkers: r.engine.max_workers,
         }),
       )
       .catch(() => {})
@@ -317,8 +333,15 @@ export default function BatchPanel({
   const comboCount = Object.values(grid).reduce((a, v) => a * v.length, 1) || 1
   const repeatN = Math.max(1, Number(repeats) || 1)
   const retryN = Math.max(0, Number(retries) || 0)
+  const concurrencyN = Math.max(1, Number(concurrency) || 1)
   const totalItems = comboCount * repeatN
-  const problem = batchSubmitProblem(limits, { name, totalItems, repeats: repeatN, retries: retryN })
+  const problem = batchSubmitProblem(limits, {
+    name,
+    totalItems,
+    repeats: repeatN,
+    retries: retryN,
+    concurrency: concurrencyN,
+  })
 
   async function submit() {
     setBusy(true)
@@ -332,6 +355,7 @@ export default function BatchPanel({
         repeats: repeatN,
         seed_strategy: strategy,
         max_retries: retryN,
+        concurrency: concurrencyN,
         per_run_wall_seconds: Math.max(1, Number(wallSec) || 60),
       })
       setBatch(b)
@@ -430,6 +454,7 @@ export default function BatchPanel({
     setRepeats(String(batch.repeats))
     setStrategy(batch.seed_strategy)
     setRetries(String(batch.max_retries ?? 0))
+    setConcurrency(String(batch.concurrency ?? limits.maxWorkers))
     setWallSec(String(batch.per_run_wall_seconds ?? 60))
     setName(`${batch.name}（副本）`.slice(0, limits.nameMaxLength))
     setNotice(`已按批量 #${batch.id} 的配置填充表单（未启动）；可调整后重新启动。`)
@@ -572,6 +597,21 @@ export default function BatchPanel({
               style={control}
             />
           </label>
+          <label style={rowFlex}>
+            并发数：
+            <input
+              type="number"
+              min={limits.concurrencyMin}
+              max={limits.concurrencyMax}
+              value={concurrency}
+              onChange={(e) => setConcurrency(e.target.value)}
+              aria-describedby="concurrency-note"
+              style={control}
+            />
+          </label>
+          <p id="concurrency-note" style={{ fontSize: 11, color: '#6b7280', margin: '0 0 6px' }}>
+            实际在途不超过工作线程 {limits.maxWorkers}（服务端取 min）。
+          </p>
           <label style={rowFlex}>
             单项墙钟（秒）：
             <input value={wallSec} onChange={(e) => setWallSec(e.target.value)} style={control} />

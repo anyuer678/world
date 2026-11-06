@@ -1294,3 +1294,11 @@
     ③ 浏览器实测：模板批量（beta [0.3,0.4]、7 次、增量种子、重试 2、墙钟 30）→ 表单各值与
     组合数 14 一致、工作台 sir v1.0.0；启动后的新批量复核字段与 total=14、completed。
     ④ 回归：前端 **85/85**（新增 `gridRowsFromBatch` 用例）、tsc/vite 干净；后端 **340/340** 无改动。
+
+111. **R100 功能：批量并发数进入表单（服务端上限 + 模板回填）**。
+    ① 缺口：后端与 `/api/limits` 已有 concurrency，表单没有输入，模板也无法回填。
+    ② 实现：表单加并发数（min/max 取 limits），`batchSubmitProblem` 越界拦截，提交体携带
+    concurrency，提示实际在途 ≤ max_workers；模板回填 batch.concurrency。
+    ③ 浏览器实测：并发 1 的模板回填 1；改 65 → 提示并禁用启动；改回 1 → 新批量
+    API concurrency=1、4 项 completed。
+    ④ 回归：前端 **86/86**、tsc/vite 干净；后端 **340/340** 无改动。

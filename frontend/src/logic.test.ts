@@ -46,6 +46,19 @@ describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
     ).toContain('失败重试需在 0–5 之间')
     expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 10 })).toBeNull()
   })
+
+  it('rejects concurrency outside the server window (R100)', () => {
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0, concurrency: 65 }),
+    ).toContain('并发数需在 1–64 之间（当前 65）')
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0, concurrency: 0 }),
+    ).toContain('并发数需在 1–64 之间')
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0, concurrency: 8 }),
+    ).toBeNull()
+    expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0 })).toBeNull()
+  })
 })
 
 describe('itemsHeading (R34：单项结果表头必须交代总数)', () => {

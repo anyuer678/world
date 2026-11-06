@@ -934,3 +934,13 @@ R97 的重试入口只在批量详情里，而列表只显示 `done/total`，看
 `sir v1.0.0`；随后点「启动批量实验」创建的新批量复核 spec beta=0.3、grid、repeats=7、
 max_retries=2、wall=30、strategy=per_repeat_increment、total=14、completed。
 前端 **85/85**、tsc/vite 干净；后端无改动（复用既有批量字段）。
+
+**R100（2026-11-06）功能：批量并发数进入表单（服务端上限 + 模板回填）**
+
+`CreateBatchBody`/`/api/limits` 早有 `concurrency`（1–64，实际在途再取 min(max_workers)），
+但批量表单没有该输入，用户无法调整，R99 的模板也无法回填。本轮把并发数加入表单：
+范围取自 `/api/limits.batch.concurrency_min/max`，提交前用 `batchSubmitProblem` 拦截越界，
+提交体携带 `concurrency`，并提示「实际在途 ≤ 工作线程 max_workers」；「以该批量为模板」
+同时回填批量的 `concurrency`。浏览器实测：并发 1 的模板 → 表单回填 1；改 65 →
+提示「并发数需在 1–64 之间（当前 65）」且启动禁用；改回 1 → 启动成功，
+新批量 API `concurrency=1`、4 项 completed。前端 **86/86**、tsc/vite 干净；后端无改动。
