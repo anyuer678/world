@@ -139,6 +139,9 @@ export interface BatchDetail {
   status: string
   total_items: number
   repeats: number
+  max_retries: number
+  concurrency: number
+  per_run_wall_seconds: number
   seed_strategy: string
   seed_base: number | null
   created_at: string | null

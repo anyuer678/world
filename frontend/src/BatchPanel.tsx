@@ -94,12 +94,31 @@ export function parseValues(raw: string): unknown[] {
     .map((tok) => (/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(tok) ? Number(tok) : tok))
 }
 
-interface GridRow {
+export interface GridRow {
   param: string
   values: string
 }
 
-export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; models?: ModelInfo[] }) {
+/** 把批量记录的 grid 还原成表单行（R99）：数字/布尔用 String，其他值 JSON 化。 */
+export function gridRowsFromBatch(grid: Record<string, unknown[]>): GridRow[] {
+  const rows = Object.entries(grid).map(([param, values]) => ({
+    param,
+    values: values
+      .map((v) => (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)))
+      .join(', '),
+  }))
+  return rows.length ? rows : [{ param: '', values: '' }]
+}
+
+export default function BatchPanel({
+  spec,
+  models = [],
+  onUseTemplate,
+}: {
+  spec: ModelSpec
+  models?: ModelInfo[]
+  onUseTemplate?: (spec: ModelSpec) => void
+}) {
   const [rows, setRows] = useState<GridRow[]>([{ param: '', values: '' }])
   const [name, setName] = useState('参数网格批量')
   const [repeats, setRepeats] = useState('3')
@@ -402,6 +421,18 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
     } finally {
       setBusy(false)
     }
+  }
+
+  function useAsTemplate() {
+    if (!batch) return
+    onUseTemplate?.(batch.spec)
+    setRows(gridRowsFromBatch(batch.grid))
+    setRepeats(String(batch.repeats))
+    setStrategy(batch.seed_strategy)
+    setRetries(String(batch.max_retries ?? 0))
+    setWallSec(String(batch.per_run_wall_seconds ?? 60))
+    setName(`${batch.name}（副本）`.slice(0, limits.nameMaxLength))
+    setNotice(`已按批量 #${batch.id} 的配置填充表单（未启动）；可调整后重新启动。`)
   }
 
   async function cancelBatchRow(b: BatchListItem) {    if (!window.confirm(`取消批量 #${b.id}「${b.name}」正在进行的运行？`)) return
@@ -714,6 +745,14 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
                 重试失败项（{batch.counts.failed}）
               </button>
             )}
+            <button
+              onClick={useAsTemplate}
+              disabled={busy}
+              aria-label={`以批量 ${batch.id} 为模板`}
+              style={smallBtn}
+            >
+              以该批量为模板
+            </button>
             <a
               href={api.batchCsvUrl(batch.id)}
               download={`worldlab-batch-${batch.id}.csv`}

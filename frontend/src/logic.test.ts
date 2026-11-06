@@ -7,7 +7,7 @@ import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
-import { BATCH_STATUSES, canCancelBatch, canRetryFailed, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, itemsHeading } from './BatchPanel'
+import { BATCH_STATUSES, canCancelBatch, canRetryFailed, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, gridRowsFromBatch, itemsHeading } from './BatchPanel'
 import { toggleCompare } from './ComparePanel'
 import { ApiError, errorDetailMessage, isNotFoundOn, specErrorText } from './api'
 
@@ -811,6 +811,19 @@ describe('batch filters (R92)', () => {
     expect(canRetryFailed('failed', 0)).toBe(false)
     expect(canRetryFailed('completed', 1)).toBe(false)
     expect(canRetryFailed('running', 1)).toBe(false)
+  })
+})
+
+describe('gridRowsFromBatch (batch template, R99)', () => {
+  it('restores grid entries into form rows and handles an empty grid', () => {
+    expect(gridRowsFromBatch({ beta: [0.3, 0.4], servers: [1, 2] })).toEqual([
+      { param: 'beta', values: '0.3, 0.4' },
+      { param: 'servers', values: '1, 2' },
+    ])
+    expect(gridRowsFromBatch({})).toEqual([{ param: '', values: '' }])
+    expect(gridRowsFromBatch({ x: [{ a: 1 }, 's'] })).toEqual([
+      { param: 'x', values: '{"a":1}, s' },
+    ])
   })
 })
 

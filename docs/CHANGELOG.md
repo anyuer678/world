@@ -922,3 +922,15 @@ R97 的重试入口只在批量详情里，而列表只显示 `done/total`，看
 `2/2（失败 2）` + 重试按钮；confirm=false 不变；confirm=true 后自动变「已完成」、
 进度「2/2」（失败后缀消失）、两项 attempts 2。后端在服务/HTTP 重试测试中断言
 `failed_items=2/1`。后端 **340/340**、前端 **84/84**、tsc/vite 干净。
+
+**R99（2026-11-06）功能：以批量为模板（预填表单）**
+
+批量跑完后想「同配置改一处再跑」，只能手工重填网格、重复次数、策略与重试参数。本轮在批量
+详情加「以该批量为模板」：把批量的 spec 应用到工作台（模型/参数/种子/停止条件），并按
+`grid`/`repeats`/`seed_strategy`/`max_retries`/`per_run_wall_seconds` 回填批量表单，
+名称改为 `<原名>（副本）`，只填充不启动。`gridRowsFromBatch()` 负责把数字/对象值还原为
+表单文本（空 grid 回退一行空输入）。浏览器实测：模板批量（beta=[0.3,0.4]、7 次、增量种子、
+重试 2、墙钟 30）→ 点击后名称/网格/重复/策略/重试/墙钟与组合数 2×7=14 全部一致、工作台解析为
+`sir v1.0.0`；随后点「启动批量实验」创建的新批量复核 spec beta=0.3、grid、repeats=7、
+max_retries=2、wall=30、strategy=per_repeat_increment、total=14、completed。
+前端 **85/85**、tsc/vite 干净；后端无改动（复用既有批量字段）。
