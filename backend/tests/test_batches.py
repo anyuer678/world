@@ -497,6 +497,29 @@ def test_retry_pins_original_model_version(batches):
         registry._by_id.pop("toy_pin", None)
 
 
+def test_batch_mutation_responses_include_summary(batches):
+    """R111：create/retry/cancel 与 GET 详情同形状（含 summary），客户端无需二次抓取。"""
+    FailOnceModel._seen.clear()
+    created = batches.create("summary-shape", _flaky_spec(), {}, repeats=1, max_retries=0)
+    assert "summary" in created and created["summary"]["combos"] == []
+    assert _wait_terminal(batches, created["id"])["status"] == "failed"
+    retried = batches.retry_failed(created["id"])
+    assert "summary" in retried
+    assert _wait_terminal(batches, created["id"])["status"] == "completed"
+
+    slow_spec = {
+        "schema_version": 1,
+        "model_id": "toy_slow_des",
+        "params": {"total_events": 100000},
+        "stop_condition": {"type": "until_empty"},
+        "seed": 1,
+    }
+    slow = batches.create("summary-cancel", slow_spec, {}, repeats=1)
+    cancelled = batches.cancel(slow["id"])
+    assert "summary" in cancelled
+    _wait_terminal(batches, slow["id"])
+
+
 def test_retry_rejects_unavailable_pinned_version_before_resetting(batches, settings):
     """R108：重试也是提交路径，必须先校验钉住的版本。
 
@@ -548,6 +571,7 @@ def test_batch_api_flow(client):
         },
     )
     assert r.status_code == 201, r.text
+    assert "summary" in r.json()  # R111：变更端点与 GET 详情同形状
     bid = r.json()["id"]
     deadline = time.time() + 20
     g = None

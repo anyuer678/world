@@ -1055,3 +1055,14 @@ notice 显示「旧结果面板已收起，完成后可重新查看」；前端 
 证据：browser-use 实测两个已完成实验→勾选 2 个→比较出表（含 `avg_waiting_time` 指标列）→
 取消一个勾选→表格立即清空（DOM 中不再含该指标列）。前端 **91/91**、tsc/vite 干净；
 后端 **347/347** 无改动。
+
+**R111（2026-11-06）修复：批量变更端点统一返回完整 Batch**
+
+R109 在批量详情取消后补拉 items/findings，但 `cancelBatch` 的响应来自
+`get_batch(include_summary=False)`：若取消时编排线程已收尾（响应直接是终态），轮询不会再来，
+`batch.summary` 永远缺失，取消后的敏感性图表不显示。根因是变更端点（create/retry/cancel）与
+GET 详情的响应形状不一致。本轮让三处统一返回完整 Batch（含 `summary`），客户端无需二次抓取；
+前端取消路径移除多余重取。
+
+测试：服务层断言 create/retry/cancel 响应均含 `summary`，HTTP 创建响应同断言；批量 **27/27**。
+后端全量 **348/348**、前端 **91/91**、tsc/vite 干净。

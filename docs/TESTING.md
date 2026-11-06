@@ -1404,3 +1404,11 @@
     ④ 浏览器：dev 前后端（临时库）预置两个已完成实验 → 展开「高级」→ 勾选 2 个 → 比较出表
     （DOM 含 `avg_waiting_time` 列）→ 取消一个勾选 → 指标列立即消失，返回 `cleared`。
     ⑤ 回归：tsc -b / vite build 干净；后端 **347/347** 无改动。
+
+122. **R111 修复：批量变更端点统一返回完整 Batch**。
+    ① 缺口：`cancel` 响应 `include_summary=False`；取消时若编排已收尾（响应即终态），轮询不再来，
+    详情永远没有 summary，R109 补拉的 items/findings 有了但敏感性图表仍缺失。根因是
+    create/retry/cancel 与 GET 详情形状不一致。
+    ② 实现：三处统一 `get_batch(...)`（默认含 summary），前端取消路径删除二次 `getBatch`。
+    ③ 测试：服务层 create/retry/cancel 响应均含 `summary`；HTTP 建批响应含 `summary`；批量 **27/27**。
+    ④ 回归：后端全量 **348/348**、前端 **91/91**、tsc -b / vite build 干净；文档锁 21/21。

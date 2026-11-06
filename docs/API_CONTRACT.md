@@ -132,6 +132,8 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   **`total` 是全量条数**：批量面板一次只取一页（50），因此表头必须写「显示前 N / 共 M 项」并指向
   CSV 导出（R34，导出走 500/页循环，始终含全部项）
 - `POST /api/batches/{id}/cancel` → Batch（协作式取消；在途上限 = min(concurrency, max_workers)，R1）
+  - **变更端点返回完整 Batch**（R111）：create/retry/cancel 与 `GET /api/batches/{id}` 同形状，
+    含 `summary`（组合统计/敏感性）。客户端不需要二次抓取；取消在终态收尾后也能立即拿到图表数据
 - `DELETE /api/batches/{id}`（R87）→ 204；删除批量并级联单项。运行中（`running`）返回 **409**，
   需先 cancel 并等待终态；未知 id 与已删除 id 均 404
 - `POST /api/batches/{id}/retry`（R97）→ Batch；仅 `failed` 且存在失败项时可调用（否则 **409**，

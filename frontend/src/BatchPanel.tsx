@@ -440,12 +440,13 @@ export default function BatchPanel({
       setBatch(b)
       setItemDetail(null)
       // 取消响应可能已经是终态（编排线程已完成收尾）：此时轮询不再启动，
-      // 必须在这里加载部分结果，否则详情会一直显示 0 项（R109）
+      // 必须在这里加载部分结果，否则详情会一直显示 0 项（R109）。
+      // 变更端点现在返回完整 Batch（含 summary，R111），图表数据不再缺失。
       if (TERMINAL.has(b.status)) {
-        const page = await api.listBatchItems(batch.id, ITEMS_PAGE_SIZE, 0, itemStatus || undefined)
+        const page = await api.listBatchItems(b.id, ITEMS_PAGE_SIZE, 0, itemStatus || undefined)
         setItems(page.items)
         setItemsTotal(page.total)
-        api.getBatchFindings(batch.id).then(setFindings).catch(() => {})
+        api.getBatchFindings(b.id).then(setFindings).catch(() => {})
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

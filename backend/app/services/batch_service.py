@@ -207,7 +207,9 @@ class BatchService:
         threading.Thread(
             target=self._orchestrate, args=(batch_id, flag), daemon=True, name=f"batch-{batch_id}"
         ).start()
-        return self.get_batch(batch_id, include_summary=False)
+        # R111：变更端点也返回完整 Batch（含 summary），与 GET 详情同形状；
+        # 调用方无需二次抓取，取消/重试后终态时图表数据不会缺失。
+        return self.get_batch(batch_id)
 
     # ------------------------------------------------------------- orchestration
     def _orchestrate(self, batch_id: int, flag: threading.Event) -> None:
@@ -390,7 +392,9 @@ class BatchService:
             flag = self._cancel_flags.get(batch_id)
         if flag is not None:
             flag.set()
-        return self.get_batch(batch_id, include_summary=False)
+        # R111：变更端点也返回完整 Batch（含 summary），与 GET 详情同形状；
+        # 调用方无需二次抓取，取消/重试后终态时图表数据不会缺失。
+        return self.get_batch(batch_id)
 
     def retry_failed(self, batch_id: int) -> dict[str, Any]:
         """Re-run only the failed items of a failed batch (R97).
@@ -435,7 +439,9 @@ class BatchService:
         threading.Thread(
             target=self._orchestrate, args=(batch_id, flag), daemon=True, name=f"batch-{batch_id}-retry"
         ).start()
-        return self.get_batch(batch_id, include_summary=False)
+        # R111：变更端点也返回完整 Batch（含 summary），与 GET 详情同形状；
+        # 调用方无需二次抓取，取消/重试后终态时图表数据不会缺失。
+        return self.get_batch(batch_id)
 
     def delete(self, batch_id: int) -> None:
         """Delete a terminal batch and its items (cascade).
