@@ -115,6 +115,13 @@
 3. **单节点 SQLite**：存储层为单文件 SQLite，写入为串行化单写者。适合
    开发、教学与中小规模实验；不支持多进程并发写与横向扩展。
 
+3b. **必须单进程运行（`--workers` 只能为 1）**（R66 实测）：会话是进程内存态，
+   实验/批量的取消标志也是进程内的 `threading.Event`。用 `uvicorn --workers 2` 实测：
+   同一 sid 的 `GET /api/sessions/{id}` 12 次中 **仅 3 次 200、9 次 404**；6 个实验各
+   `POST /cancel` 一次（全部返回 200）后仍有 **1 个继续 running**——取消打在了不拥有该
+   run 的进程上，静默失效。请使用 `uvicorn app.main:app`（1 worker）或 compose 的默认
+   单进程配置；需要水平扩展必须先把会话与取消标志外置（当前未做，见 DECISIONS D85）。
+
 ### 运行时资源上限语义（重要）
 
 4. **批量条目受 `default_max_steps` 硬上限约束**：批量执行的每个条目

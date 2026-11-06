@@ -196,7 +196,9 @@ WAL 模式、`foreign_keys=ON`、`busy_timeout=30000`；每个请求与工作线
 检查一次，同时对照 `max_wall_seconds` / `max_steps` 上限，超限即落
 `cancelled/step_limit/wall_timeout` 终态。`Limits` 的四个字段在**三条路径上都取自同一份
 `Settings`**（R37：会话侧曾漏传后两项，使两个环境变量对交互会话静默无效，现由测试锁定）。
-API 事件循环内从不直接跑模拟。
+API 事件循环内从不直接跑模拟。**服务必须以单进程运行**（R66）：会话对象与取消标志都只存在于
+当前进程，`--workers > 1` 会让请求落到不持有它们的 worker 上（实测会话 GET 12 次里 9 次 404、
+单次取消返回 200 却仍然运行）。
 交互会话是**内存态**资源：`SessionService` 在每次会话操作前回收空闲超过
 `Settings.session_ttl_seconds`（`WORLDLAB_SESSION_TTL_SECONDS`，默认 3600 秒）的会话并停其线程，
 被回收的会话后续访问返回 404（R39 成文）。

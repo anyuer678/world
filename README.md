@@ -122,6 +122,8 @@ R15 复验停止条件两型，CSV/报告导出为阶段 6 已验链路。
 ## 已知限制
 
 见 `docs/BENCHMARKS.md` 的「已知限制」章节（测试稳定性说明、性能口径、单机数据规模等）。
+**必须单进程运行**：会话与取消标志都是进程内状态，`uvicorn --workers N`（N>1）会导致
+会话随机 404、取消静默失效（R66 实测）；请用默认的单 worker 启动方式。
 
 详细设计：`docs/ARCHITECTURE.md`（架构）、`docs/API_CONTRACT.md`（API 契约）、
 `docs/DECISIONS.md`（决策记录）、`docs/PLUGINS.md`（插件接口）、`docs/TESTING.md`（测试策略）、
