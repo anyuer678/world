@@ -448,18 +448,25 @@ class BatchService:
         finally:
             conn.close()
 
-    def list_items(self, batch_id: int, limit: int = 200, offset: int = 0) -> dict[str, Any]:
+    def list_items(
+        self, batch_id: int, limit: int = 200, offset: int = 0, status: str | None = None
+    ) -> dict[str, Any]:
         conn = self._conn()
         try:
             self._get_batch_row(conn, batch_id)
+            where = "batch_id=?"
+            args: list[Any] = [batch_id]
+            if status:
+                where += " AND status=?"
+                args.append(status)
             total = conn.execute(
-                "SELECT COUNT(*) FROM batch_items WHERE batch_id=?", (batch_id,)
+                f"SELECT COUNT(*) FROM batch_items WHERE {where}", args
             ).fetchone()[0]
             rows = conn.execute(
-                """SELECT id, item_index, combo_json, repeat_index, seed, status, attempts, steps,
+                f"""SELECT id, item_index, combo_json, repeat_index, seed, status, attempts, steps,
                    sim_time, metrics_json, result_sha256, error, duration_ms
-                   FROM batch_items WHERE batch_id=? ORDER BY item_index LIMIT ? OFFSET ?""",
-                (batch_id, limit, offset),
+                   FROM batch_items WHERE {where} ORDER BY item_index LIMIT ? OFFSET ?""",
+                [*args, limit, offset],
             ).fetchall()
             items = []
             for r in rows:

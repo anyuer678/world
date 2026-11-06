@@ -21,6 +21,10 @@ router = APIRouter(prefix="/api")
 # `events_limit=0` 的切片 `[-0:]` 反而会返回全部事件。所有列表端点统一用这里的边界。
 MAX_PAGE_SIZE = 1000
 MAX_EVENTS_LIMIT = 500
+# 批单项状态（R88）：筛选参数用 Literal，未知状态由 FastAPI 直接 422，不落到 SQL
+BatchItemStatus = Literal[
+    "pending", "running", "completed", "failed", "cancelled", "step_limit", "wall_timeout"
+]
 # R64：offset 不设上限时，`offset=999999999999999999999` 会让 Python 大整数进 SQLite，
 # 触发 OverflowError → 500。路径 id 同理（用 RowId 约束）。
 MAX_OFFSET = 1_000_000_000
@@ -364,8 +368,9 @@ def list_batch_items(
     request: Request,
     limit: int = Query(200, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(0, ge=0, le=MAX_OFFSET),
+    status: BatchItemStatus | None = None,
 ) -> dict[str, Any]:
-    return _batches(request).list_items(batch_id, limit, offset)
+    return _batches(request).list_items(batch_id, limit, offset, status)
 
 
 @router.post("/batches/{batch_id}/cancel")

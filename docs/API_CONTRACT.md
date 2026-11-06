@@ -119,7 +119,8 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   详情不给 `done_items` 而给 `counts`（状态→数量分桶，进度 = 终态桶求和）
 - `GET /api/batches/{id}` → Batch（含 spec/grid/counts{状态→数}；
   终态含 summary：每组合的聚合指标 `{n, mean, std, p50, p90, ci95_low, ci95_high}`）
-- `GET /api/batches/{id}/items?limit&offset` → `{total, items:[{item_index, combo, repeat_index, seed, status, attempts, steps, sim_time, metrics, result_sha256, error, duration_ms}]}`，按 `item_index` 升序、分页稳定（续读不重不漏）。
+- `GET /api/batches/{id}/items?limit&offset&status` → `{total, items:[{item_index, combo, repeat_index, seed, status, attempts, steps, sim_time, metrics, result_sha256, error, duration_ms}]}`，按 `item_index` 升序、分页稳定（续读不重不漏）；`status`（R88）限
+  `pending|running|completed|failed|cancelled|step_limit|wall_timeout`，未知值 422，`total` 为筛选后的数量。
   **`total` 是全量条数**：批量面板一次只取一页（50），因此表头必须写「显示前 N / 共 M 项」并指向
   CSV 导出（R34，导出走 500/页循环，始终含全部项）
 - `POST /api/batches/{id}/cancel` → Batch（协作式取消；在途上限 = min(concurrency, max_workers)，R1）

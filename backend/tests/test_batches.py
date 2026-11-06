@@ -365,11 +365,40 @@ def test_batch_api_flow(client):
     items = client.get(f"/api/batches/{bid}/items?limit=2").json()
     assert items["total"] == 6 and len(items["items"]) == 2
     assert items["items"][0]["metrics"]["count"] == 200.0
+    done = client.get(f"/api/batches/{bid}/items?status=completed").json()
+    assert done["total"] == 6 and all(i["status"] == "completed" for i in done["items"])
+    assert client.get(f"/api/batches/{bid}/items?status=failed").json()["total"] == 0
+    assert client.get(f"/api/batches/{bid}/items?status=nope").status_code == 422
     listing = client.get("/api/batches").json()
     assert any(x["id"] == bid for x in listing["batches"])
     # finished batch cannot be cancelled again
     assert client.post(f"/api/batches/{bid}/cancel").status_code == 409
     assert client.get("/api/batches/99999").status_code == 404
+
+
+def test_item_status_filter(batches):
+    b = batches.create("filter", _spec(params={"total_events": 10}), {}, repeats=2)
+    _wait_terminal(batches, b["id"])
+    assert batches.list_items(b["id"], status="completed")["total"] == 2
+    assert batches.list_items(b["id"], status="failed")["total"] == 0
+    assert batches.list_items(b["id"], status=None)["total"] == 2
+
+    slow = batches.create(
+        "filter-cancel",
+        {
+            "schema_version": 1,
+            "model_id": "toy_slow_des",
+            "params": {"total_events": 1_000_000, "delay_mean": 1.0},
+            "stop_condition": {"type": "until_empty"},
+            "seed": 1,
+        },
+        {},
+        repeats=1,
+    )
+    batches.cancel(slow["id"])
+    _wait_terminal(batches, slow["id"])
+    assert batches.list_items(slow["id"], status="cancelled")["total"] == 1
+    assert batches.list_items(slow["id"], status="completed")["total"] == 0
 
 
 def test_batch_delete_api(client):

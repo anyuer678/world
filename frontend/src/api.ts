@@ -210,10 +210,11 @@ export const api = {
     request<{ total: number; batches: BatchListItem[] }>(`/api/batches?limit=${limit}&offset=${offset}`),
   getBatch: (id: number) => request<BatchDetail>(`/api/batches/${id}`),
   getBatchFindings: (id: number) => request<FindingsResponse>(`/api/batches/${id}/findings`),
-  listBatchItems: (id: number, limit = 50, offset = 0) =>
-    request<{ total: number; items: BatchItem[] }>(
-      `/api/batches/${id}/items?limit=${limit}&offset=${offset}`,
-    ),
+  listBatchItems: (id: number, limit = 50, offset = 0, status?: string) => {
+    const q = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+    if (status) q.set('status', status)
+    return request<{ total: number; items: BatchItem[] }>(`/api/batches/${id}/items?${q.toString()}`)
+  },
   cancelBatch: (id: number) =>
     request<BatchDetail>(`/api/batches/${id}/cancel`, { method: 'POST' }),
   deleteBatch: (id: number) => request<void>(`/api/batches/${id}`, { method: 'DELETE' }),

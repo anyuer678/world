@@ -53,6 +53,16 @@ export function batchSubmitProblem(
 export const BATCH_PAGE_SIZE = 10
 // R86：批单项一次取 50 条；超过时用「加载更多」按 offset 续读（与列表分页同一交互）
 export const ITEMS_PAGE_SIZE = 50
+// R88：批单项可按状态服务端筛选（与实验历史的筛选同一原则：分页列表不能在客户端过滤）
+export const ITEM_STATUSES = [
+  'pending',
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+  'step_limit',
+  'wall_timeout',
+] as const
 
 export function batchesHeading(shown: number, total: number): string {
   if (total <= 0) return '批量实验'
@@ -92,6 +102,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const [batch, setBatch] = useState<BatchDetail | null>(null)
   const [items, setItems] = useState<BatchItem[]>([])
   const [itemsTotal, setItemsTotal] = useState(0)
+  const [itemStatus, setItemStatus] = useState('')
   const [findings, setFindings] = useState<FindingsResponse | null>(null)
   const [sweepSel, setSweepSel] = useState<{ param: string; metric: string } | null>(null)
   const [limits, setLimits] = useState<BatchLimits>(FALLBACK_LIMITS)
@@ -134,9 +145,30 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     if (!batch) return
     setBusy(true)
     try {
-      const page = await api.listBatchItems(batch.id, ITEMS_PAGE_SIZE, items.length)
+      const page = await api.listBatchItems(
+        batch.id,
+        ITEMS_PAGE_SIZE,
+        items.length,
+        itemStatus || undefined,
+      )
       const seen = new Set(items.map((it) => it.id))
       setItems([...items, ...page.items.filter((it) => !seen.has(it.id))])
+      setItemsTotal(page.total)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function changeItemStatus(status: string) {
+    if (!batch) return
+    setItemStatus(status)
+    setBusy(true)
+    setError('')
+    try {
+      const page = await api.listBatchItems(batch.id, ITEMS_PAGE_SIZE, 0, status || undefined)
+      setItems(page.items)
       setItemsTotal(page.total)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -171,7 +203,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
         const b = await api.getBatch(id)
         setBatch(b)
         if (TERMINAL.has(b.status)) {
-          const page = await api.listBatchItems(id, ITEMS_PAGE_SIZE)
+          const page = await api.listBatchItems(id, ITEMS_PAGE_SIZE, 0, itemStatus || undefined)
           setItems(page.items)
           setItemsTotal(page.total)
           api.getBatchFindings(id).then(setFindings).catch(() => {})
@@ -187,7 +219,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
       }
     }, 700)
     return () => clearInterval(t)
-  }, [batch, refreshBatches])
+  }, [batch, refreshBatches, itemStatus])
 
   // 打开的批量到达终态且用户未手动选过切片时，从自动发现取默认扫描曲线；
   // findings 未返回（null）时先等它，避免默认到字母序第一个指标
@@ -233,6 +265,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
       // 新批量的 items 尚未产生；不清空会把上一个批量的明细继续显示在下面
       setItems([])
       setItemsTotal(0)
+      setItemStatus('')
       setNotice(`批量 #${b.id} 已创建（${b.total_items} 项），运行中…`)
       refreshBatches()
     } catch (e) {
@@ -251,6 +284,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
       const b = await api.getBatch(id)
       setBatch(b)
       setFindings(null)
+      setItemStatus('')
       if (TERMINAL.has(b.status)) {
         const page = await api.listBatchItems(id, ITEMS_PAGE_SIZE)
         setItems(page.items)
@@ -661,6 +695,37 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
             </>
           )}
 
+          {batch && TERMINAL.has(batch.status) && (
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0' }}>
+              <label style={{ ...rowFlex, margin: 0 }}>
+                单项状态：
+                <select
+                  value={itemStatus}
+                  onChange={(e) => void changeItemStatus(e.target.value)}
+                  disabled={busy}
+                  aria-label="按状态筛选单项"
+                  style={{ ...smallBtn, padding: '4px 8px' }}
+                >
+                  <option value="">全部状态</option>
+                  {ITEM_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {statusLabel(s)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {itemStatus && (
+                <span style={{ fontSize: 12, color: '#92400e' }}>
+                  筛选：{statusLabel(itemStatus)}（共 {itemsTotal} 项）
+                </span>
+              )}
+            </div>
+          )}
+          {batch && TERMINAL.has(batch.status) && itemStatus && items.length === 0 && (
+            <p style={{ color: '#6b7280', fontSize: 13 }}>
+              没有状态为「{statusLabel(itemStatus)}」的单项。
+            </p>
+          )}
           {items.length > 0 && (
             <>
               <h4 style={{ fontSize: 14, marginBottom: 4 }}>{itemsHeading(items.length, itemsTotal)}</h4>
