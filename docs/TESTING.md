@@ -935,3 +935,15 @@
     1×200 + 7×409、run=1；探针实验已 cancel + delete。
     ④ 回归：`test_concurrent_run_claims_exactly_once`（8 线程、断言恰好 1 个成功且 DB 1 条 run）。
     后端 **309/309**。
+
+74. **R63 删除实验的 TOCTOU + worker 静默异常**。
+    ① 缺陷：`_assert_not_running` 读完后无条件 `DELETE`；检查与删除之间的窗口里若被
+    `POST /run` claim，删除会成功并级联删掉 run 行，worker 仍在跑 → 后台线程抛
+    `NotFoundError` 且无人观察。
+    ② 修：删除改为 `DELETE … WHERE status!='running'`，rowcount=0 时区分 404/409；
+    `_execute_run` 在实验或 run 行消失时安静退出。
+    ③ 测试：`test_delete_refuses_when_a_run_claims_between_check_and_delete`（绕过检查函数
+    模拟竞态窗口，断言 409 且实验仍在）与 `test_worker_exits_quietly_when_experiment_is_gone`
+    （run 行在、实验已删，直接调 `_execute_run` 不抛异常）。
+    ④ 反证：把 DELETE 改回无条件，第一条测试变红（AssertionError：运行中的实验不应被删除）；
+    还原后全绿。后端 **311/311**。

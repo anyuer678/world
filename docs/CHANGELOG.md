@@ -538,3 +538,13 @@ R55 只验到加载器层面；本轮把 `PLUGINS.md` 的示例代码块原样�
 串行化使这条判断成立。复核：服务层 8 线程 → ok=1 / conflict=7 / DB run=1；真实 HTTP
 8 个并发 curl → **1×200、7×409**、run=1。新增
 `test_concurrent_run_claims_exactly_once`。后端 **309/309**。
+
+**R63（2026-11-06）删除实验的 TOCTOU：检查通过后被并发 claim，运行中的实验仍可被删**
+
+`delete_experiment` 先 `_assert_not_running`（读 status）再无条件 `DELETE`。若两段之间正好有
+`POST /run` 抢到占位，删除会成功并级联删掉 run 行，而 worker 仍在执行——最终在后台线程里
+抛出一个没人观察的 `NotFoundError`。修：① 删除改为条件语句
+（`DELETE … WHERE id=? AND status!='running'`），`rowcount=0` 时再区分 404 与 409；
+② worker 启动时若实验或 run 行已消失则**安静退出**，不再把异常留在 Future 里。
+反证：把删除改回无条件语句，`test_delete_refuses_when_a_run_claims_between_check_and_delete`
+立即变红；还原后全绿。后端 **311/311**。

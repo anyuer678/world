@@ -259,9 +259,16 @@ class ExperimentService:
         conn = self._conn()
         try:
             with conn:
-                cur = conn.execute("DELETE FROM experiments WHERE id=?", (exp_id,))
+                # R63：检查与删除必须原子。此前 `_assert_not_running` 读完后无条件 DELETE，
+                # 若这期间有并发 run 抢到占位，级联会删掉 run 行而 worker 仍在执行。
+                cur = conn.execute(
+                    "DELETE FROM experiments WHERE id=? AND status!='running'", (exp_id,)
+                )
                 if cur.rowcount == 0:
-                    raise NotFoundError(f"experiment {exp_id} not found")
+                    row = conn.execute("SELECT status FROM experiments WHERE id=?", (exp_id,)).fetchone()
+                    if row is None:
+                        raise NotFoundError(f"experiment {exp_id} not found")
+                    raise ConflictError(f"experiment {exp_id} is running; cancel it first")
         finally:
             conn.close()
 
@@ -372,13 +379,19 @@ class ExperimentService:
         conn = self._conn()
         t0 = time.monotonic()
         try:
-            exp_row = self._get_experiment_row(conn, exp_id)
+            try:
+                exp_row = self._get_experiment_row(conn, exp_id)
+            except NotFoundError:
+                # R63：实验在 claim 之后被删除（级联也删掉了 run 行）——没有可写回的目标，
+                # 安静退出，而不是在 Future 里留下一个没人观察的异常。
+                return
             spec_raw = json.loads(exp_row["spec_json"])
             # Execute with the seed recorded on the run row (not spec.seed),
             # so a run with seed=None is reproducible from the stored seed.
-            run_seed = conn.execute(
-                "SELECT seed FROM experiment_runs WHERE id=?", (run_id,)
-            ).fetchone()["seed"]
+            run_row = conn.execute("SELECT seed FROM experiment_runs WHERE id=?", (run_id,)).fetchone()
+            if run_row is None:
+                return
+            run_seed = run_row["seed"]
             try:
                 conn.execute(
                     "UPDATE experiment_runs SET status='running', started_at=datetime('now') WHERE id=?",

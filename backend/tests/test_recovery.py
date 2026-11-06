@@ -248,3 +248,62 @@ def test_concurrent_run_claims_exactly_once(settings):
     finally:
         svc.shutdown()
 
+
+def test_delete_refuses_when_a_run_claims_between_check_and_delete(settings, monkeypatch):
+    """R63：`_assert_not_running` 与 DELETE 之间的窗口必须由条件 DELETE 兜住。
+
+    这里把检查函数替换成 no-op 模拟「检查通过、随后被并发 claim」的时序：
+    旧实现会直接删掉（级联删 run 行，worker 还在跑）；现在返回 409 且实验仍在。"""
+    from app.core.registry import registry
+    from app.services.experiment_service import ConflictError, ExperimentService
+
+    svc = ExperimentService(settings, registry)
+    try:
+        spec = {
+            "schema_version": 1,
+            "model_id": "toy_slow_step",
+            "params": {},
+            "stop_condition": {"type": "steps", "value": 200000},
+            "seed": 5,
+        }
+        exp = svc.create_experiment("r63-delete", spec)
+        svc.run_experiment(exp["id"])
+        monkeypatch.setattr(svc, "_assert_not_running", lambda _id: None)
+        try:
+            svc.delete_experiment(exp["id"])
+            raise AssertionError("运行中的实验不应被删除")
+        except ConflictError:
+            pass
+        assert svc.get_experiment(exp["id"])["status"] == "running"
+        svc.cancel_experiment(exp["id"])
+    finally:
+        svc.shutdown()
+
+
+def test_worker_exits_quietly_when_experiment_is_gone(settings):
+    """R63：claim 后实验被删（级联删 run）时，worker 不能抛未观察的异常。"""
+    from app.core.registry import registry
+    from app.services.experiment_service import ExperimentService
+
+    svc = ExperimentService(settings, registry)
+    try:
+        spec = {
+            "schema_version": 1,
+            "model_id": "toy_des",
+            "params": {"total_events": 10, "delay_mean": 0.01},
+            "stop_condition": {"type": "until_empty"},
+            "seed": 5,
+        }
+        exp = svc.create_experiment("r63-gone", spec)
+        conn = svc._conn()  # noqa: SLF001 - 直接造出「run 行存在但实验已不存在」的状态
+        try:
+            with conn:
+                cur = conn.execute("INSERT INTO experiment_runs(experiment_id, repeat_index, seed, status) VALUES (?,?,?,'pending')", (exp["id"], 0, 5))
+                run_id = int(cur.lastrowid)
+                conn.execute("DELETE FROM experiments WHERE id=?", (exp["id"],))
+        finally:
+            conn.close()
+        svc._execute_run(run_id, exp["id"])  # noqa: SLF001 - 不应抛异常
+    finally:
+        svc.shutdown()
+
