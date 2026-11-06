@@ -14,6 +14,11 @@ type StopType = 'steps' | 'sim_time' | 'until_empty'
 export default function App() {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [selected, setSelected] = useState('')
+  // R81：模型版本选择——目录里同一 model_id 可能有多个版本，表单/scenario 必须按所选版本重建
+  const [selectedVersion, setSelectedVersion] = useState('')
+  const [versionModel, setVersionModel] = useState<ModelInfo | null>(null)
+  const [versionError, setVersionError] = useState('')
+  const versionSeq = useRef(0)
   const [params, setParams] = useState<Record<string, unknown>>({})
   const [seed, setSeed] = useState<string>('42')
   const [stopType, setStopType] = useState<StopType>('steps')
@@ -107,8 +112,25 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [])
 
+  async function fetchVersion(modelId: string, version: string) {
+    const token = ++versionSeq.current
+    setVersionError('')
+    try {
+      const detail = await api.getModel(modelId, version)
+      if (token === versionSeq.current) setVersionModel(detail)
+    } catch (e) {
+      if (token !== versionSeq.current) return
+      setVersionModel(null)
+      setVersionError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   function applyModel(m: ModelInfo) {
+    versionSeq.current++
     setSelected(m.model_id)
+    setSelectedVersion('')
+    setVersionModel(null)
+    setVersionError('')
     setParams(structuredClone(m.example_spec.params))
     setSeed(m.example_spec.seed != null ? String(m.example_spec.seed) : '')
     setStopType(m.example_spec.stop_condition.type)
@@ -121,6 +143,52 @@ export default function App() {
     setSeed(spec.seed != null ? String(spec.seed) : '')
     setStopType(spec.stop_condition.type)
     setStopValue(spec.stop_condition.value != null ? String(spec.stop_condition.value) : '')
+    setVersionError('')
+    const version = spec.model_version ?? ''
+    setSelectedVersion(version)
+    const latest = models.find((m) => m.model_id === spec.model_id)
+    if (version && latest && version !== latest.version) {
+      // 旧版本的 schema/场景只能按版本单独取；拉取到达前不回退到最新版，避免表单错位
+      setVersionModel(null)
+      void fetchVersion(spec.model_id, version)
+    } else {
+      versionSeq.current++
+      setVersionModel(null)
+    }
+  }
+
+  async function changeVersion(version: string) {
+    const latest = models.find((m) => m.model_id === selected)
+    if (!latest) return
+    if (!version) {
+      applyModel(latest)
+      return
+    }
+    // 显式选了版本（包括最新版）就把它写进 spec：将来注册了更新版本，已保存的实验不会悄悄换实现
+    setBusy(true)
+    setError('')
+    setNotice('')
+    setVersionError('')
+    const token = ++versionSeq.current
+    try {
+      const detail = await api.getModel(latest.model_id, version)
+      if (token !== versionSeq.current) return
+      setSelectedVersion(version)
+      setVersionModel(detail)
+      setParams(structuredClone(detail.example_spec.params))
+      setSeed(detail.example_spec.seed != null ? String(detail.example_spec.seed) : '')
+      setStopType(detail.example_spec.stop_condition.type)
+      setStopValue(detail.example_spec.stop_condition.value != null ? String(detail.example_spec.stop_condition.value) : '')
+      setNotice(`已切换到 v${version}：参数表单与一键场景按该版本定义重建。`)
+    } catch (e) {
+      if (token === versionSeq.current) {
+        const msg = e instanceof Error ? e.message : String(e)
+        setVersionError(msg)
+        setError(msg)
+      }
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function runScenario(modelId: string, scenario: ScenarioInfo) {
@@ -138,7 +206,7 @@ export default function App() {
               : ({ type: 'steps', value: 1000 } as const),
         seed: seed === '' ? null : Number(seed),
       }
-      const spec = scenarioSpec(modelId, scenario, current)
+      const spec = scenarioSpec(modelId, scenario, { ...current, model_version: selectedVersion || null })
       applySpec(spec)
       const s = await api.createSession(spec)
       setSession(s)
@@ -227,6 +295,7 @@ export default function App() {
     return {
       schema_version: 1,
       model_id: selected,
+      ...(selectedVersion ? { model_version: selectedVersion } : {}),
       params,
       stop_condition: stopType === 'until_empty' ? { type: 'until_empty' } : { type: stopType, value: Number(stopValue) },
       seed: seed === '' ? null : Number(seed),
@@ -310,6 +379,10 @@ export default function App() {
   }
 
   const model = models.find((m) => m.model_id === selected)
+  // 旧版本详情未到达前不回退到最新版：params 已是该版本的，混用 schema 会让表单错位
+  const activeModel = selectedVersion && selectedVersion !== model?.version ? versionModel : model
+  // 自定义路网编辑器只跟随目录里的最新版；旧版本走通用 schema 表单，避免预设与旧参数结构错配
+  const usesTrafficPanel = selected === 'traffic_network' && !!model && (!selectedVersion || selectedVersion === model.version)
 
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 1100, margin: '0 auto', padding: 24 }}>
@@ -495,20 +568,40 @@ export default function App() {
                 ))}
               </select>
             </label>
+            {model && versionOptions(model.versions, model.version).length > 1 && (
+              <label style={rowFlex}>
+                版本：
+                <select
+                  value={selectedVersion || model.version}
+                  onChange={(e) => void changeVersion(e.target.value)}
+                  disabled={busy}
+                  aria-label="模型版本"
+                  style={control}
+                >
+                  {versionOptions(model.versions, model.version).map((v) => (
+                    <option key={v} value={v}>
+                      v{v}
+                      {v === model.version ? '（最新）' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {model && (
               <p style={{ color: '#6b7280', fontSize: 12, margin: '2px 0 6px' }}>
-                内部标识 {model.model_id} · v{model.version} · {modelTypeLabel(model.model_type)}
+                内部标识 {model.model_id} · v{selectedVersion || model.version} ·{' '}
+                {modelTypeLabel((activeModel ?? model).model_type)}
               </p>
             )}
             {model?.description && <p style={{ color: '#666', fontSize: 13 }}>{model.description}</p>}
-            {model && model.scenarios?.length > 0 && (
+            {activeModel && activeModel.scenarios?.length > 0 && (
               <div style={{ margin: '8px 0 4px' }}>
                 <h3 style={{ fontSize: 14, marginBottom: 6 }}>一键场景</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {model.scenarios.map((sc) => (
+                  {activeModel.scenarios.map((sc) => (
                     <button
                       key={sc.id}
-                      onClick={() => runScenario(model.model_id, sc)}
+                      onClick={() => runScenario(activeModel.model_id, sc)}
                       disabled={busy}
                       aria-label={`一键运行场景：${sc.title}`}
                       style={scenarioCard}
@@ -550,16 +643,26 @@ export default function App() {
           </div>
           <div style={{ flex: 2, minWidth: 380 }}>
             <h3 style={{ fontSize: 14 }}>
-              {selected === 'traffic_network' ? '路网配置（预设 + JSON 编辑 + 预览）' : '参数配置（结构化编辑器，由 params_schema 生成）'}
+              {usesTrafficPanel ? '路网配置（预设 + JSON 编辑 + 预览）' : '参数配置（结构化编辑器，由 params_schema 生成）'}
             </h3>
-            {model ? (
-              selected === 'traffic_network' ? (
+            {activeModel ? (
+              usesTrafficPanel ? (
                 <TrafficPanel params={params} onChange={setParams} />
               ) : (
-                <ParamForm schema={model.params_schema as never} value={params} onChange={setParams} />
+                <ParamForm schema={activeModel.params_schema as never} value={params} onChange={setParams} />
               )
             ) : (
-              <p style={{ color: '#6b7280' }}>加载中…</p>
+              <p style={{ color: versionError ? '#dc2626' : '#6b7280' }}>
+                {versionError
+                  ? `版本 v${selectedVersion} 的 schema 加载失败：${versionError}`
+                  : !selected
+                    ? '加载中…'
+                    : model
+                      ? `正在加载 v${selectedVersion} 的 schema…`
+                      : models.length === 0
+                        ? '模型目录尚未加载，参数表单暂不可用。'
+                        : `模型 ${selected} 不在当前模型目录中，参数不可编辑（配置仍可查看）。`}
+              </p>
             )}
           </div>
         </div>
@@ -707,16 +810,22 @@ export function modelTypeLabel(t: string): string {
 export function scenarioSpec(
   modelId: string,
   scenario: ScenarioInfo,
-  current?: { stop_condition: ModelSpec['stop_condition']; seed: number | null },
+  current?: { stop_condition: ModelSpec['stop_condition']; seed: number | null; model_version?: string | null },
 ): ModelSpec {
   const stop = scenario.stop_condition ?? current?.stop_condition ?? { type: 'steps', value: 1000 }
   return {
     schema_version: 1,
     model_id: modelId,
+    ...(current?.model_version ? { model_version: current.model_version } : {}),
     params: structuredClone(scenario.params),
     stop_condition: structuredClone(stop),
     seed: scenario.seed != null ? scenario.seed : (current?.seed ?? null),
   }
+}
+
+/** 版本下拉选项（R81）：目录的 versions 未必包含最新版，补进去且不重复。 */
+export function versionOptions(versions: string[], latest: string): string[] {
+  return versions.includes(latest) ? versions.slice() : [latest, ...versions]
 }
 
 const QUICK_PICKS: { modelId: string; scenarioId: string }[] = [

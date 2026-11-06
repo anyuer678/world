@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, quickPicks, scenarioSpec, stepProblem } from './App'
+import { historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, quickPicks, scenarioSpec, stepProblem, versionOptions } from './App'
 import { statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
@@ -313,6 +313,25 @@ describe('scenarioSpec', () => {
     const defaulted = scenarioSpec('plug', bare)
     expect(defaulted.stop_condition).toEqual({ type: 'steps', value: 1000 })
     expect(defaulted.seed).toBeNull()
+  })
+
+  it('carries an explicit model_version and omits it when unset', () => {
+    const bare: ScenarioInfo = { id: 'a', title: 'A', description: 'd', params: { n: 1 } }
+    const versioned = scenarioSpec('plug', bare, {
+      stop_condition: { type: 'steps', value: 10 },
+      seed: 1,
+      model_version: '2.0.0',
+    })
+    expect(versioned.model_version).toBe('2.0.0')
+    expect(scenarioSpec('plug', bare, { stop_condition: { type: 'steps', value: 10 }, seed: 1, model_version: null })).not.toHaveProperty('model_version')
+  })
+})
+
+describe('versionOptions', () => {
+  it('keeps catalog order and appends the latest version only when missing', () => {
+    expect(versionOptions(['1.0.0', '2.0.0'], '2.0.0')).toEqual(['1.0.0', '2.0.0'])
+    expect(versionOptions(['1.0.0'], '2.0.0')).toEqual(['2.0.0', '1.0.0'])
+    expect(versionOptions([], '1.0.0')).toEqual(['1.0.0'])
   })
 })
 

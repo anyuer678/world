@@ -138,6 +138,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   listModels: () => request<{ models: ModelInfo[] }>('/api/models'),
+  getModel: (id: string, version?: string) =>
+    request<ModelInfo>(
+      `/api/models/${encodeURIComponent(id)}${version ? `?version=${encodeURIComponent(version)}` : ''}`,
+    ),
   getLimits: () => request<LimitsResponse>('/api/limits'),
   createExperiment: (name: string, spec: unknown) =>
     request<{ id: number }>('/api/experiments', { method: 'POST', body: JSON.stringify({ name, spec }) }),

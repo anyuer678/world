@@ -1108,3 +1108,17 @@
     ③ 浏览器实测：单步到 20 → 保存 → 单步到 30 → 恢复 → **step 20、paused**；
     运行中 `saveDisabled=true/restoreDisabled=true`。
     ④ 前端 **71/71**、tsc/vite 干净；后端无改动。
+
+92. **R81 功能：模型版本选择（工作台）**。
+    ① 缺口：`versions`/`?version=` 自 R32 起可用，但工作台只用最新版；载入旧版本实验后表单
+    仍按最新版 schema 渲染，也没有选择版本的入口。
+    ② 实现：`versions` > 1 时显示「版本」下拉；`changeVersion()` 按所选版本请求
+    `GET /api/models/{id}?version=` 并重建参数表单/场景卡；显式选择（含最新版）把
+    `model_version` 写入 `buildSpec()` 与 `scenarioSpec()`；`applySpec()` 载入旧版本时单独
+    拉取该版本 schema，拉取失败显示具体错误而不是永远「加载中」。路网自定义编辑器仅用于最新版。
+    ③ 浏览器实测（临时插件注册 SIR 2.0.0，带 `vaccination` 字段与独有场景）：切到 v1 后
+    探针字段/场景消失、提示出现；v2 会话请求体 `model_version="2.0.0"` + `vaccination=0.25`，
+    v1 会话与场景请求体 `model_version="1.0.0"` 且无 `vaccination`；存 v1 实验→切走模型→
+    「载入配置」后版本下拉=1.0.0、表单=v1 schema。
+    ④ 回归：前端 **73/73**（新增 `versionOptions`、`scenarioSpec` 版本字段两例）、tsc/vite 干净；
+    后端 **332/332**、无改动。
