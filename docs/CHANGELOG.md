@@ -944,3 +944,14 @@ max_retries=2、wall=30、strategy=per_repeat_increment、total=14、completed�
 同时回填批量的 `concurrency`。浏览器实测：并发 1 的模板 → 表单回填 1；改 65 →
 提示「并发数需在 1–64 之间（当前 65）」且启动禁用；改回 1 → 启动成功，
 新批量 API `concurrency=1`、4 项 completed。前端 **86/86**、tsc/vite 干净；后端无改动。
+
+**R101（2026-11-06）修复：批量墙钟边界显式拦截 + 生效配置可见**
+
+批量表单的「单项墙钟」是自由文本：填 0/负数会被 `Math.max(1, …)` **静默改成 1**、填 999 会被
+服务端静默钳到 `max_wall_seconds`，而批量详情又看不到并发/重试/墙钟的实际生效值。本轮：
+墙钟范围取自 `/api/limits.engine.max_wall_seconds`，`batchSubmitProblem` 对非正数/超上限直接
+报错（启动禁用），输入框改为 number 并给出「不静默钳制」提示；提交体使用校验后的数值。
+批量详情标题行补「并发 N · 重试 N · 单项墙钟 Ns」，与模板回填的字段一致。浏览器实测：
+墙钟 0 → 「需为大于 0 的秒数」、121 → 「不能超过 120 秒」、均禁用启动；120 → 启动成功，
+API `per_run_wall_seconds=120`、completed，详情行显示并发 2/重试 0/墙钟 120s。
+前端 **87/87**、tsc/vite 干净；后端无改动。

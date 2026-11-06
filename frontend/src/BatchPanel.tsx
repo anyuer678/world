@@ -19,6 +19,7 @@ export interface BatchLimits {
   concurrencyMin: number
   concurrencyMax: number
   maxWorkers: number
+  maxWallSeconds: number
 }
 
 /** Used until /api/limits answers; the server stays the source of truth. */
@@ -32,11 +33,19 @@ export const FALLBACK_LIMITS: BatchLimits = {
   concurrencyMin: 1,
   concurrencyMax: 64,
   maxWorkers: 2,
+  maxWallSeconds: 120,
 }
 
 export function batchSubmitProblem(
   limits: BatchLimits,
-  opts: { name: string; totalItems: number; repeats: number; retries: number; concurrency?: number },
+  opts: {
+    name: string
+    totalItems: number
+    repeats: number
+    retries: number
+    concurrency?: number
+    perRunWallSeconds?: number
+  },
 ): string | null {
   if (!opts.name.trim()) return '批量名称不能为空'
   if (opts.name.length > limits.nameMaxLength) return `批量名称最长 ${limits.nameMaxLength} 字符（当前 ${opts.name.length}）`
@@ -49,6 +58,12 @@ export function batchSubmitProblem(
     (opts.concurrency < limits.concurrencyMin || opts.concurrency > limits.concurrencyMax)
   )
     return `并发数需在 ${limits.concurrencyMin}–${limits.concurrencyMax} 之间（当前 ${opts.concurrency}）`
+  if (opts.perRunWallSeconds != null) {
+    if (!Number.isFinite(opts.perRunWallSeconds) || opts.perRunWallSeconds <= 0)
+      return '单项墙钟需为大于 0 的秒数'
+    if (opts.perRunWallSeconds > limits.maxWallSeconds)
+      return `单项墙钟不能超过 ${limits.maxWallSeconds} 秒（服务端上限）`
+  }
   if (opts.totalItems > limits.maxItems)
     return `总项数 ${opts.totalItems} 超过上限 ${limits.maxItems}：请缩小网格或减少重复`
   return null
@@ -278,6 +293,7 @@ export default function BatchPanel({
           concurrencyMin: r.batch.concurrency_min,
           concurrencyMax: r.batch.concurrency_max,
           maxWorkers: r.engine.max_workers,
+          maxWallSeconds: r.engine.max_wall_seconds,
         }),
       )
       .catch(() => {})
@@ -334,6 +350,7 @@ export default function BatchPanel({
   const repeatN = Math.max(1, Number(repeats) || 1)
   const retryN = Math.max(0, Number(retries) || 0)
   const concurrencyN = Math.max(1, Number(concurrency) || 1)
+  const wallN = Number(wallSec)
   const totalItems = comboCount * repeatN
   const problem = batchSubmitProblem(limits, {
     name,
@@ -341,6 +358,7 @@ export default function BatchPanel({
     repeats: repeatN,
     retries: retryN,
     concurrency: concurrencyN,
+    perRunWallSeconds: wallN,
   })
 
   async function submit() {
@@ -356,7 +374,7 @@ export default function BatchPanel({
         seed_strategy: strategy,
         max_retries: retryN,
         concurrency: concurrencyN,
-        per_run_wall_seconds: Math.max(1, Number(wallSec) || 60),
+        per_run_wall_seconds: wallN,
       })
       setBatch(b)
       // 新批量的 items 尚未产生；不清空会把上一个批量的明细继续显示在下面
@@ -614,8 +632,19 @@ export default function BatchPanel({
           </p>
           <label style={rowFlex}>
             单项墙钟（秒）：
-            <input value={wallSec} onChange={(e) => setWallSec(e.target.value)} style={control} />
+            <input
+              type="number"
+              min={1}
+              max={limits.maxWallSeconds}
+              value={wallSec}
+              onChange={(e) => setWallSec(e.target.value)}
+              aria-describedby="wall-note"
+              style={control}
+            />
           </label>
+          <p id="wall-note" style={{ fontSize: 11, color: '#6b7280', margin: '0 0 6px' }}>
+            服务端上限 {limits.maxWallSeconds} 秒；超过会在表单里拦截，不静默钳制。
+          </p>
           <button onClick={submit} disabled={busy || !!problem} style={primaryBtn}>
             启动批量实验
           </button>
@@ -757,6 +786,7 @@ export default function BatchPanel({
           <p style={{ fontSize: 13, color: '#374151' }}>
             批量 #{batch.id}「{batch.name}」 · 模型 {batch.model_id} v{batch.model_version} · 状态{' '}
             <strong role="status">{statusLabel(batch.status)}</strong> · 种子策略 {batch.seed_strategy}（基种子 {batch.seed_base ?? '—'}）
+            {' '}· 并发 {batch.concurrency} · 重试 {batch.max_retries} · 单项墙钟 {batch.per_run_wall_seconds}s
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
             <div style={{ background: '#e5e7eb', borderRadius: 4, height: 10, flex: 1, overflow: 'hidden' }}>

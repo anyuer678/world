@@ -59,6 +59,21 @@ describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
     ).toBeNull()
     expect(batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0 })).toBeNull()
   })
+
+  it('rejects non-positive or over-cap wall clock instead of silently clamping (R101)', () => {
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0, perRunWallSeconds: 0 }),
+    ).toBe('单项墙钟需为大于 0 的秒数')
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0, perRunWallSeconds: -5 }),
+    ).toBe('单项墙钟需为大于 0 的秒数')
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0, perRunWallSeconds: 121 }),
+    ).toContain('单项墙钟不能超过 120 秒')
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0, perRunWallSeconds: 120 }),
+    ).toBeNull()
+  })
 })
 
 describe('itemsHeading (R34：单项结果表头必须交代总数)', () => {
