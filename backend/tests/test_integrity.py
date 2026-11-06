@@ -298,12 +298,17 @@ def test_soak_runs_and_sessions_leave_no_in_process_residue(settings):
         exp_svc.shutdown()
 
 
-def test_session_event_ring_is_bounded(settings):
-    """事件环按 `event_log_size` 截断（R67）：长跑不能让事件列表无界增长。"""
+def test_session_event_ring_honors_configured_size(settings):
+    """R70：事件环必须按 `WORLDLAB_EVENT_LOG_SIZE` 截断，而不是硬编码 500。
+
+    R67 的原版用 500 的默认值做上界断言，硬编码 500 也能通过——属于空断言。
+    这里用 37 构造服务，既证「配置生效」也证「有界」。"""
+    from dataclasses import replace
+
     from app.core.registry import registry
     from app.services.session_service import SessionService
 
-    ses_svc = SessionService(settings, registry)
+    ses_svc = SessionService(replace(settings, event_log_size=37), registry)
     try:
         spec = {
             "schema_version": 1,
@@ -315,8 +320,7 @@ def test_session_event_ring_is_bounded(settings):
         sid = ses_svc.create(spec)["session_id"]
         ses_svc.step(sid, 3000)
         st = ses_svc.state(sid, events_limit=500)
-        assert len(st["events"]) <= settings.event_log_size
-        assert len(st["events"]) > 0
+        assert len(st["events"]) == 37, len(st["events"])
     finally:
         ses_svc.shutdown()
 

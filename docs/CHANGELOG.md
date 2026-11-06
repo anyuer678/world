@@ -605,3 +605,17 @@ api 镜像最后构建于 R53，web 镜像更早于 R57；R59/R60/R62/R63/R64 �
 `clone` 201 字符名称 → **422**（R60）；打包产物内含「批量实验（显示最近」「步数不能超过」
 「最多同时比较」三处新文案（R57/R47/R49）。探针实验已删除，栈已 `down`。
 本轮未改产品代码。
+
+**R70（2026-11-06）`WORLDLAB_EVENT_LOG_SIZE` 读了不生效（R37 同类）+ 配置消费锁**
+
+审计「配置→行为」时发现：`Settings.event_log_size` 被读入后**从未被使用**，事件环在
+`BaseWorldModel` 里硬编码 `deque(maxlen=500)`——README 承诺可配置，实际改不动。更糟的是
+R67 的 `test_session_event_ring_is_bounded` 用默认值 500 做上界断言，硬编码 500 也能通过，
+属于**空断言**。修：新增 `BaseWorldModel.configure_event_log(size)`（构造后配置，**不改构造
+签名**——traffic_network 等模型重写了 `__init__`，加关键字参数会让它们在运行时 TypeError，
+这是本轮实际踩到的回归）；会话/实验/批量的模型构造后均按 `settings.event_log_size` 配置；
+R67 的测试改用 `event_log_size=37` 的 Settings，断言恰好 37 条（反证：去掉配置调用即变红）。
+另新增文档锁 `test_every_setting_field_is_actually_consumed`：`Settings` 每个字段必须在
+`backend/app/`（除 config.py）出现，把「配置读了但不生效」变成 CI 红。实跑复核：
+`WORLDLAB_EVENT_LOG_SIZE=37` 起服务，queueing 会话推进 300 步后 `events=37`。
+后端 **315/315**、前端 **70/70**。

@@ -93,6 +93,7 @@ class SessionService:
     def create(self, spec_raw: dict[str, Any]) -> dict[str, Any]:
         spec, model_cls = validate_spec(spec_raw, self._registry)
         model = model_cls(spec.params, spec.seed)
+        model.configure_event_log(self._settings.event_log_size)
         engine = SimulationEngine(
             model,
             spec.stop_condition.model_dump(),

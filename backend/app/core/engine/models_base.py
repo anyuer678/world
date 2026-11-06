@@ -86,6 +86,13 @@ class BaseWorldModel(ABC):
         self._log_seq = 0
         self.seed = rng_seed
 
+    def configure_event_log(self, size: int) -> None:
+        """按配置调整事件环容量（R70）。
+
+        不改构造签名：模型插件允许重写 `__init__`（如 traffic_network），给基类加关键字
+        参数会让这些子类在运行时抛 `TypeError`。保留已有事件，只替换容量。"""
+        self._log = deque(self._log, maxlen=max(1, int(size)))
+
     def emit(self, time: float, kind: str, message: str, data: dict[str, Any] | None = None) -> None:
         self._log_seq += 1
         self._log.append(EventRecord(self._log_seq, float(time), kind, message, data or {}))

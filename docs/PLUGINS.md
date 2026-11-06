@@ -127,6 +127,10 @@ def register(registry):
 `dump_state()`/`load_state()`（检查点与恢复）、`finalize_metrics()`（结果指标）；
 `initialize()` 可选。所有状态必须 JSON 安全。
 
+基类还提供 `configure_event_log(size)`（事件环容量），由服务按 `WORLDLAB_EVENT_LOG_SIZE` 在构造后
+调用；**重写 `__init__` 的模型必须调用 `super().__init__(...)`**，否则事件环与 RNG 不会初始化
+（traffic_network 就是重写构造的例子）。
+
 启动时加载（逗号分隔，顺序即加载顺序）：
 
 ```

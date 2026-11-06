@@ -279,3 +279,22 @@ def test_every_service_passes_all_four_limits_fields():
             missing = [f for f in ("max_steps", "max_wall_seconds", "zero_delay_chain_limit",
                                    "cancel_poll_interval") if f not in block]
             assert not missing, f"{name} 构造 Limits 时漏传 {missing}"
+
+
+def test_every_setting_field_is_actually_consumed():
+    """R70：`Settings` 的每个字段都必须有使用方。
+
+    R37 修过「Limits 漏传两项」，R70 又发现 `event_log_size` 被读入后**从未使用**
+    （事件环硬编码 500）——同一类「配置读了但不生效」。这条锁把这类问题从「靠人记得」
+    变成 CI 红：字段名必须在 `backend/app/`（config.py 之外）出现。"""
+    from app.config import Settings
+
+    app_dir = ROOT / "backend" / "app"
+    corpus = "\n".join(
+        p.read_text(encoding="utf-8")
+        for p in app_dir.rglob("*.py")
+        if p.name != "config.py" and "__pycache__" not in p.parts
+    )
+    unused = [f for f in Settings.__dataclass_fields__ if f not in corpus]
+    assert not unused, f"配置项无人使用（读了但不生效）：{unused}"
+

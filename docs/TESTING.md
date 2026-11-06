@@ -1005,3 +1005,15 @@
     `clone` 201 字符名称 → 422；bundle 含「批量实验（显示最近」「步数不能超过」
     「最多同时比较」三处新文案。
     ③ 探针实验已删、栈已 down；本轮无产品代码改动。
+
+81. **R70 事件环配置接线 + 配置消费锁**。
+    ① 缺陷：`Settings.event_log_size` 读了从不使用（事件环硬编码 500）；R67 的测试用
+    默认值 500 做上界，属空断言。
+    ② 修：`BaseWorldModel.configure_event_log(size)`（构造后配置，不改构造签名——
+    traffic_network 重写了 `__init__`，加关键字会 TypeError，本轮实际踩到）；三条服务路径
+    构造模型后按 `settings.event_log_size` 配置。
+    ③ 测试改为 `event_log_size=37` 并断言恰好 37 条；反证去掉配置调用即红。
+    ④ 新锁 `test_every_setting_field_is_actually_consumed`：`Settings` 每个字段必须在
+    `backend/app/`（除 config.py）出现（粗粒度：只保证「有人用」，路径级接线由行为测试覆盖）。
+    ⑤ 实跑：`WORLDLAB_EVENT_LOG_SIZE=37` → 会话 300 步后 events=37。
+    回归：后端 **315/315**、前端 **70/70**、tsc/vite 干净。

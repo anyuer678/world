@@ -297,6 +297,7 @@ class BatchService:
                     conn.commit()
                     spec, model_cls = validate_spec(spec_raw, self.registry)
                     model = model_cls(spec.params, spec.seed)
+                    model.configure_event_log(self.settings.event_log_size)
                     engine = SimulationEngine(
                         model, spec.stop_condition.model_dump(), limits=limits, cancel_check=flag.is_set
                     )

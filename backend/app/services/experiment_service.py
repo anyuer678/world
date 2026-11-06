@@ -400,6 +400,7 @@ class ExperimentService:
                 conn.commit()
                 spec, model_cls = validate_spec(spec_raw, self.registry)
                 model = model_cls(spec.params, run_seed)
+                model.configure_event_log(self.settings.event_log_size)
                 limits = Limits(
                     max_steps=self.settings.default_max_steps,
                     max_wall_seconds=self.settings.max_wall_seconds,
