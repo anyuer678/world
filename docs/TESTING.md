@@ -1240,3 +1240,12 @@
     ③ 浏览器实测（60 项批量 item #0）：SHA 与 API 一致、模拟时间 5.000、耗时 0.00 s、
     指标逐项一致；关闭与切换筛选均收起详情。
     ④ 回归：前端 **83/83**、tsc/vite 干净；后端 **337/337** 无改动（端点已返回全部字段）。
+
+106. **R95 复核：Docker 生产形态复验 R76–R94（阴性，无代码改动）**。
+    ① 范围：R76–R94 的模型/端点/界面在 R69 之后未做生产镜像复验。
+    ② 做法：`docker compose build` + `up -d`（api healthy），全部请求经 nginx 5173。
+    ③ 实测：首页 200 + 构建产物 246,783 B 含新文案；health、9 模型、validate 有效/无效；
+    实验 create/run/result/SHA/状态筛选；批量 create→completed 6/6→单项状态筛选→列表
+    model/status 筛选→DELETE 204→404；运行中 DELETE 409（提示先 cancel）→ cancel→终态→204；
+    实验 DELETE 204。随后 compose down（保留卷）。
+    ④ 回归：后端 **337/337**、前端 **83/83** 维持；无代码改动。

@@ -874,3 +874,16 @@ tsc/vite 干净；后端无改动。
 浏览器实测（60 项批量，item #0）：SHA `3704adce…fcddd5` 与 API 一致，模拟时间 5.000、
 耗时 0.00 s、指标数值逐项一致；关闭与筛选切换都会收起详情。前端 **83/83**、tsc/vite 干净；
 后端无改动（items 端点本就返回这些字段）。
+
+**R95（2026-11-06）复核：Docker 生产形态复验 R76–R94（阴性，无代码改动）**
+
+R76–R94 新增了沙堆模型、批量删除、三套筛选、运行详情、校验预览等端点与界面，但生产镜像
+最后一次复验在 R69。本轮 `docker compose build` + `up -d`（api healthy）后全部经 nginx
+（`localhost:5173`）实测：首页 200，构建产物 `/assets/index-dNKlJc5v.js`（246,783 B）包含
+「校验当前配置 / 批单项 / 按状态筛选实验 / 按状态筛选批量 / 按模型筛选实验 / 详情」等新文案；
+`/api/health` ok、9 个模型目录、validate 有效与 `population=5` 无效（`params.population`）；
+实验 create 201 → run → result 1 个 run + SHA → `?status=completed` 生效；批量 create 201 →
+completed 6/6 → `items?status=completed` total=6 → 批量 `?status/&model_id` 过滤生效 →
+DELETE 204 后 GET 404；运行中批量 DELETE 返回 **409**（message 提示先 cancel）→ cancel 200 →
+终态后 DELETE 204；实验 DELETE 204。随后 `docker compose down`（保留数据卷）。
+生产形态与源码行为一致，无需修复；后端 **337/337**、前端 **83/83** 维持。
