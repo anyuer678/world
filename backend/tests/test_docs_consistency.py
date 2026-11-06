@@ -50,6 +50,20 @@ def test_readme_builtin_count_wording_matches_registry():
     assert f"{numeral}个内置模型" in README, f"README 应写「{numeral}个内置模型」"
 
 
+def test_living_docs_model_count_phrases_match_registry():
+    """README/ARCHITECTURE 是面向读者的现状文档（CHANGELOG/DECISIONS 有历史口径，不在此列）。
+    R89：README 的测试说明与 ARCHITECTURE 的架构框图长期写「八模型」，而实际已九个。"""
+    count = len(builtin_model_ids())
+    numeral = CN_NUMERAL.get(count)
+    assert numeral is not None, f"计数措辞测试未覆盖 {count} 个模型，请更新 CN_NUMERAL"
+    for name, text in (("README.md", README), ("ARCHITECTURE.md", ARCH)):
+        found = set(re.findall(r"([一二三四五六七八九十])个内置模型", text))
+        found |= set(re.findall(r"内置([一二三四五六七八九十])个", text))
+        assert found == {numeral}, (
+            f"{name} 的模型数量措辞 {sorted(found)} 与注册表（{count} 个）不一致"
+        )
+
+
 def test_readme_backend_test_file_count_matches_disk():
     on_disk = len(list((ROOT / "backend" / "tests").glob("test_*.py")))
     claimed = {int(n) for n in re.findall(r"（(\d+) 个测试文件）", README)}

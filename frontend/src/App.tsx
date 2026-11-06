@@ -5,7 +5,7 @@ import ParamForm from './ParamForm'
 import TrafficPanel from './TrafficPanel'
 import SimView from './SimView'
 import ResultPanel from './ResultPanel'
-import { moreLabel, statusLabel } from './labels'
+import { modelVersionLabel, moreLabel, statusLabel } from './labels'
 import BatchPanel from './BatchPanel'
 import ComparePanel from './ComparePanel'
 import { summarizeMetrics } from './summary'
@@ -38,7 +38,7 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState<
-    { id: number; name: string; model_id: string; status: string; tags: string[] }[]
+    { id: number; name: string; model_id: string; model_version: string; status: string; tags: string[] }[]
   >([])
   // R48：历史只取最近一页，必须把总数一起显示，否则用户会以为看到的就是全部
   const [historyTotal, setHistoryTotal] = useState(0)
@@ -886,7 +886,7 @@ export default function App() {
                 <tr key={h.id}>
                   <td style={td}>{h.id}</td>
                   <td style={td}>{h.name}</td>
-                  <td style={td}>{h.model_id}</td>
+                  <td style={td}>{modelVersionLabel(h.model_id, h.model_version)}</td>
                   <td style={td}>
                     {editingTags?.id === h.id ? (
                       <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>

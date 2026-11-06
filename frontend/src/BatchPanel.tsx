@@ -1,4 +1,4 @@
-import { moreLabel, statusLabel } from './labels'
+import { modelVersionLabel, moreLabel, statusLabel } from './labels'
 import { useCallback, useEffect, useState } from 'react'
 import { api, isNotFoundOn } from './api'
 import type { BatchDetail, BatchItem, BatchListItem, ModelSpec } from './types'
@@ -467,7 +467,7 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
               <tr key={b.id}>
                 <td style={td}>{b.id}</td>
                 <td style={td}>{b.name}</td>
-                <td style={td}>{b.model_id}</td>
+                <td style={td}>{modelVersionLabel(b.model_id, b.model_version)}</td>
                 <td style={td}>{statusLabel(b.status)}</td>
                 <td style={td}>
                   {b.done_items}/{b.total_items}

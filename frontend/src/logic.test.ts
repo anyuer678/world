@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { metricColumns } from './ResultPanel'
 import { canCancel, canRerun, filterSummary, historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, parseTags, quickPicks, scenarioSpec, stepProblem, versionOptions } from './App'
-import { statusLabel } from './labels'
+import { modelVersionLabel, statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
@@ -269,6 +269,14 @@ describe('resolve (param schema ref resolution)', () => {
   it('returns plain schemas untouched', () => {
     const s: JSONSchema = { type: 'string', enum: ['fcfs', 'sjf'] }
     expect(resolve(root, s)).toEqual(s)
+  })
+})
+
+describe('modelVersionLabel (R89)', () => {
+  it('shows id + version so v1/v2 rows are distinguishable', () => {
+    expect(modelVersionLabel('sir', '2.0.0')).toBe('sir v2.0.0')
+    expect(modelVersionLabel('sir', '')).toBe('sir')
+    expect(modelVersionLabel('sir', null)).toBe('sir')
   })
 })
 

@@ -4,7 +4,7 @@
 
 **阶段 0–6 完成，产品化改进推进中**：版本化模型 Schema（迁移 + 校验）、统一模拟引擎（时间步进 + 离散事件、检查点/恢复/取消、资源上限）、九个内置模型、可视化模拟工作台、实验管理、批量实验与统计（含 95% 置信区间与自动发现）、插件式模型库、报告导出（md/JSON/CSV）、性能基准、异常恢复与端到端测试、Docker 部署验证，界面全中文。
 
-逐轮改进记录（R1–R31，含每轮发现并修掉的真问题）见 `docs/CHANGELOG.md`；设计取舍见 `docs/DECISIONS.md`，验证口径见 `docs/TESTING.md`。
+逐轮改进记录（含每轮发现并修掉的真问题）见 `docs/CHANGELOG.md`；设计取舍见 `docs/DECISIONS.md`，验证口径见 `docs/TESTING.md`。
 
 ## 内置模型
 
@@ -32,7 +32,7 @@
 ```bash
 cd backend
 uv sync                 # 安装依赖（fastapi/pydantic/numpy/uvicorn + pytest/httpx）
-uv run pytest           # 全部测试：引擎/事件队列/八模型/Schema/迁移/会话/批量/插件/报告/性能/恢复/端到端
+uv run pytest           # 全部测试：引擎/事件队列/全部内置模型/Schema/迁移/会话/批量/插件/报告/性能/恢复/端到端
 uv run python scripts/benchmark.py   # 性能基准（数字写入 docs/BENCHMARKS.md 的口径）
 uv run uvicorn app.main:app --port 8000
 # API: http://localhost:8000/api/health  文档: http://localhost:8000/docs
@@ -90,11 +90,11 @@ R15 复验停止条件两型，CSV/报告导出为阶段 6 已验链路。
   （ubuntu-latest，uv 装的 CPython 3.12.16），前端 60 项 + 构建通过——即测试套并非只在
   Windows 上成立。
 - **后端 pytest**（27 个测试文件）：引擎时间语义（同刻事件顺序、零延迟链上限）、
-  八模型正确性（排队论对照、调度指标手算对照、缓存命中数、CA 规则、谢林同步步
+  内置模型正确性（排队论对照、调度指标手算对照、缓存命中数、CA 规则、谢林同步步
   不变式、SIR 仓室守恒与 R₀ 阈值、捕食者-猎物首次积分守恒与内平衡收敛、交通路网信号相位与守恒）、确定性
   （同种子逐位一致，含检查点恢复后续跑）、Schema 迁移、批量（网格/种子策略/取消/重试/并发上限）、
   统计汇总、自动发现（扫描跳变/离散异常/CI 重叠三态）、插件注册、报告、性能回归阈值、异常恢复
-  （进程重启后续跑、崩溃不丢数据）、端到端全生命周期（HTTP 层走真实 API 契约，八个模型逐个跑通）。
+  （进程重启后续跑、崩溃不丢数据）、端到端全生命周期（HTTP 层走真实 API 契约，全部内置模型逐个跑通）。
 - **前端**：vitest 单元测试（spec 编辑、状态映射、速读文案、扫描曲线与 CI 带、批量面板与
   `/api/limits` 校验、两种 422 形状的文案还原）。
 - **性能基准**：`docs/BENCHMARKS.md` —— 引擎吞吐、API 延迟、批量吞吐与回归阈值，

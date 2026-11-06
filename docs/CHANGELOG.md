@@ -5,7 +5,7 @@ TESTING 条目）→ 提交推送。本文件由 README 原样搬迁而来（R31
 不再往 README 正文里堆。
 
 **阶段 0–6 完成，产品化改进推进中（R 轮次）**：版本化模型 Schema（迁移 + 校验）、
-统一模拟引擎（时间步进 + 离散事件、检查点/恢复/取消、资源上限）、八个内置模型、
+统一模拟引擎（时间步进 + 离散事件、检查点/恢复/取消、资源上限）、九个内置模型、
 可视化模拟工作台、实验管理、批量实验与统计、插件式模型库、报告导出、性能基准、
 异常恢复测试、端到端测试与 Docker 部署验证。R1 完成可信执行基础（种子溯源、
 聚合口径、批量在途上限、网格限量前移、检查点绑定）；R2 完成交通路网世界
@@ -810,3 +810,15 @@ tsc/vite 干净；后端无改动。
 「没有状态为「失败」的单项」；API `status=completed` total=60、`status=failed` total=0、
 `status=nope` 422。后端新增服务级筛选测试（completed/failed/cancelled 与取消批量），
 HTTP 断言并入现有批量 API 测试。后端 **336/336**、前端 **77/77**、tsc/vite 干净。
+
+**R89（2026-11-06）修复：列表中的模型版本 + 现状文档计数漂移**
+
+R81 支持多版本后，实验历史与批量列表仍只显示 `model_id`——`sir v1.0.0` 与 `sir v2.0.0` 的行
+看起来完全一样。本轮新增 `modelVersionLabel()` 并在两张列表的模型列显示 `id v版本`；
+临时 SIR 2.0.0 插件的浏览器实测：历史与批量列表都分别显示 `sir v2.0.0` / `sir v1.0.0`。
+同时清掉现状文档里的陈旧计数：README 测试说明与 ARCHITECTURE 架构框图仍写「八模型」、
+README 的改进记录指针停在 R1–R31、API_CONTRACT 标题停在 R1–R30（CHANGELOG/DECISIONS 的
+历史口径保留不动）。新增文档锁 `test_living_docs_model_count_phrases_match_registry`：
+README/ARCHITECTURE 中所有「N 个内置模型」「内置 N 个」的数量词必须等于注册表；
+往 ARCHITECTURE 注入「内置八个」验证会红，恢复后通过。后端 **337/337**、前端 **78/78**、
+tsc/vite 干净。

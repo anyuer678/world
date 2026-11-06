@@ -27,3 +27,9 @@ export function moreLabel(shown: number, total: number): string | null {
 export function statusLabel(s: string): string {
   return STATUS_LABELS[s] ?? s
 }
+
+/** 列表里的模型标识（R89）：版本化模型必须同时显示 id 与版本，
+ * 否则 v1/v2 的实验在历史/批量列表里看起来完全一样。 */
+export function modelVersionLabel(modelId: string, version: string | null | undefined): string {
+  return version ? `${modelId} v${version}` : modelId
+}
