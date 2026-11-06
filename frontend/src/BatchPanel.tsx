@@ -114,6 +114,8 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
   const [items, setItems] = useState<BatchItem[]>([])
   const [itemsTotal, setItemsTotal] = useState(0)
   const [itemStatus, setItemStatus] = useState('')
+  // R94：批单项详情（SHA/耗时/模拟时间等字段此前只在 CSV 里）
+  const [itemDetail, setItemDetail] = useState<BatchItem | null>(null)
   const [findings, setFindings] = useState<FindingsResponse | null>(null)
   const [sweepSel, setSweepSel] = useState<{ param: string; metric: string } | null>(null)
   const [limits, setLimits] = useState<BatchLimits>(FALLBACK_LIMITS)
@@ -210,6 +212,7 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
   async function changeItemStatus(status: string) {
     if (!batch) return
     setItemStatus(status)
+    setItemDetail(null)
     setBusy(true)
     setError('')
     try {
@@ -312,6 +315,7 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
       setItems([])
       setItemsTotal(0)
       setItemStatus('')
+      setItemDetail(null)
       setNotice(`批量 #${b.id} 已创建（${b.total_items} 项），运行中…`)
       refreshBatches()
     } catch (e) {
@@ -331,6 +335,7 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
       setBatch(b)
       setFindings(null)
       setItemStatus('')
+      setItemDetail(null)
       if (TERMINAL.has(b.status)) {
         const page = await api.listBatchItems(id, ITEMS_PAGE_SIZE)
         setItems(page.items)
@@ -392,6 +397,7 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
         setItemsTotal(0)
         setFindings(null)
         setSweepSel(null)
+        setItemDetail(null)
       }
       setNotice(`已删除批量 #${b.id}「${b.name}」及其单项结果。`)
     } catch (e) {
@@ -865,6 +871,7 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
                       <th style={th}>状态</th>
                       <th style={th}>尝试</th>
                       <th style={th}>steps</th>
+                      <th style={th}>详情</th>
                       <th style={th}>指标</th>
                     </tr>
                   </thead>
@@ -877,6 +884,15 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
                         <td style={td}>{statusLabel(it.status)}</td>
                         <td style={td}>{it.attempts}</td>
                         <td style={td}>{it.steps ?? '—'}</td>
+                        <td style={td}>
+                          <button
+                            onClick={() => setItemDetail(it)}
+                            aria-label={`查看批单项 ${it.item_index} 的详情`}
+                            style={{ ...smallBtn, padding: '2px 8px', fontSize: 11 }}
+                          >
+                            详情
+                          </button>
+                        </td>
                         <td style={{ ...td, fontFamily: 'monospace', fontSize: 12 }}>
                           {it.metrics ? JSON.stringify(it.metrics) : it.error || '—'}
                         </td>
@@ -885,6 +901,44 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
                   </tbody>
                 </table>
               </div>
+              {itemDetail && (
+                <div
+                  aria-label="批单项详情"
+                  style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '8px 12px', marginTop: 8, background: 'white' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <h4 style={{ fontSize: 14, margin: '2px 0' }}>批单项 #{itemDetail.item_index} 详情</h4>
+                    <button
+                      onClick={() => setItemDetail(null)}
+                      aria-label="关闭批单项详情"
+                      style={{ ...smallBtn, padding: '2px 8px' }}
+                    >
+                      关闭
+                    </button>
+                  </div>
+                  <p style={{ fontSize: 12, color: '#374151', margin: '2px 0' }}>
+                    {statusLabel(itemDetail.status)} · 组合 {JSON.stringify(itemDetail.params)} · 重复{' '}
+                    {itemDetail.repeat_index} · seed {itemDetail.seed} · 尝试 {itemDetail.attempts}
+                  </p>
+                  <p style={{ fontSize: 12, color: '#374151', margin: '2px 0' }}>
+                    步数 {itemDetail.steps ?? '—'} · 模拟时间{' '}
+                    {itemDetail.sim_time != null ? itemDetail.sim_time.toFixed(3) : '—'} · 耗时{' '}
+                    {itemDetail.duration_ms != null ? `${(itemDetail.duration_ms / 1000).toFixed(2)} s` : '—'}
+                  </p>
+                  <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0', wordBreak: 'break-all' }}>
+                    结果 SHA-256：{itemDetail.result_sha256 ?? '—'}
+                  </p>
+                  {itemDetail.error && (
+                    <p role="alert" style={{ color: '#b91c1c', fontSize: 12, margin: '2px 0' }}>
+                      错误：{itemDetail.error}
+                    </p>
+                  )}
+                  <p style={{ fontSize: 12, color: '#374151', margin: '6px 0 2px' }}>指标：</p>
+                  <pre style={{ margin: 0, fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {itemDetail.metrics ? JSON.stringify(itemDetail.metrics, null, 2) : '（无）'}
+                  </pre>
+                </div>
+              )}
               {moreLabel(items.length, itemsTotal) && (
                 <button onClick={loadMoreItems} disabled={busy} style={{ ...smallBtn, marginTop: 8 }}>
                   {moreLabel(items.length, itemsTotal)}
