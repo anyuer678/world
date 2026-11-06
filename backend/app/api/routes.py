@@ -373,6 +373,11 @@ def cancel_batch(batch_id: RowId, request: Request) -> dict[str, Any]:
     return _batches(request).cancel(batch_id)
 
 
+@router.delete("/batches/{batch_id}", status_code=204)
+def delete_batch(batch_id: RowId, request: Request) -> None:
+    _batches(request).delete(batch_id)
+
+
 @router.get("/batches/{batch_id}/export.csv")
 def export_batch_csv(batch_id: RowId, request: Request) -> Response:
     batches = _batches(request)

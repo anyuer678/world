@@ -280,6 +280,31 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     }
   }
 
+  async function removeBatch(b: BatchListItem) {
+    if (!window.confirm(`删除批量 #${b.id}「${b.name}」及其全部单项结果？此操作不可撤销。`)) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await api.deleteBatch(b.id)
+      setBatches((list) => list.filter((x) => x.id !== b.id))
+      setBatchesTotal((n) => Math.max(0, n - 1))
+      // 正在查看的就是被删批量时立即收起，避免继续展示已不存在的数据
+      if (batch?.id === b.id) {
+        setBatch(null)
+        setItems([])
+        setItemsTotal(0)
+        setFindings(null)
+        setSweepSel(null)
+      }
+      setNotice(`已删除批量 #${b.id}「${b.name}」及其单项结果。`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const done = batch
     ? Object.entries(batch.counts).reduce((a, [k, v]) => a + (TERMINAL.has(k) ? v : 0), 0)
     : 0
@@ -416,6 +441,15 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
                 <td style={td}>
                   <button onClick={() => openBatch(b.id)} disabled={busy} style={{ ...smallBtn, padding: '4px 10px' }}>
                     查看
+                  </button>{' '}
+                  <button
+                    onClick={() => removeBatch(b)}
+                    disabled={busy}
+                    aria-label={`删除批量 ${b.id}`}
+                    title={b.status === 'running' ? '运行中的批量需先取消再删除' : '删除批量及其全部单项结果'}
+                    style={{ ...smallBtn, padding: '4px 10px', color: '#b91c1c', borderColor: '#fecaca' }}
+                  >
+                    删除
                   </button>
                 </td>
               </tr>

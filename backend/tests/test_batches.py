@@ -280,6 +280,46 @@ def test_cancel_finished_batch_conflicts(batches):
         batches.cancel(99999)
 
 
+# ------------------------------------------------------------------- delete
+def test_delete_finished_batch_cascades_items(batches):
+    b = batches.create("del", _spec(params={"total_events": 10}), {}, repeats=2)
+    _wait_terminal(batches, b["id"])
+    batches.delete(b["id"])
+    with pytest.raises(NotFoundError):
+        batches.get_batch(b["id"])
+    with pytest.raises(NotFoundError):
+        batches.list_items(b["id"])
+    with pytest.raises(NotFoundError):
+        batches.delete(b["id"])
+
+
+def test_delete_running_batch_requires_cancel(batches):
+    b = batches.create(
+        "del-running",
+        {
+            "schema_version": 1,
+            "model_id": "toy_slow_des",
+            "params": {"total_events": 1_000_000, "delay_mean": 1.0},
+            "stop_condition": {"type": "until_empty"},
+            "seed": 1000,
+        },
+        {},
+        repeats=1,
+    )
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        if batches.get_batch(b["id"], include_summary=False)["status"] == "running":
+            break
+        time.sleep(0.02)
+    with pytest.raises(ConflictError):
+        batches.delete(b["id"])
+    batches.cancel(b["id"])
+    _wait_terminal(batches, b["id"])
+    batches.delete(b["id"])
+    with pytest.raises(NotFoundError):
+        batches.get_batch(b["id"])
+
+
 # ---------------------------------------------------------------- sensitivity
 def test_summary_and_sensitivity(batches):
     # total_time = delay_mean * sum(-log(1-u_i)) under a fixed seed: exactly linear
@@ -330,6 +370,52 @@ def test_batch_api_flow(client):
     # finished batch cannot be cancelled again
     assert client.post(f"/api/batches/{bid}/cancel").status_code == 409
     assert client.get("/api/batches/99999").status_code == 404
+
+
+def test_batch_delete_api(client):
+    r = client.post(
+        "/api/batches",
+        json={"name": "del api", "spec": _spec(params={"total_events": 10}), "grid": {}, "repeats": 1},
+    )
+    assert r.status_code == 201, r.text
+    bid = r.json()["id"]
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        g = client.get(f"/api/batches/{bid}").json()
+        if g["status"] in ("completed", "failed", "cancelled"):
+            break
+        time.sleep(0.05)
+    assert client.delete(f"/api/batches/{bid}").status_code == 204
+    assert client.get(f"/api/batches/{bid}").status_code == 404
+    assert client.delete(f"/api/batches/{bid}").status_code == 404
+    assert client.delete("/api/batches/99999").status_code == 404
+
+    slow = client.post(
+        "/api/batches",
+        json={
+            "name": "slow del",
+            "spec": {
+                "schema_version": 1,
+                "model_id": "toy_slow_des",
+                "params": {"total_events": 1_000_000, "delay_mean": 1.0},
+                "stop_condition": {"type": "until_empty"},
+                "seed": 1,
+            },
+            "grid": {},
+            "repeats": 1,
+        },
+    ).json()["id"]
+    deadline = time.time() + 10
+    while time.time() < deadline and client.get(f"/api/batches/{slow}").json()["status"] != "running":
+        time.sleep(0.05)
+    assert client.delete(f"/api/batches/{slow}").status_code == 409
+    assert client.post(f"/api/batches/{slow}/cancel").status_code == 200
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        if client.get(f"/api/batches/{slow}").json()["status"] in ("completed", "failed", "cancelled"):
+            break
+        time.sleep(0.05)
+    assert client.delete(f"/api/batches/{slow}").status_code == 204
 
 
 def test_batch_api_validation(client):

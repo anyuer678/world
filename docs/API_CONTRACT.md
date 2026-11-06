@@ -123,6 +123,8 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   **`total` 是全量条数**：批量面板一次只取一页（50），因此表头必须写「显示前 N / 共 M 项」并指向
   CSV 导出（R34，导出走 500/页循环，始终含全部项）
 - `POST /api/batches/{id}/cancel` → Batch（协作式取消；在途上限 = min(concurrency, max_workers)，R1）
+- `DELETE /api/batches/{id}`（R87）→ 204；删除批量并级联单项。运行中（`running`）返回 **409**，
+  需先 cancel 并等待终态；未知 id 与已删除 id 均 404
 - `GET /api/batches/{id}/export.csv` → 逐 item 明细 CSV 附件
 - `GET /api/batches/{id}/report?format=markdown|json`（R77）→ **批量报告**（默认 markdown）。
   JSON 键：`{report_version, generated_at, software{app_version,engine_version,python_version},

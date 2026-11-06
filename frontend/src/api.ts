@@ -216,6 +216,7 @@ export const api = {
     ),
   cancelBatch: (id: number) =>
     request<BatchDetail>(`/api/batches/${id}/cancel`, { method: 'POST' }),
+  deleteBatch: (id: number) => request<void>(`/api/batches/${id}`, { method: 'DELETE' }),
   reportUrl: (id: number, format: 'markdown' | 'json') =>
     `/api/experiments/${id}/report?format=${format}`,
   batchCsvUrl: (id: number) => `/api/batches/${id}/export.csv`,

@@ -379,6 +379,37 @@ class BatchService:
             flag.set()
         return self.get_batch(batch_id, include_summary=False)
 
+    def delete(self, batch_id: int) -> None:
+        """Delete a terminal batch and its items (cascade).
+
+        Running batches are refused so deletion never races the orchestrator;
+        cancel first, wait for the terminal status, then delete. This mirrors the
+        experiment delete guard (R63) with an explicit two-step ritual instead of
+        an in-flight cancel+delete protocol.
+        """
+        conn = self._conn()
+        try:
+            row = conn.execute("SELECT status FROM batch_runs WHERE id=?", (batch_id,)).fetchone()
+            if row is None:
+                raise NotFoundError(f"batch {batch_id} not found")
+            if row["status"] == "running":
+                raise ConflictError(f"batch {batch_id} is still running; cancel it before deleting")
+            with conn:
+                cur = conn.execute(
+                    "DELETE FROM batch_runs WHERE id=? AND status!='running'", (batch_id,)
+                )
+                if cur.rowcount == 0:
+                    row = conn.execute(
+                        "SELECT status FROM batch_runs WHERE id=?", (batch_id,)
+                    ).fetchone()
+                    if row is None:
+                        raise NotFoundError(f"batch {batch_id} not found")
+                    raise ConflictError(f"batch {batch_id} is still running; cancel it before deleting")
+        finally:
+            conn.close()
+        with self._lock:
+            self._cancel_flags.pop(batch_id, None)
+
     # ------------------------------------------------------------------ queries
     def list_batches(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
         conn = self._conn()
