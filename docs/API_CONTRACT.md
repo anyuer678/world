@@ -70,7 +70,8 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 - `GET /api/experiments/{id}` → Experiment（含 runs 概要）
 - `DELETE /api/experiments/{id}` → 204
 - `POST /api/experiments/{id}/clone` body=`{name?, spec_overrides?}` → 新 Experiment
-  （未显式指定 `model_version` 时钉住源实验记录的版本，R105）
+  （未显式指定 `model_version` 时钉住源实验记录的版本，R105；未指定 `name` 时自动
+  `源名 (clone)`，R113 起超长时截断源名以守住 200 字上限；显式超长 name 仍 422）
 - `PUT /api/experiments/{id}/tags` body=`{tags:[string]}` → Experiment
 - `POST /api/experiments/{id}/run` body=`{wait?:bool}` → **200** `{experiment_id, run_id, status:"queued"}`
   （R35 实测纠正：既不是 202，也不返回 `runs:[…]` 数组）；`wait=true` 时阻塞到跑完再返回同一形态

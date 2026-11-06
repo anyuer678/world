@@ -306,6 +306,10 @@ def test_clone_rejects_overlong_name_like_create(client):
     assert over.json()["detail"]["code"] == "spec_invalid"
     ok = client.post(f"/api/experiments/{eid}/clone", json={"name": "y" * 200})
     assert ok.status_code in (200, 201), ok.text
+    # R113：不传 name 时自动加 " (clone)" 后缀，200 字名字不能因此超限
+    auto = client.post(f"/api/experiments/{eid}/clone")
+    assert auto.status_code in (200, 201), auto.text
+    assert len(auto.json()["name"]) == 200 and auto.json()["name"].endswith("(clone)")
 
 
 def test_default_app_never_points_at_repo_database():

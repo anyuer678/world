@@ -292,7 +292,12 @@ class ExperimentService:
                 else:
                     spec[key] = value
         spec = self._pin_spec_version(spec, src["model_version"])
-        new_name = name or f"{src['name']} (clone)"
+        if name is None:
+            # R113：自动后缀不能把 200 字上限顶破；显式传入的超长 name 仍按 R60 报 422
+            suffix = " (clone)"
+            new_name = f"{src['name'][: EXPERIMENT_NAME_MAX - len(suffix)]}{suffix}"
+        else:
+            new_name = name
         return self.create_experiment(new_name, spec, parent_experiment_id=exp_id)
 
     def set_tags(self, exp_id: int, tags: list[str]) -> dict[str, Any]:
