@@ -249,3 +249,74 @@ def test_checkpoint_binds_version_and_params():
     )
     with pytest.raises(SimulationError):
         other.restore(cp)
+
+
+def test_soak_runs_and_sessions_leave_no_in_process_residue(settings):
+    """R67：连续 run/会话循环后，进程内注册表与行数都不能泄漏。
+
+    `_futures`/`_cancel_flags` 由 worker 的 finally 清理，`_sessions` 由 delete/TTL 清理；
+    这里用真实服务跑 40 轮（run 等完成）+ 20 次会话建删，逐一断言为空/精确。"""
+    import sqlite3
+
+    from app.core.registry import registry
+    from app.services.experiment_service import ExperimentService
+    from app.services.session_service import SessionService
+
+    exp_svc = ExperimentService(settings, registry)
+    ses_svc = SessionService(settings, registry)
+    spec = {
+        "schema_version": 1,
+        "model_id": "sir",
+        "params": {},
+        "stop_condition": {"type": "steps", "value": 5},
+        "seed": 1,
+    }
+    try:
+        exp = exp_svc.create_experiment("r67-soak", spec)
+        for _ in range(40):
+            body = exp_svc.run_experiment(exp["id"], wait=True)
+            assert body["status"] == "queued"
+
+        assert exp_svc._futures == {}, f"futures 泄漏：{len(exp_svc._futures)}"
+        assert exp_svc._cancel_flags == {}, f"cancel flags 泄漏：{len(exp_svc._cancel_flags)}"
+
+        conn = sqlite3.connect(settings.db_path)
+        try:
+            runs = conn.execute(
+                "SELECT COUNT(*) FROM experiment_runs WHERE experiment_id=?", (exp["id"],)
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        assert runs == 40, runs
+
+        for _ in range(20):
+            sid = ses_svc.create(spec)["session_id"]
+            assert ses_svc.delete(sid) is None
+        assert ses_svc._sessions == {}, f"会话泄漏：{len(ses_svc._sessions)}"
+    finally:
+        ses_svc.shutdown()
+        exp_svc.shutdown()
+
+
+def test_session_event_ring_is_bounded(settings):
+    """事件环按 `event_log_size` 截断（R67）：长跑不能让事件列表无界增长。"""
+    from app.core.registry import registry
+    from app.services.session_service import SessionService
+
+    ses_svc = SessionService(settings, registry)
+    try:
+        spec = {
+            "schema_version": 1,
+            "model_id": "queueing",
+            "params": {},
+            "stop_condition": {"type": "steps", "value": 5000},
+            "seed": 1,
+        }
+        sid = ses_svc.create(spec)["session_id"]
+        ses_svc.step(sid, 3000)
+        st = ses_svc.state(sid, events_limit=500)
+        assert len(st["events"]) <= settings.event_log_size
+        assert len(st["events"]) > 0
+    finally:
+        ses_svc.shutdown()
+

@@ -579,3 +579,11 @@ JSON 报告键集完整（aggregate/experiment/runs/software/comparability_note�
 把会话与取消标志外置（Redis/DB 轮询），属于架构变更。本轮把它写成明确限制：README
 「已知限制」+ BENCHMARKS 3b + ARCHITECTURE「后台执行模型」三处成文；未改产品代码。
 探针库与进程已清理。后端 **312/312**（无代码改动）。
+
+**R67（2026-11-06）短时 soak 基线：连续 run/会话循环后无进程内残留**
+
+补上 §76 里「长时间运行」的最小可回归版本：同一服务连续 40 次 `run(wait=True)` + 20 次
+会话建删后，断言 `_futures`/`_cancel_flags`/`_sessions` **全部为空**、`experiment_runs`
+恰好 40 条；另证事件环有界——queueing 会话推进 3000 步后 `events ≤ event_log_size`（500）。
+反证：临时删掉 worker `finally` 里的 `_futures.pop`，soak 测试立即变红；还原后全绿。
+本轮无产品代码改动；后端 **314/314**。

@@ -972,3 +972,12 @@
     ③ 成文：README「已知限制」、BENCHMARKS「已知限制」3b、ARCHITECTURE 后台执行模型；
     并写明正确用法是单 worker / compose 默认配置。
     ④ 探针库与 uvicorn 进程已清理；后端 **312/312**（本轮无产品代码改动）。
+
+78. **R67 短时 soak（进程内注册表 + 事件环 + 行数）**。
+    ① `test_soak_runs_and_sessions_leave_no_in_process_residue`：连续 40 次
+    `run(wait=True)` + 20 次会话建删，断言 `_futures`/`_cancel_flags`/`_sessions` 为空、
+    `experiment_runs` 恰好 40 条。
+    ② `test_session_event_ring_is_bounded`：queueing 会话推进 3000 步后事件数 ≤ 500。
+    ③ 反证：删掉 worker finally 中的 `_futures.pop`，soak 测试变红；还原后全绿。
+    ④ 未覆盖：真正的小时级 soak 与 RSS 曲线（需要长时运行环境），本轮只固定「无残留」
+    这一可判定口径。后端 **314/314**。
