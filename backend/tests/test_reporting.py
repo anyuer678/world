@@ -148,3 +148,42 @@ def test_batch_csv_export(client):
 
 def test_batch_csv_unknown(client):
     assert client.get("/api/batches/99999/export.csv").status_code == 404
+
+
+def _wait_batch(client, bid, timeout=20.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        body = client.get(f"/api/batches/{bid}").json()
+        if body["status"] in ("completed", "failed", "cancelled"):
+            return body
+        time.sleep(0.05)
+    raise AssertionError("batch did not finish")
+
+
+def test_batch_report_markdown_and_json(client):
+    """R77：批量报告（实验已有 md/json，批量此前只有 CSV）。"""
+    spec = dict(QUEUE_SPEC, stop_condition={"type": "steps", "value": 50})
+    r = client.post(
+        "/api/batches",
+        json={"name": "r77-report", "spec": spec, "grid": {"servers": [1, 2]}, "repeats": 2, "concurrency": 1},
+    )
+    assert r.status_code == 201, r.text
+    bid = r.json()["id"]
+    _wait_batch(client, bid)
+
+    js = client.get(f"/api/batches/{bid}/report?format=json")
+    assert js.status_code == 200, js.text
+    report = js.json()
+    assert {"report_version", "generated_at", "software", "batch", "findings", "caveats"} <= set(report)
+    assert report["batch"]["model_id"] == "queueing"
+    assert report["batch"]["summary"]["combos"]
+    assert "batch_note" in report["caveats"]
+
+    md = client.get(f"/api/batches/{bid}/report")  # 默认 markdown
+    assert md.status_code == 200
+    text = md.text
+    assert "WorldLab 批量报告" in text and "统计汇总" in text and "自动发现" in text
+    assert "不构成因果" in text
+
+    assert client.get("/api/batches/999999/report").status_code == 404
+    assert client.get(f"/api/batches/{bid}/report?format=xml").status_code == 422

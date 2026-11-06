@@ -676,3 +676,13 @@ PLUGINS kind 清单、ARCHITECTURE 清单、QUICK_PICKS 快捷入口、e2e 预�
 曲线只剩几条，改为保留最近 128 条。浏览器实测：场景卡一键运行到 3000 步，画布 600×450、
 雪崩曲线与「落沙 3000 · 雪崩 517 次 · 最大 2075 次崩塌 · 边界流失 486 粒」一致；API 复核
 `history` 恰为 128 条。后端 **331/331**、前端 **71/71**。
+
+**R77（2026-11-06）功能：批量实验的 Markdown / JSON 报告**
+
+实验一直有 md/JSON 报告，批量只有 CSV——汇总、自动发现与「相关性≠因果」声明无法随批量结果
+一起交付。本轮补 `GET /api/batches/{id}/report?format=markdown|json`：JSON 含
+`report_version/generated_at/software/batch/findings/caveats`；Markdown 含概览、网格、
+按参数组合的统计表（n/均值/标准差/p50/p90/ci95）、自动发现逐条中文描述与说明段落。
+前端批量详情新增「报告MD」「报告JSON」下载链接（与 CSV 并列，带 aria-label）。
+测试：`test_batch_report_markdown_and_json`（键集、统计表、自动发现段、404、format 非法 422）。
+后端 **332/332**、前端 **71/71**。

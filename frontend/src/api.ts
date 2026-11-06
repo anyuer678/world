@@ -181,4 +181,6 @@ export const api = {
   reportUrl: (id: number, format: 'markdown' | 'json') =>
     `/api/experiments/${id}/report?format=${format}`,
   batchCsvUrl: (id: number) => `/api/batches/${id}/export.csv`,
+  batchReportUrl: (id: number, format: 'markdown' | 'json') =>
+    `/api/batches/${id}/report?format=${format}`,
 }

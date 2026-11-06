@@ -343,6 +343,21 @@ def batch_findings(batch_id: RowId, request: Request) -> dict[str, Any]:
     return analyze_summary(batch.get("summary", {}), batch.get("grid", {}))
 
 
+@router.get("/batches/{batch_id}/report")
+def batch_report(
+    batch_id: RowId, request: Request, format: Literal["markdown", "json"] = "markdown"
+) -> Any:
+    batch = _batches(request).get_batch(batch_id, include_summary=True)
+    findings = analyze_summary(batch.get("summary", {}), batch.get("grid", {}))
+    report = reporting.build_batch_report(batch, findings, APP_VERSION, ENGINE_VERSION)
+    if format == "json":
+        return report
+    return Response(
+        content=reporting.render_batch_report_markdown(report),
+        media_type="text/markdown; charset=utf-8",
+    )
+
+
 @router.get("/batches/{batch_id}/items")
 def list_batch_items(
     batch_id: RowId,

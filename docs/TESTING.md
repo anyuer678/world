@@ -1075,3 +1075,13 @@
     BENCH_STEPS、e2e 预算、QUICK_PICKS、性能阈值——所有文档锁通过。
     ⑤ 浏览器实测：场景卡运行到 3000 步，画布与曲线/数字一致；API 复核 history=128。
     后端 **331/331**、前端 **71/71**。
+
+88. **R77 功能：批量实验报告（Markdown / JSON）**。
+    ① 缺口：实验有 md/JSON 报告，批量只有 CSV——汇总、findings 与「相关性≠因果」无法随批量交付。
+    ② 实现：`GET /api/batches/{id}/report?format=markdown|json`；JSON 键集
+    `{report_version, generated_at, software, batch, findings, caveats}`；Markdown 含概览、
+    网格、按组合统计表、自动发现（jump/dispersion 中文描述）与说明。前端批量详情加两个下载链接。
+    ③ 测试 `test_batch_report_markdown_and_json`：构建 2×2 批量 → 等终态 → JSON 键集与
+    batch.summary.combos 非空；md 含「批量报告/统计汇总/自动发现/不构成因果」；未知批量 404；
+    `format=xml` 422。
+    ④ 回归：后端 **332/332**、前端 **71/71**、tsc/vite 干净。

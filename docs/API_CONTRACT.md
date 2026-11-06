@@ -124,6 +124,11 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   CSV 导出（R34，导出走 500/页循环，始终含全部项）
 - `POST /api/batches/{id}/cancel` → Batch（协作式取消；在途上限 = min(concurrency, max_workers)，R1）
 - `GET /api/batches/{id}/export.csv` → 逐 item 明细 CSV 附件
+- `GET /api/batches/{id}/report?format=markdown|json`（R77）→ **批量报告**（默认 markdown）。
+  JSON 键：`{report_version, generated_at, software{app_version,engine_version,python_version},
+  batch{…含 spec/grid/counts/summary}, findings{findings[],note}, caveats{batch_note}}`；
+  markdown 含概览、网格、按组合的统计表（n/均值/标准差/p50/p90/ci95）、自动发现与
+  「观察性数据、相关性≠因果」声明。未知批量 404，`format` 非法 422。
 - `GET /api/batches/{id}/findings`（R6）→ `{findings[], note}`：
   两层描述性自动发现——①jump：1-D 扫描相邻点因子 ≥3（触及精确零记
   `ratio: null`，0→0 不算；R23 起附 `ci_overlap` 三态——false=两段 95% CI

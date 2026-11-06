@@ -152,3 +152,125 @@ def render_batch_items_csv(batch: dict[str, Any], items: list[dict[str, Any]]) -
             json.dumps(it.get("metrics"), ensure_ascii=False, sort_keys=True) if it.get("metrics") else "",
         ])
     return buf.getvalue()
+
+
+BATCH_NOTE = (
+    "批量结果是观察性数据：自动发现只描述参数与指标之间的关联，不构成因果结论；"
+    "单次批量实验不足以断言某种参数取值普遍最优。逐项数据以导出 CSV 为准。"
+)
+
+
+def build_batch_report(
+    batch: dict[str, Any], findings: dict[str, Any], app_version: str, engine_version: str
+) -> dict[str, Any]:
+    """Batch report: everything recorded for the batch, plus the findings payload.
+
+    Same rule as the experiment report — no derived numbers are invented; the
+    per-combination stats come straight from get_batch(include_summary=True).
+    """
+    return {
+        "report_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "software": {
+            "app_version": app_version,
+            "engine_version": engine_version,
+            "python_version": platform.python_version(),
+        },
+        "batch": batch,
+        "findings": findings,
+        "caveats": {"batch_note": BATCH_NOTE},
+    }
+
+
+def _fmt(value: Any) -> str:
+    if isinstance(value, float):
+        return f"{value:.4g}"
+    return str(value)
+
+
+def _finding_line(f: dict[str, Any]) -> str:
+    if f.get("type") == "jump":
+        ratio = f.get("ratio")
+        change = (
+            f"从 {_fmt(f.get('value_from'))} 变到 {_fmt(f.get('value_to'))}（跨越 0）"
+            if ratio is None
+            else f"从 {_fmt(f.get('value_from'))} 变到 {_fmt(f.get('value_to'))}（×{ratio}）"
+        )
+        return (
+            f"- 参数 `{f.get('param')}` 从 {f.get('from')} → {f.get('to')} 时，"
+            f"指标 `{f.get('metric')}` {change}——可能存在临界点"
+        )
+    if f.get("type") == "dispersion":
+        return (
+            f"- 组合 {json.dumps(f.get('params'), ensure_ascii=False, sort_keys=True)} 的指标 "
+            f"`{f.get('metric')}` 离散度高（CV={f.get('cv')}，n={f.get('n')}）——结果对种子敏感"
+        )
+    return f"- {json.dumps(f, ensure_ascii=False, sort_keys=True)}"
+
+
+def render_batch_report_markdown(report: dict[str, Any]) -> str:
+    batch = report["batch"]
+    lines: list[str] = []
+    lines.append(f"# WorldLab 批量报告 — {batch.get('name', '')} (#{batch.get('id')})")
+    lines.append("")
+    lines.append(f"- 模型：{batch.get('model_id')} v{batch.get('model_version')}")
+    lines.append(f"- 状态：{batch.get('status')} · 条目：{batch.get('total_items')} · 重复：{batch.get('repeats')}")
+    lines.append(
+        f"- 种子策略：{batch.get('seed_strategy')}（基种子 {batch.get('seed_base')}）· 并发：{batch.get('concurrency')}"
+    )
+    counts = batch.get("counts") or {}
+    lines.append("- 终态分布：" + "，".join(f"{k}={v}" for k, v in sorted(counts.items())))
+    lines.append(f"- 生成时间：{report['generated_at']}")
+    sw = report["software"]
+    lines.append(
+        f"- 软件版本：WorldLab {sw['app_version']} · 引擎 {sw['engine_version']} · Python {sw['python_version']}"
+    )
+    lines.append("")
+    lines.append("## 网格（参数扫描）")
+    lines.append("")
+    lines.append("```json")
+    lines.append(json.dumps(batch.get("grid"), ensure_ascii=False, indent=2, sort_keys=True))
+    lines.append("```")
+    lines.append("")
+    lines.append("## 统计汇总（按参数组合）")
+    lines.append("")
+    summary = batch.get("summary") or {}
+    combos = summary.get("combos") or []
+    if not combos:
+        lines.append("（没有已完成的条目，暂无可汇总的指标。）")
+    else:
+        for combo in combos:
+            lines.append(f"### 组合 {json.dumps(combo.get('params'), ensure_ascii=False, sort_keys=True)}")
+            lines.append("")
+            lines.append("| 指标 | n | 均值 | 标准差 | p50 | p90 | ci95 |")
+            lines.append("|---|---:|---:|---:|---:|---:|---|")
+            for metric in sorted(combo.get("metrics", {})):
+                s = combo["metrics"][metric]
+                lines.append(
+                    f"| `{metric}` | {s.get('n')} | {_fmt(s.get('mean'))} | {_fmt(s.get('std'))} | "
+                    f"{_fmt(s.get('p50'))} | {_fmt(s.get('p90'))} | "
+                    f"[{_fmt(s.get('ci95_low'))}, {_fmt(s.get('ci95_high'))}] |"
+                )
+            lines.append("")
+        for key in ("sensitivity_note", "ci_note"):
+            if summary.get(key):
+                lines.append(f"> {summary[key]}")
+                lines.append("")
+    lines.append("## 自动发现")
+    lines.append("")
+    findings = (report.get("findings") or {}).get("findings") or []
+    if not findings:
+        lines.append("（没有达到阈值的跳变或离散异常。）")
+    else:
+        for f in findings:
+            lines.append(_finding_line(f))
+    lines.append("")
+    note = (report.get("findings") or {}).get("note")
+    if note:
+        lines.append(f"> {note}")
+        lines.append("")
+    lines.append("## 说明")
+    lines.append("")
+    lines.append(f"> {report['caveats']['batch_note']}")
+    lines.append("")
+    return "\n".join(lines)

@@ -416,6 +416,22 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
             >
               导出 CSV
             </a>
+            <a
+              href={api.batchReportUrl(batch.id, 'markdown')}
+              download={`worldlab-batch-${batch.id}.md`}
+              aria-label={`导出批量 ${batch.id} 的 Markdown 报告`}
+              style={{ ...smallBtn, textDecoration: 'none', display: 'inline-block' }}
+            >
+              报告MD
+            </a>
+            <a
+              href={api.batchReportUrl(batch.id, 'json')}
+              download={`worldlab-batch-${batch.id}.json`}
+              aria-label={`导出批量 ${batch.id} 的 JSON 报告`}
+              style={{ ...smallBtn, textDecoration: 'none', display: 'inline-block' }}
+            >
+              报告JSON
+            </a>
           </div>
           {Object.keys(batch.counts).length > 0 && (
             <p style={{ fontSize: 12, color: '#6b7280' }}>
