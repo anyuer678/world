@@ -389,6 +389,8 @@ def test_retry_failed_items_reruns_only_failed(batches):
     FailOnceModel._seen.clear()
     b = batches.create("retry", _flaky_spec(), {"key": [1, 2]}, repeats=1, max_retries=0)
     assert _wait_terminal(batches, b["id"])["status"] == "failed"
+    listed = next(x for x in batches.list_batches(status="failed")["batches"] if x["id"] == b["id"])
+    assert listed["failed_items"] == 2
     first = batches.list_items(b["id"])["items"]
     assert [i["status"] for i in first] == ["failed", "failed"]
     assert all(i["attempts"] == 1 for i in first)
@@ -553,6 +555,8 @@ def test_batch_retry_api(client):
     while time.time() < deadline and client.get(f"/api/batches/{bid}").json()["status"] != "failed":
         time.sleep(0.05)
     assert client.get(f"/api/batches/{bid}/items").json()["items"][0]["attempts"] == 1
+    listed = client.get("/api/batches?status=failed").json()["batches"]
+    assert next(x for x in listed if x["id"] == bid)["failed_items"] == 1
 
     assert client.post(f"/api/batches/{bid}/retry").status_code == 200
     deadline = time.time() + 20

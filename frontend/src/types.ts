@@ -158,6 +158,7 @@ export interface BatchListItem {
   status: string
   total_items: number
   done_items: number
+  failed_items: number
   created_at: string
 }
 

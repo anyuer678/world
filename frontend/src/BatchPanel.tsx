@@ -387,6 +387,23 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
     }
   }
 
+  async function retryBatchRow(b: BatchListItem) {
+    if (!window.confirm(`重试批量 #${b.id}「${b.name}」的失败项？已完成项不会重跑。`)) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const updated = await api.retryBatch(b.id)
+      if (batch?.id === b.id) setBatch(updated)
+      setNotice(`已提交批量 #${b.id} 的失败项重试。`)
+      refreshBatches()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function cancelBatchRow(b: BatchListItem) {    if (!window.confirm(`取消批量 #${b.id}「${b.name}」正在进行的运行？`)) return
     setBusy(true)
     setError('')
@@ -608,6 +625,7 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
                 <td style={td}>{statusLabel(b.status)}</td>
                 <td style={td}>
                   {b.done_items}/{b.total_items}
+                  {b.failed_items > 0 ? `（失败 ${b.failed_items}）` : ''}
                 </td>
                 <td style={td}>
                   <button onClick={() => openBatch(b.id)} disabled={busy} style={{ ...smallBtn, padding: '4px 10px' }}>
@@ -622,6 +640,18 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
                         style={{ ...smallBtn, padding: '4px 10px', color: '#b45309', borderColor: '#fde68a' }}
                       >
                         取消
+                      </button>{' '}
+                    </>
+                  )}
+                  {canRetryFailed(b.status, b.failed_items) && (
+                    <>
+                      <button
+                        onClick={() => retryBatchRow(b)}
+                        disabled={busy}
+                        aria-label={`重试批量 ${b.id} 的失败项（列表）`}
+                        style={{ ...smallBtn, padding: '4px 10px', color: '#1d4ed8', borderColor: '#bfdbfe' }}
+                      >
+                        重试
                       </button>{' '}
                     </>
                   )}

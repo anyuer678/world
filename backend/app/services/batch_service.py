@@ -481,7 +481,8 @@ class BatchService:
                 f"""SELECT b.id, b.name, b.model_id, b.model_version, b.status, b.total_items,
                    b.repeats, b.seed_strategy, b.seed_base, b.created_at, b.duration_ms,
                    COALESCE(SUM(CASE WHEN i.status IN ('completed','failed','cancelled','step_limit','wall_timeout')
-                   THEN 1 ELSE 0 END), 0) AS done_items
+                   THEN 1 ELSE 0 END), 0) AS done_items,
+                   COALESCE(SUM(CASE WHEN i.status='failed' THEN 1 ELSE 0 END), 0) AS failed_items
                    FROM batch_runs b LEFT JOIN batch_items i ON i.batch_id = b.id
                    {clause}
                    GROUP BY b.id ORDER BY b.id DESC LIMIT ? OFFSET ?""",
