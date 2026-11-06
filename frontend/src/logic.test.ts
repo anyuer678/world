@@ -7,7 +7,7 @@ import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
-import { BATCH_STATUSES, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, itemsHeading } from './BatchPanel'
+import { BATCH_STATUSES, canCancelBatch, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, itemsHeading } from './BatchPanel'
 import { toggleCompare } from './ComparePanel'
 import { ApiError, errorDetailMessage, isNotFoundOn, specErrorText } from './api'
 
@@ -796,6 +796,14 @@ describe('isSessionGone (session TTL recovery, R50)', () => {
 describe('batch filters (R92)', () => {
   it('has a Chinese label for every filterable batch status', () => {
     for (const s of BATCH_STATUSES) expect(statusLabel(s)).not.toBe(s)
+  })
+
+  it('only offers row cancel for queued/running batches (R93)', () => {
+    expect(canCancelBatch('queued')).toBe(true)
+    expect(canCancelBatch('running')).toBe(true)
+    expect(canCancelBatch('completed')).toBe(false)
+    expect(canCancelBatch('failed')).toBe(false)
+    expect(canCancelBatch('cancelled')).toBe(false)
   })
 })
 

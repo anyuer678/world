@@ -77,6 +77,11 @@ export function itemsHeading(shown: number, total: number): string {
   return `单项结果（显示前 ${shown} / 共 ${total} 项，可继续加载或导出 CSV）`
 }
 
+/** 行内取消按钮的可用状态（R93）：与后端 cancel 的 queued/running 语义一致。 */
+export function canCancelBatch(status: string): boolean {
+  return status === 'queued' || status === 'running'
+}
+
 export function parseValues(raw: string): unknown[] {
   return raw
     .split(/[,\s]+/)
@@ -135,6 +140,14 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
   useEffect(() => {
     refreshBatches()
   }, [refreshBatches])
+
+  // R93：有 queued/running 批量时自动刷新列表——进度与终态不必靠用户打开详情才更新
+  const anyActiveBatch = batches.some((b) => canCancelBatch(b.status))
+  useEffect(() => {
+    if (!anyActiveBatch) return
+    const t = setInterval(refreshBatches, 800)
+    return () => clearInterval(t)
+  }, [anyActiveBatch, refreshBatches])
 
   async function loadMoreBatches() {
     setBusy(true)
@@ -340,6 +353,22 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
     setError('')
     try {
       setBatch(await api.cancelBatch(batch.id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function cancelBatchRow(b: BatchListItem) {
+    if (!window.confirm(`取消批量 #${b.id}「${b.name}」正在进行的运行？`)) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await api.cancelBatch(b.id)
+      setNotice(`已取消批量 #${b.id} 的运行。`)
+      refreshBatches()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -557,6 +586,18 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
                   <button onClick={() => openBatch(b.id)} disabled={busy} style={{ ...smallBtn, padding: '4px 10px' }}>
                     查看
                   </button>{' '}
+                  {canCancelBatch(b.status) && (
+                    <>
+                      <button
+                        onClick={() => cancelBatchRow(b)}
+                        disabled={busy}
+                        aria-label={`取消批量 ${b.id} 的运行`}
+                        style={{ ...smallBtn, padding: '4px 10px', color: '#b45309', borderColor: '#fde68a' }}
+                      >
+                        取消
+                      </button>{' '}
+                    </>
+                  )}
                   <button
                     onClick={() => removeBatch(b)}
                     disabled={busy}

@@ -1224,3 +1224,11 @@
     ③ 浏览器实测（sir 完成／queueing 完成／sir 运行中）：全部 3 → sir 2 → +已完成 1 →
     +失败 0 + 空态 → 清除 3；API completed=2、running=1、model_id=sir=2。
     ④ 回归：后端 **337/337**（批量 API/删除测试补筛选断言）、前端 **82/82**、tsc/vite 干净。
+
+104. **R93 功能：批量列表实时进度 + 行内取消**。
+    ① 缺口：列表只在创建/打开详情时刷新，运行中进度与终态陈旧；取消必须先打开详情。
+    ② 实现：有 queued/running 批量时 800ms 自动刷新列表；行内「取消」（确认框，
+    `canCancelBatch` 仅 queued/running），取消后刷新。
+    ③ 浏览器实测：运行中 `0/3` → 外部 `POST /cancel` → 1.5s 后列表自动变「已取消 3/3」
+    且按钮消失；另一批量 confirm=false 保持运行中，confirm=true 变已取消并提示。
+    ④ 回归：前端 **83/83**（新增 `canCancelBatch` 用例）、tsc/vite 干净；后端 **337/337** 无改动。
