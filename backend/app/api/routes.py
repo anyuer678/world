@@ -11,7 +11,7 @@ from ..core.schema.spec import SpecValidationError
 from ..services import reporting
 from ..services.analysis_service import analyze_summary
 from ..services.batch_service import MAX_BATCH_ITEMS
-from ..services.experiment_service import ConflictError, NotFoundError
+from ..services.experiment_service import EXPERIMENT_NAME_MAX, ConflictError, NotFoundError
 from ..services.session_service import MAX_STEP_BATCH
 
 
@@ -24,7 +24,7 @@ MAX_EVENTS_LIMIT = 500
 
 
 class CreateExperimentBody(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
+    name: str = Field(min_length=1, max_length=EXPERIMENT_NAME_MAX)
     spec: dict[str, Any]
 
 
@@ -297,6 +297,7 @@ def get_limits(request: Request) -> dict[str, Any]:
         "session": {"max_step_batch": MAX_STEP_BATCH},
         # R59：列表分页与事件数量的边界（同一个常量供校验与契约使用）
         "pagination": {"max_limit": MAX_PAGE_SIZE, "max_events": MAX_EVENTS_LIMIT},
+        "experiment": {"name_max_length": EXPERIMENT_NAME_MAX},
     }
 
 

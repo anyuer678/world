@@ -904,3 +904,12 @@
     -1/501→422）。
     ④ 实跑复核（重启服务后）：limit=-1/0/999999、offset=-5 → 422；limit=20 → 200；
     events_limit 0/2 → 0/2 条、-1 → 422；`/api/limits.pagination` 呈现。后端 **306/306**。
+
+71. **R60 名称长度上限下沉到服务层（clone 曾绕过）**。
+    ① 实跑：直接创建 10000 字符名称 → 422；`clone` 同样名称 → 200 且库中存 10000 字符。
+    规则只在路由的 `CreateExperimentBody` 里，服务层没有校验。
+    ② 修：`EXPERIMENT_NAME_MAX=200` 同时供路由与服务层；`create_experiment()` 校验长度；
+    `/api/limits.experiment.name_max_length` 导出，前端名称输入框据此 `maxLength`。
+    ③ 测试：`test_clone_rejects_overlong_name_like_create`（201 → 422；200 → 200）。
+    ④ 实跑复核：clone(201)=422、clone(200)=200；limits 呈现 200。探针实验已删。
+    ⑤ 回归：后端 **307/307**、前端 **70/70**、tsc/vite 干净。

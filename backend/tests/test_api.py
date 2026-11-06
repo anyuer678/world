@@ -293,3 +293,16 @@ def test_pagination_bounds_are_enforced(client):
     assert client.get("/api/experiments?limit=1").status_code == 200
     assert client.get("/api/batches?limit=1000").status_code == 200
 
+
+def test_clone_rejects_overlong_name_like_create(client):
+    """R60：名称长度上限原先只写在 CreateExperimentBody（路由层），`clone` 走服务层时
+    能把 10000 字符的名称写进库（实测 200 OK）。规则下沉到服务层后两条入口一致。"""
+    r = client.post("/api/experiments", json={"name": "x" * 200, "spec": QUEUE_SPEC})
+    assert r.status_code == 201, r.text
+    eid = r.json()["id"]
+    over = client.post(f"/api/experiments/{eid}/clone", json={"name": "y" * 201})
+    assert over.status_code == 422, over.text
+    assert over.json()["detail"]["code"] == "spec_invalid"
+    ok = client.post(f"/api/experiments/{eid}/clone", json={"name": "y" * 200})
+    assert ok.status_code in (200, 201), ok.text
+

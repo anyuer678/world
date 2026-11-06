@@ -505,3 +505,13 @@ R55 只验到加载器层面；本轮把 `PLUGINS.md` 的示例代码块原样�
 越界一律 422；`_build_state` 对 `events_limit=0` 明确返回空列表；`/api/limits` 新增
 `pagination:{max_limit, max_events}` 作为单一事实源。实跑复核：三个越界值全部 422、
 `events_limit=0` 返回 0 条、`=2` 返回 2 条。后端 **306/306**。
+
+**R60（2026-11-06）实验名称长度上限下沉到服务层：clone 不再能绕过**
+
+实跑：`POST /api/experiments` 带 10000 字符名称 → **422**；对同一实验
+`POST /api/experiments/{id}/clone` 带同样名称 → **200，库里存了 10000 字符**。根因是规则只写在
+`CreateExperimentBody`（路由层 pydantic），而 clone 走服务层、没有任何长度校验。修：
+`EXPERIMENT_NAME_MAX = 200` 常量同时供路由与服务层使用，`create_experiment()` 自己校验长度；
+`/api/limits` 新增 `experiment.name_max_length`，工作台的实验名称输入框据此设 `maxLength`，
+超长名称在界面层就不可输入。实跑复核：clone(201) → 422、clone(200) → 200。
+后端 **307/307**、前端 **70/70**。

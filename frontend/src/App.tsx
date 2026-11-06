@@ -23,6 +23,8 @@ export default function App() {
   const [session, setSession] = useState<SessionState | null>(null)
   // R47：单次步进上限从 /api/limits 取（取不到时用与后端一致的保守默认值）
   const [stepMax, setStepMax] = useState(1_000_000)
+  // R60：实验名称上限由服务端导出，输入框直接拦住超长名称
+  const [nameMax, setNameMax] = useState(200)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
@@ -44,7 +46,10 @@ export default function App() {
     refreshHistory()
     api
       .getLimits()
-      .then((l) => setStepMax(l.session.max_step_batch))
+      .then((l) => {
+        setStepMax(l.session.max_step_batch)
+        setNameMax(l.experiment.name_max_length)
+      })
       .catch(() => {
         /* 保持保守默认值，不阻塞表单 */
       })
@@ -452,7 +457,7 @@ export default function App() {
             )}
             <label style={rowFlex}>
               实验名称：
-              <input value={name} onChange={(e) => setName(e.target.value)} style={control} />
+              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={nameMax} style={control} />
             </label>
             <button onClick={() => act(() => api.createSession(buildSpec()))} disabled={busy || !selected} style={primaryBtn}>
               开始实时模拟

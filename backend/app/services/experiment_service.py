@@ -17,6 +17,10 @@ import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
+# 实验名称长度上限：创建与克隆都必须遵守（R60 前只有路由的 pydantic 拦，
+# clone 走服务层时能存进 10000 字符的名称）。
+EXPERIMENT_NAME_MAX = 200
+
 from .. import APP_VERSION
 from ..config import Settings
 from ..core.engine.engines import Limits, SimulationEngine
@@ -171,6 +175,10 @@ class ExperimentService:
     ) -> dict[str, Any]:
         if not name or not name.strip():
             raise SpecValidationError.single("name", "experiment name must not be empty")
+        if len(name) > EXPERIMENT_NAME_MAX:
+            raise SpecValidationError.single(
+                "name", f"experiment name must be at most {EXPERIMENT_NAME_MAX} characters"
+            )
         spec, model_cls = validate_spec(spec_raw, self.registry)
         software = (
             f"worldlab-{APP_VERSION}; engine-{ENGINE_VERSION}; "
