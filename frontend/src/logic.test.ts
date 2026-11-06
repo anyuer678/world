@@ -9,7 +9,7 @@ import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
 import { FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, itemsHeading } from './BatchPanel'
 import { toggleCompare } from './ComparePanel'
-import { ApiError, errorDetailMessage, isNotFoundOn } from './api'
+import { ApiError, errorDetailMessage, isNotFoundOn, specErrorText } from './api'
 
 describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
   it('rejects repeats above the server max that the old frontend ignored', () => {
@@ -277,6 +277,21 @@ describe('modelVersionLabel (R89)', () => {
     expect(modelVersionLabel('sir', '2.0.0')).toBe('sir v2.0.0')
     expect(modelVersionLabel('sir', '')).toBe('sir')
     expect(modelVersionLabel('sir', null)).toBe('sir')
+  })
+})
+
+describe('specErrorText (validate preview, R90)', () => {
+  it('reuses the Chinese spec-error translation', () => {
+    expect(specErrorText({ code: 'params.gamma', message: 'Input should be less than or equal to 5.0' })).toBe(
+      'gamma 不能大于 5.0',
+    )
+    expect(specErrorText({ code: 'params.population', message: 'Input should be greater than or equal to 10' })).toBe(
+      'population 不能小于 10',
+    )
+  })
+
+  it('falls back to code + raw message when the pattern is unknown', () => {
+    expect(specErrorText({ code: 'weird', message: 'mystery' })).toBe('weird mystery')
   })
 })
 

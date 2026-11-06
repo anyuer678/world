@@ -5,6 +5,7 @@ import type {
   ExperimentResult,
   LimitsResponse,
   ModelInfo,
+  ModelValidation,
   RunDetail,
   SessionState,
 } from './types'
@@ -69,6 +70,11 @@ function humanizeFastApiError(item: FastApiError): string | null {
     if (m) return `${label ? label + ' ' : ''}${fmt(m)}`
   }
   return null
+}
+
+/** 单个 spec 校验错误 → 中文（R90 复用给 validate 预览）；识别不了保留 code + 原文。 */
+export function specErrorText(e: { code: string; message: string }): string {
+  return humanizeSpecError(e) ?? `${e.code} ${e.message}`
 }
 
 export function errorDetailMessage(status: number, body: unknown): string {
@@ -142,6 +148,11 @@ export const api = {
     request<ModelInfo>(
       `/api/models/${encodeURIComponent(id)}${version ? `?version=${encodeURIComponent(version)}` : ''}`,
     ),
+  validateModel: (id: string, spec: unknown) =>
+    request<ModelValidation>(`/api/models/${encodeURIComponent(id)}/validate`, {
+      method: 'POST',
+      body: JSON.stringify(spec),
+    }),
   getLimits: () => request<LimitsResponse>('/api/limits'),
   createExperiment: (name: string, spec: unknown) =>
     request<{ id: number }>('/api/experiments', { method: 'POST', body: JSON.stringify({ name, spec }) }),

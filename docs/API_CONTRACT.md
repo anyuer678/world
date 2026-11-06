@@ -54,7 +54,7 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   此前只回吐入参）**：`model_version`= 注册表解析出的实际版本（未钉则数值最新）、
   `display_name`= 模型显示名、`params`= 套用默认值后的完整参数、`notes`= 迁移说明。
   该端点对非法输入返回 **200 + `valid:false`**（不是 422），未知版本时
-  `errors[0].code == "unknown_model"`
+  `errors[0].code == "unknown_model"`；工作台「校验当前配置」按钮消费此端点（R90，不创建运行）
 - **`spec.model_version` 有实际效力**（R33 探针 + 测试绑定）：它决定校验用哪一版参数 Schema、
   以及运行用哪一版模型实现；不钉则取数值最新版本。钉了注册表里没有的版本时，
   `POST /api/experiments` 是 **422 `spec_invalid`**（`errors[].code="unknown_model"`），不是 500。

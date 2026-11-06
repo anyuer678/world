@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, isNotFoundOn } from './api'
-import type { ExperimentResult, ModelInfo, ModelSpec, ScenarioInfo, SessionState } from './types'
+import { api, isNotFoundOn, specErrorText } from './api'
+import type { ExperimentResult, ModelInfo, ModelSpec, ModelValidation, ScenarioInfo, SessionState } from './types'
 import ParamForm from './ParamForm'
 import TrafficPanel from './TrafficPanel'
 import SimView from './SimView'
@@ -32,6 +32,8 @@ export default function App() {
   // R80：工作台内的检查点（保存在浏览器内存，不落库；存结果请用「存配置为新实验」）
   const [checkpoint, setCheckpoint] = useState<Record<string, unknown> | null>(null)
   const [checkpointStep, setCheckpointStep] = useState<number | null>(null)
+  // R90：本地校验预览（/models/{id}/validate），不创建会话或实验
+  const [validation, setValidation] = useState<ModelValidation | null>(null)
   // R60：实验名称上限由服务端导出，输入框直接拦住超长名称
   const [nameMax, setNameMax] = useState(200)
   const [error, setError] = useState('')
@@ -104,6 +106,11 @@ export default function App() {
     const t = setInterval(refreshHistory, 800)
     return () => clearInterval(t)
   }, [runningAny, filterModel, filterTag, historyLimit])
+
+  // 配置一变，之前的校验结果就过期了——不留着旧结论误导当前表单
+  useEffect(() => {
+    setValidation(null)
+  }, [selected, selectedVersion, params, seed, stopType, stopValue])
 
   // 会话运行中时轮询真实状态；状态离开 running 后停止
   useEffect(() => {
@@ -410,6 +417,22 @@ export default function App() {
     )
   }
 
+  async function validateConfig() {
+    if (!selected) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const v = await api.validateModel(selected, buildSpec())
+      setValidation(v)
+      setNotice(v.valid ? '配置校验通过（未创建任何运行）。' : `配置校验未通过：${v.errors.length} 项。`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   function buildSpec(): ModelSpec {
     return {
       schema_version: 1,
@@ -516,6 +539,7 @@ export default function App() {
   const activeModel = selectedVersion && selectedVersion !== model?.version ? versionModel : model
   // 自定义路网编辑器只跟随目录里的最新版；旧版本走通用 schema 表单，避免预设与旧参数结构错配
   const usesTrafficPanel = selected === 'traffic_network' && !!model && (!selectedVersion || selectedVersion === model.version)
+  const normalizedSpec = validation?.normalized_spec ?? null
 
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 1100, margin: '0 auto', padding: 24 }}>
@@ -770,9 +794,50 @@ export default function App() {
               实验名称：
               <input value={name} onChange={(e) => setName(e.target.value)} maxLength={nameMax} style={control} />
             </label>
-            <button onClick={() => act(() => api.createSession(buildSpec()))} disabled={busy || !selected} style={primaryBtn}>
-              开始实时模拟
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button onClick={() => act(() => api.createSession(buildSpec()))} disabled={busy || !selected} style={primaryBtn}>
+                开始实时模拟
+              </button>
+              <button onClick={validateConfig} disabled={busy || !selected} style={{ ...btn, padding: '8px 14px' }}>
+                校验当前配置
+              </button>
+            </div>
+            {validation && (
+              <div
+                aria-label="配置校验结果"
+                style={{
+                  marginTop: 8,
+                  padding: '8px 10px',
+                  borderRadius: 6,
+                  border: `1px solid ${validation.valid ? '#bbf7d0' : '#fecaca'}`,
+                  background: validation.valid ? '#f0fdf4' : '#fef2f2',
+                }}
+              >
+                {validation.valid && normalizedSpec ? (
+                  <>
+                    <p role="status" style={{ margin: '0 0 4px', fontSize: 13, color: '#166534' }}>
+                      配置有效：解析为 {normalizedSpec.model_id} v{normalizedSpec.model_version}
+                      {normalizedSpec.display_name ? `（${normalizedSpec.display_name}）` : ''}
+                    </p>
+                    <p style={{ margin: '0 0 2px', fontSize: 12, color: '#374151' }}>参数（含模型默认值）：</p>
+                    <pre style={{ margin: 0, fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {JSON.stringify(normalizedSpec.params, null, 2)}
+                    </pre>
+                  </>
+                ) : (
+                  <>
+                    <p role="alert" style={{ margin: '0 0 4px', fontSize: 13, color: '#b91c1c' }}>
+                      配置无效：
+                    </p>
+                    <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#b91c1c' }}>
+                      {validation.errors.map((e, i) => (
+                        <li key={`${e.code}-${i}`}>{specErrorText(e)}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
           </div>
           <div style={{ flex: 2, minWidth: 380 }}>
             <h3 style={{ fontSize: 14 }}>

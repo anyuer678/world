@@ -30,6 +30,19 @@ export interface ModelSpec {
   seed?: number | null
 }
 
+/** `/api/models/{id}/validate` 的返回（R90）：normalized_spec 含解析后的版本、
+ * 显示名与套完默认值的参数；本地校验不创建任何运行。 */
+export interface ValidationIssue {
+  code: string
+  message: string
+}
+
+export interface ModelValidation {
+  valid: boolean
+  errors: ValidationIssue[]
+  normalized_spec: (ModelSpec & { display_name?: string }) | null
+}
+
 export interface Experiment {
   id: number
   name: string
