@@ -58,7 +58,8 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 - **`spec.model_version` 有实际效力**（R33 探针 + 测试绑定）：它决定校验用哪一版参数 Schema、
   以及运行用哪一版模型实现；不钉则取数值最新版本。钉了注册表里没有的版本时，
   `POST /api/experiments` 是 **422 `spec_invalid`**（`errors[].code="unknown_model"`），不是 500。
-  这是「不同模型版本的实验不默认可比」的执行层依据
+  这是「不同模型版本的实验不默认可比」的执行层依据；实验与批量两条执行路径均有行为测试
+  （R105 实验再运行/克隆、R106 批量显式版本执行）
 
 ## 实验
 - `POST /api/experiments` body=`{name, spec}` → Experiment（status=created）

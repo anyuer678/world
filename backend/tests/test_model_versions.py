@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import Field
@@ -205,3 +207,44 @@ def test_clone_pins_the_source_experiment_version(settings):
             assert peak == pytest.approx(first)
     finally:
         registry._by_id.pop(MRP, None)
+
+
+# ------------------------------------------------- 批量路径的钉版本（R106）
+# R33 只验证了实验路径；批量 spec 的 model_version 是否真正决定执行此前没有测试。
+
+def _wait_batch(client, batch_id: int, timeout: float = 20):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        b = client.get(f"/api/batches/{batch_id}").json()
+        if b["status"] in ("completed", "failed", "cancelled"):
+            return b
+        time.sleep(0.05)
+    raise AssertionError(f"batch {batch_id} did not finish: {b}")
+
+
+def test_batch_pinned_version_changes_actual_execution(two_behavioral_versions):
+    peaks = {}
+    for version in ("1.0.0", "2.0.0"):
+        r = two_behavioral_versions.post(
+            "/api/batches",
+            json={
+                "name": f"batch-{version}",
+                "spec": _spec(model_version=version),
+                "grid": {},
+                "repeats": 1,
+                "concurrency": 1,
+            },
+        )
+        assert r.status_code == 201, r.text
+        b = _wait_batch(two_behavioral_versions, r.json()["id"])
+        assert b["status"] == "completed" and b["model_version"] == version
+        item = two_behavioral_versions.get(f"/api/batches/{b['id']}/items").json()["items"][0]
+        peaks[version] = item["metrics"]["peak_infected"]
+    assert peaks["1.0.0"] != peaks["2.0.0"], "批量执行也必须跟着 spec.model_version 走"
+
+    r = two_behavioral_versions.post(
+        "/api/batches",
+        json={"name": "batch-latest", "spec": _spec(), "grid": {}, "repeats": 1, "concurrency": 1},
+    )
+    latest = _wait_batch(two_behavioral_versions, r.json()["id"])
+    assert latest["model_version"] == "2.0.0", "未钉版本应解析到数值最新"
