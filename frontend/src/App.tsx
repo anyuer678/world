@@ -37,11 +37,18 @@ export default function App() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
-  const [history, setHistory] = useState<{ id: number; name: string; model_id: string; status: string }[]>([])
+  const [history, setHistory] = useState<
+    { id: number; name: string; model_id: string; status: string; tags: string[] }[]
+  >([])
   // R48：历史只取最近一页，必须把总数一起显示，否则用户会以为看到的就是全部
   const [historyTotal, setHistoryTotal] = useState(0)
   // R75：历史分页——「加载更多」按 offset 追加，直到取满总数
   const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE_SIZE)
+  // R83：模型/标签筛选（服务端 list_experiments 早已支持 model_id/tag，界面此前没接）
+  const [filterModel, setFilterModel] = useState('')
+  const [filterTag, setFilterTag] = useState('')
+  const [editingTags, setEditingTags] = useState<{ id: number; raw: string } | null>(null)
+  const historySeq = useRef(0)
   // R82：实验结果查看（结果端点此前只被「载入配置」顺手用到，没显示过指标）
   const [resultView, setResultView] = useState<ExperimentResult | null>(null)
   const [viewingId, setViewingId] = useState<number | null>(null)
@@ -57,7 +64,6 @@ export default function App() {
         if (models.length > 0) applyModel(models[0])
       })
       .catch((e) => setError(String(e)))
-    refreshHistory()
     api
       .getLimits()
       .then((l) => {
@@ -68,6 +74,26 @@ export default function App() {
         /* 保持保守默认值，不阻塞表单 */
       })
   }, [])
+
+  // 筛选变化从第一页重取（tag 输入做 250ms 防抖）；计数器丢弃先发后到的旧响应
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const token = ++historySeq.current
+      api
+        .listExperiments(HISTORY_PAGE_SIZE, 0, filterModel || undefined, filterTag.trim() || undefined)
+        .then((r) => {
+          if (token !== historySeq.current) return
+          setHistory(r.experiments)
+          setHistoryTotal(r.total)
+          setHistoryLimit(HISTORY_PAGE_SIZE)
+          setEditingTags(null)
+        })
+        .catch((e) => {
+          if (token === historySeq.current) setError(e instanceof Error ? e.message : String(e))
+        })
+    }, 250)
+    return () => clearTimeout(t)
+  }, [filterModel, filterTag])
 
   // 会话运行中时轮询真实状态；状态离开 running 后停止
   useEffect(() => {
@@ -225,10 +251,17 @@ export default function App() {
   }
 
   function refreshHistory() {
-    api.listExperiments(historyLimit, 0).then((r) => {
-      setHistory(r.experiments)
-      setHistoryTotal(r.total)
-    })
+    const token = ++historySeq.current
+    api
+      .listExperiments(historyLimit, 0, filterModel || undefined, filterTag.trim() || undefined)
+      .then((r) => {
+        if (token !== historySeq.current) return
+        setHistory(r.experiments)
+        setHistoryTotal(r.total)
+      })
+      .catch((e) => {
+        if (token === historySeq.current) setError(e instanceof Error ? e.message : String(e))
+      })
   }
 
   async function saveCheckpoint() {
@@ -285,11 +318,37 @@ export default function App() {
   async function loadMoreHistory() {
     setBusy(true)
     try {
-      const r = await api.listExperiments(HISTORY_PAGE_SIZE, history.length)
+      const r = await api.listExperiments(
+        HISTORY_PAGE_SIZE,
+        history.length,
+        filterModel || undefined,
+        filterTag.trim() || undefined,
+      )
       const seen = new Set(history.map((h) => h.id))
       setHistory([...history, ...r.experiments.filter((h) => !seen.has(h.id))])
       setHistoryTotal(r.total)
       setHistoryLimit((n) => n + HISTORY_PAGE_SIZE)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function saveTags(id: number) {
+    if (!editingTags || editingTags.id !== id) return
+    const tags = parseTags(editingTags.raw)
+    setBusy(true)
+    setError('')
+    try {
+      const saved = await api.setTags(id, tags)
+      setEditingTags(null)
+      setNotice(`已更新实验 #${id} 的标签：${saved.tags.length ? saved.tags.join('、') : '（无）'}`)
+      // 标签可能影响当前筛选，重新取列表而不是只改本地行
+      refreshHistory()
+      setResultView((r) =>
+        r && r.experiment.id === id ? { ...r, experiment: { ...r.experiment, tags: saved.tags } } : r,
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -708,8 +767,54 @@ export default function App() {
 
       <section style={card}>
         <h2>4. {historyHeading(history.length, historyTotal)}</h2>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+          <label style={{ ...rowFlex, margin: 0 }}>
+            模型筛选：
+            <select
+              value={filterModel}
+              onChange={(e) => setFilterModel(e.target.value)}
+              aria-label="按模型筛选实验"
+              style={{ ...control, width: 180 }}
+            >
+              <option value="">全部模型</option>
+              {models.map((m) => (
+                <option key={m.model_id} value={m.model_id}>
+                  {m.display_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ ...rowFlex, margin: 0 }}>
+            标签筛选：
+            <input
+              value={filterTag}
+              onChange={(e) => setFilterTag(e.target.value)}
+              aria-label="按标签筛选实验"
+              placeholder="如 baseline（输入后自动刷新）"
+              style={{ ...control, width: 220 }}
+            />
+          </label>
+          {(filterModel || filterTag.trim()) && (
+            <button
+              onClick={() => {
+                setFilterModel('')
+                setFilterTag('')
+              }}
+              style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
+            >
+              清除筛选
+            </button>
+          )}
+        </div>
+        {filterSummary(filterModel, filterTag) && (
+          <p role="status" style={{ color: '#92400e', fontSize: 12, margin: '0 0 6px' }}>
+            {filterSummary(filterModel, filterTag)}
+          </p>
+        )}
         {history.length === 0 ? (
-          <p style={{ color: '#6b7280' }}>暂无实验。在上方保存会话配置为实验。</p>
+          <p style={{ color: '#6b7280' }}>
+            {filterModel || filterTag.trim() ? '没有符合当前筛选条件的实验。' : '暂无实验。在上方保存会话配置为实验。'}
+          </p>
         ) : (
           <table style={table}>
             <thead>
@@ -717,6 +822,7 @@ export default function App() {
                 <th style={th}>#</th>
                 <th style={th}>名称</th>
                 <th style={th}>模型</th>
+                <th style={th}>标签</th>
                 <th style={th}>状态</th>
                 <th style={th}>操作</th>
               </tr>
@@ -727,6 +833,51 @@ export default function App() {
                   <td style={td}>{h.id}</td>
                   <td style={td}>{h.name}</td>
                   <td style={td}>{h.model_id}</td>
+                  <td style={td}>
+                    {editingTags?.id === h.id ? (
+                      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                        <input
+                          value={editingTags.raw}
+                          onChange={(e) => setEditingTags({ id: h.id, raw: e.target.value })}
+                          aria-label={`实验 ${h.id} 的标签（逗号或空格分隔）`}
+                          style={{ ...control, width: 170, padding: 3, fontSize: 12 }}
+                        />
+                        <button
+                          onClick={() => saveTags(h.id)}
+                          disabled={busy}
+                          style={{ ...btn, padding: '3px 8px', fontSize: 12 }}
+                        >
+                          保存
+                        </button>
+                        <button onClick={() => setEditingTags(null)} style={{ ...btn, padding: '3px 8px', fontSize: 12 }}>
+                          取消
+                        </button>
+                      </span>
+                    ) : h.tags.length > 0 ? (
+                      <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+                        {h.tags.map((t) => (
+                          <button
+                            key={t}
+                            onClick={() => setFilterTag(t)}
+                            title={`按标签 ${t} 筛选`}
+                            style={{
+                              border: '1px solid #bfdbfe',
+                              background: '#eff6ff',
+                              color: '#1d4ed8',
+                              borderRadius: 999,
+                              padding: '1px 8px',
+                              fontSize: 11,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#9ca3af' }}>—</span>
+                    )}
+                  </td>
                   <td style={td}>{statusLabel(h.status)}</td>
                   <td style={td}>
                     <button
@@ -739,6 +890,13 @@ export default function App() {
                     </button>{' '}
                     <button onClick={() => loadExperiment(h.id)} style={{ ...btn, padding: '4px 10px', fontSize: 12 }}>
                       载入配置
+                    </button>{' '}
+                    <button
+                      onClick={() => setEditingTags({ id: h.id, raw: h.tags.join(', ') })}
+                      aria-label={`编辑实验 ${h.id} 的标签`}
+                      style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
+                    >
+                      标签
                     </button>{' '}
                     <a
                       href={api.reportUrl(h.id, 'markdown')}
@@ -855,6 +1013,26 @@ export function scenarioSpec(
 /** 版本下拉选项（R81）：目录的 versions 未必包含最新版，补进去且不重复。 */
 export function versionOptions(versions: string[], latest: string): string[] {
   return versions.includes(latest) ? versions.slice() : [latest, ...versions]
+}
+
+/** 标签输入解析（R83）：逗号（含中文逗号）或空白分隔，去空、去重、保留输入顺序。
+ * 后端 set_tags 会再排序去重；这里先归一化，避免把 "a, a" 当成两个标签提交。 */
+export function parseTags(raw: string): string[] {
+  const out: string[] = []
+  for (const part of raw.split(/[,，\s]+/)) {
+    const t = part.trim()
+    if (t && !out.includes(t)) out.push(t)
+  }
+  return out
+}
+
+/** 历史筛选说明（R83）：只在有筛选时返回文案，告诉用户总数是筛选后的口径。 */
+export function filterSummary(modelId: string, tag: string): string | null {
+  const parts: string[] = []
+  if (modelId) parts.push(`模型 ${modelId}`)
+  const t = tag.trim()
+  if (t) parts.push(`标签 ${t}`)
+  return parts.length ? `筛选：${parts.join(' · ')}（只统计符合条件的实验）` : null
 }
 
 const QUICK_PICKS: { modelId: string; scenarioId: string }[] = [

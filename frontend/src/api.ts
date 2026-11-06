@@ -153,10 +153,20 @@ export const api = {
   getResult: (id: number) => request<ExperimentResult>(`/api/experiments/${id}/result`),
   deleteExperiment: (id: number) => request<void>(`/api/experiments/${id}`, { method: 'DELETE' }),
   getRun: (runId: number) => request<RunDetail>(`/api/runs/${runId}`),
-  listExperiments: (limit = 20, offset = 0) =>
-    request<{ total: number; experiments: { id: number; name: string; status: string; model_id: string }[] }>(
-      `/api/experiments?limit=${limit}&offset=${offset}`,
-    ),
+  listExperiments: (limit = 20, offset = 0, modelId?: string, tag?: string) => {
+    const q = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+    if (modelId) q.set('model_id', modelId)
+    if (tag) q.set('tag', tag)
+    return request<{
+      total: number
+      experiments: { id: number; name: string; model_id: string; model_version: string; status: string; tags: string[] }[]
+    }>(`/api/experiments?${q.toString()}`)
+  },
+  setTags: (id: number, tags: string[]) =>
+    request<{ id: number; tags: string[] }>(`/api/experiments/${id}/tags`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags }),
+    }),
   createSession: (spec: unknown) =>
     request<SessionState>('/api/sessions', { method: 'POST', body: JSON.stringify({ spec }) }),
   getSession: (id: string) => request<SessionState>(`/api/sessions/${id}`),

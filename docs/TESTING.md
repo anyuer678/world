@@ -1133,3 +1133,14 @@
     等与 API 逐项一致且表格 2 行；关闭后面板消失；未运行实验显示「还没有运行记录」；
     查看中删除实验 → 面板关闭、行消失、提示出现。
     ④ 回归：前端 **74/74**（新增 `metricColumns` 用例）、tsc 干净；后端 **332/332** 无改动。
+
+94. **R83 功能：实验历史筛选与标签编辑**。
+    ① 缺口：`GET /api/experiments?model_id&tag` 与 `PUT .../tags` 早已存在且有后端测试，
+    但前端只发 limit/offset，标签既不显示也不可编辑。
+    ② 实现：`api.listExperiments(limit, offset, modelId?, tag?)`（URLSearchParams）与
+    `api.setTags`；历史区模型下拉 + 标签输入（250ms 防抖、服务端筛选）、筛选说明与清除按钮；
+    标签列徽章（点击即筛选）与行内编辑；「加载更多」携带筛选；请求计数器丢弃过期响应。
+    ③ 浏览器实测（隔离库）：3 条 → 模型 sir 2 条 → 加标签 baseline 1 条 + 筛选说明 → 清除回 3 条；
+    编辑 #3 为 `baseline, rerun` 后行内两枚徽章、API 回读 `["baseline","rerun"]`；点徽章进入筛选；
+    22 条 `bulk` 实验首屏 20 条 +「还有 2 条」→ 加载后 22 条、按钮消失。
+    ④ 回归：前端 **76/76**（新增 `parseTags`/`filterSummary` 用例）、tsc 干净；后端 **332/332** 无改动。

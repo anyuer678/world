@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { metricColumns } from './ResultPanel'
-import { historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, quickPicks, scenarioSpec, stepProblem, versionOptions } from './App'
+import { filterSummary, historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, parseTags, quickPicks, scenarioSpec, stepProblem, versionOptions } from './App'
 import { statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
@@ -796,6 +796,20 @@ describe('metricColumns (experiment result view, R82)', () => {
       ]),
     ).toEqual(['avg_wait', 'dropped', 'utilization'])
     expect(metricColumns([])).toEqual([])
+  })
+})
+
+describe('parseTags / filterSummary (tag UI, R83)', () => {
+  it('splits on commas and whitespace, dedupes and keeps order', () => {
+    expect(parseTags('baseline, mm1  mm1，中文')).toEqual(['baseline', 'mm1', '中文'])
+    expect(parseTags('   ')).toEqual([])
+    expect(parseTags('a,b')).toEqual(['a', 'b'])
+  })
+
+  it('describes active filters and stays silent when none', () => {
+    expect(filterSummary('', '')).toBeNull()
+    expect(filterSummary('sir', '')).toBe('筛选：模型 sir（只统计符合条件的实验）')
+    expect(filterSummary('sir', ' baseline ')).toBe('筛选：模型 sir · 标签 baseline（只统计符合条件的实验）')
   })
 })
 
