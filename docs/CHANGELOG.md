@@ -975,3 +975,14 @@ tsc/vite 干净；后端 **340/340** 无改动。
 新增部分重试回归——预先让 key1 成功、key2 失败，批次 failed 后重试：key1 保持
 `completed/attempts=1`（未被重跑），key2 变为 `completed/attempts=2`，批次 completed，
 列表 `failed_items=0`。报告测试断言新行，后端 **341/341**、前端 **88/88** 无改动。
+
+**R104（2026-11-06）修复：批量重试/模板钉住原模型版本**
+
+批量 `spec_json` 中 `model_version` 常为 null（创建时按「最新」解析并记在 `batch_runs.model_version`）。
+重试会重新校验存储的 spec：若此时注册表新增了版本，`null` 会解析到**新版本**，实现被静默替换；
+模板同样只复制 spec，可能跟随最新版。本轮：`_orchestrate` 在 spec 未指定版本时用批次记录的
+`model_version` 补齐（注意 `setdefault` 对显式 null 无效，首版实现因此未生效，被新测试当场抓出）；
+前端 `templateSpec()` 同样在 spec 无版本时钉住 `batch.model_version`。
+测试：临时注册 `toy_pin` 2.0.0（永远失败）→ 建批失败 → 注册 3.0.0（永远成功）→ 重试必须仍
+failed、attempts=2（若未钉住会变 completed）；模板 spec 单测覆盖「有版本不覆盖/无版本补齐」。
+后端 **342/342**、前端 **89/89**。

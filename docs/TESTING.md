@@ -1329,3 +1329,12 @@
     `failed_items=0`。
     ③ 报告测试断言新行；后端 **341/341**、前端 **88/88**。
     ④ 无 UI 变更；本轮不依赖浏览器。
+
+115. **R104 修复：批量重试/模板钉住原模型版本**。
+    ① 缺口：`spec_json.model_version` 常为 null，重试/模板会重新解析到「最新」，注册表新增
+    版本时实现被静默替换。
+    ② 实现：`_orchestrate` 在 spec 未指定版本时用 `batch_runs.model_version` 补齐（显式 null
+    也要覆盖，`setdefault` 无效）；前端 `templateSpec()` 同样补齐。
+    ③ 测试：临时 `toy_pin` 2.0.0 永远失败 → 批次 failed → 注册 3.0.0 永远成功 → 重试仍
+    failed、attempts=2（未钉住会 completed）；`templateSpec` 有版本不覆盖/无版本补齐。
+    ④ 回归：后端 **342/342**、前端 **89/89**、tsc/vite 干净；无浏览器依赖。

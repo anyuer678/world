@@ -75,6 +75,11 @@ export function batchSubmitProblem(
  * 单项结果表头的诚实口径：接口一次最多取一页，必须把「共多少项」一起显示，
  * 否则 1200 项的批次只出现 50 行会被读成全部数据（完整明细在 CSV 导出里）。
  */
+/** 模板 spec 必须钉住批次记录的版本（R104）：注册表新增版本后，模板不能静默换实现。 */
+export function templateSpec(batch: { spec: ModelSpec; model_version: string }): ModelSpec {
+  return { ...batch.spec, model_version: batch.spec.model_version || batch.model_version }
+}
+
 /** 表单数值解析（R102）：空串视为 NaN 交给校验报错，不再用 Math.max 静默兜底。 */
 export function numericField(raw: string): number {
   return raw.trim() === '' ? NaN : Number(raw)
@@ -475,7 +480,7 @@ export default function BatchPanel({
 
   function useAsTemplate() {
     if (!batch) return
-    onUseTemplate?.(batch.spec)
+    onUseTemplate?.(templateSpec(batch))
     setRows(gridRowsFromBatch(batch.grid))
     setRepeats(String(batch.repeats))
     setStrategy(batch.seed_strategy)

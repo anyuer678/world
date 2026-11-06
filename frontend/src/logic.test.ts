@@ -7,7 +7,7 @@ import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
-import { BATCH_STATUSES, canCancelBatch, canRetryFailed, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, gridRowsFromBatch, itemsHeading, numericField } from './BatchPanel'
+import { BATCH_STATUSES, canCancelBatch, canRetryFailed, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, gridRowsFromBatch, itemsHeading, numericField, templateSpec } from './BatchPanel'
 import { toggleCompare } from './ComparePanel'
 import { ApiError, errorDetailMessage, isNotFoundOn, specErrorText } from './api'
 
@@ -874,6 +874,22 @@ describe('gridRowsFromBatch (batch template, R99)', () => {
     expect(gridRowsFromBatch({ x: [{ a: 1 }, 's'] })).toEqual([
       { param: 'x', values: '{"a":1}, s' },
     ])
+  })
+})
+
+describe('templateSpec (R104)', () => {
+  it('pins the version recorded on the batch when the spec does not carry one', () => {
+    const spec = {
+      schema_version: 1,
+      model_id: 'sir',
+      params: {},
+      stop_condition: { type: 'steps' as const, value: 5 },
+      seed: 1,
+    }
+    expect(templateSpec({ spec, model_version: '2.0.0' }).model_version).toBe('2.0.0')
+    expect(templateSpec({ spec: { ...spec, model_version: '1.0.0' }, model_version: '2.0.0' }).model_version).toBe(
+      '1.0.0',
+    )
   })
 })
 

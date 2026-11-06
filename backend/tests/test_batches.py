@@ -157,6 +157,47 @@ class FailOnceModel(DiscreteEventModel):
 registry.register(FailOnceModel)
 
 
+class PinFailParams(WorldLabParams):
+    key: int = 0
+
+
+class PinFailModel(DiscreteEventModel):
+    """Always fails; used to prove retry stays on the recorded model version (R104)."""
+
+    model_id = "toy_pin"
+    display_name = "Pinned failure"
+    description = "Always fails; a newer version would succeed."
+    model_type = "discrete_event"
+    version = "2.0.0"
+    param_model = PinFailParams
+
+    def initialize(self, ctx) -> None:
+        raise RuntimeError("pinned version always fails")
+
+    def handle_event(self, event, ctx) -> None:  # pragma: no cover
+        pass
+
+    def dump_state(self):
+        return {}
+
+    def load_state(self, state):
+        pass
+
+    def snapshot(self):
+        return {}
+
+    def finalize_metrics(self):
+        return {}
+
+
+class PinOkModel(PinFailModel):
+    version = "3.0.0"
+    display_name = "Pinned success"
+
+    def initialize(self, ctx) -> None:
+        self._s = {}
+
+
 @pytest.fixture()
 def batches(settings):
     b = BatchService(settings, registry)
@@ -425,6 +466,34 @@ def test_retry_keeps_completed_items_untouched(batches):
     assert after[2]["attempts"] == 2 and after[2]["status"] == "completed"
     listed = next(x for x in batches.list_batches()["batches"] if x["id"] == b["id"])
     assert listed["failed_items"] == 0
+
+
+def test_retry_pins_original_model_version(batches):
+    registry.register(PinFailModel)  # 2.0.0 is latest: every run fails
+    try:
+        b = batches.create(
+            "pin",
+            {
+                "schema_version": 1,
+                "model_id": "toy_pin",
+                "params": {},
+                "stop_condition": {"type": "until_empty"},
+                "seed": 1,
+            },
+            {},
+            repeats=1,
+            max_retries=0,
+        )
+        assert _wait_terminal(batches, b["id"])["status"] == "failed"
+        assert batches.list_items(b["id"])["items"][0]["attempts"] == 1
+
+        registry.register(PinOkModel)  # 3.0.0 now latest and would succeed
+        batches.retry_failed(b["id"])
+        final = _wait_terminal(batches, b["id"])
+        assert final["status"] == "failed", "重试必须仍用批次记录的 2.0.0，而不是新注册的 3.0.0"
+        assert batches.list_items(b["id"])["items"][0]["attempts"] == 2
+    finally:
+        registry._by_id.pop("toy_pin", None)
 
 
 # ---------------------------------------------------------------- sensitivity

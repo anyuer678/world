@@ -208,6 +208,9 @@ class BatchService:
         try:
             row = self._get_batch_row(conn, batch_id)
             spec_raw = json.loads(row["spec_json"])
+            # 钉住批次创建时解析出的版本：重试时若注册表新增了版本，不能静默换实现
+            if not spec_raw.get("model_version"):
+                spec_raw["model_version"] = row["model_version"]
             conn.execute(
                 "UPDATE batch_runs SET status='running', started_at=COALESCE(started_at, datetime('now')) WHERE id=?",
                 (batch_id,),

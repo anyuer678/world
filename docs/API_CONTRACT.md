@@ -132,7 +132,8 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   需先 cancel 并等待终态；未知 id 与已删除 id 均 404
 - `POST /api/batches/{id}/retry`（R97）→ Batch；仅 `failed` 且存在失败项时可调用（否则 **409**，
   未知 id 404）。把失败项重置为 `pending`（attempts 保留并累计）后只重跑这些项，
-  已完成项不动；成功后批次可变为 `completed`
+  已完成项不动；成功后批次可变为 `completed`。**重试钉住批次记录的 `model_version`**（R104），
+  即使注册表后来新增了版本也不会换实现
   - **整批状态语义**（R97 修正）：任一项 `failed` 则批次为 `failed`（不再要求「全部失败」）；
     有取消项且取消标志生效时为 `cancelled`
 - `GET /api/batches/{id}/export.csv` → 逐 item 明细 CSV 附件
