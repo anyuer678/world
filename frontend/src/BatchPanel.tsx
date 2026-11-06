@@ -436,7 +436,17 @@ export default function BatchPanel({
     setBusy(true)
     setError('')
     try {
-      setBatch(await api.cancelBatch(batch.id))
+      const b = await api.cancelBatch(batch.id)
+      setBatch(b)
+      setItemDetail(null)
+      // 取消响应可能已经是终态（编排线程已完成收尾）：此时轮询不再启动，
+      // 必须在这里加载部分结果，否则详情会一直显示 0 项（R109）
+      if (TERMINAL.has(b.status)) {
+        const page = await api.listBatchItems(batch.id, ITEMS_PAGE_SIZE, 0, itemStatus || undefined)
+        setItems(page.items)
+        setItemsTotal(page.total)
+        api.getBatchFindings(batch.id).then(setFindings).catch(() => {})
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -452,6 +462,10 @@ export default function BatchPanel({
     try {
       const b = await api.retryBatch(batch.id)
       setBatch(b)
+      // 失败项会被重置并重新执行：旧的单项快照与敏感性分析不再代表当前批次（R109）
+      setItemDetail(null)
+      setFindings(null)
+      setSweepSel(null)
       setNotice(`已提交批量 #${b.id} 的失败项重试。`)
       refreshBatches()
     } catch (e) {
@@ -468,7 +482,12 @@ export default function BatchPanel({
     setNotice('')
     try {
       const updated = await api.retryBatch(b.id)
-      if (batch?.id === b.id) setBatch(updated)
+      if (batch?.id === b.id) {
+        setBatch(updated)
+        setItemDetail(null)
+        setFindings(null)
+        setSweepSel(null)
+      }
       setNotice(`已提交批量 #${b.id} 的失败项重试。`)
       refreshBatches()
     } catch (e) {
@@ -497,6 +516,7 @@ export default function BatchPanel({
     setNotice('')
     try {
       await api.cancelBatch(b.id)
+      if (batch?.id === b.id) setItemDetail(null)
       setNotice(`已取消批量 #${b.id} 的运行。`)
       refreshBatches()
     } catch (e) {

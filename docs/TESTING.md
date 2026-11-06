@@ -1381,3 +1381,16 @@
     `model_version=9.9.9` 后起 uvicorn 8010 → `POST /api/batches/1/retry` 返回 **422**
     `unknown_model`，GET 批次仍 failed、item 仍 failed/attempts=1；验毕停服删库。
     ⑤ 回归：后端全量 **347/347**、前端 **89/89**、docs 一致性锁 21/21；无 UI 变更。
+
+120. **R109 修复：生命周期操作后的过期快照（前端）**。
+    ① 缺口：结果面板只取一次；重跑/取消不刷新，旧 run 会被当成最新。批量取消的响应若已是终态，
+    轮询不启动、部分 items/findings 永不加载；重试后单项详情/敏感性分析仍是旧值。
+    ② 实现：`resultViewAfterLifecycle()` 在重跑/取消命中当前实验时收起面板并提示；批量取消终态
+    即时拉取 items/findings；重试清空 `itemDetail/findings/sweepSel`。
+    ③ 单测：`resultViewAfterLifecycle` 命中收起/非命中保留/null 安全；前端 **90/90**。
+    ④ 浏览器：启动 dev 前后端（临时库），browser-use 打开 `localhost:5173`，点击「查看实验 1 的结果」
+    后确认结果区存在（`实验结果 #1`、汇总指标、每次运行），再点「重跑」→ 结果区消失，notice 含
+    「旧结果面板已收起」；指针 API 因窗口不可见不可用，改用 `evaluate_script` 触发 click + `wait_for`
+    校验 DOM，属真实浏览器 DOM 证据。
+    ⑤ 未取证：批量取消的「响应即终态」竞态与重试后的详情清理未构造出可复现 UI 场景，仅代码审查；
+    tsc -b 与 vite build 干净；后端 **347/347** 无改动。

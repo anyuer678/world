@@ -415,18 +415,22 @@ export default function App() {
   }
 
   async function rerunExperiment(h: { id: number; name: string }) {
+    const closesPanel = resultView?.experiment.id === h.id
     await experimentAction(h, async () => {
       await api.rerunExperiment(h.id)
-      return `实验 #${h.id} 已排队重跑，状态会自动刷新。`
+      setResultView((r) => resultViewAfterLifecycle(r, h.id))
+      return `实验 #${h.id} 已排队重跑，状态会自动刷新。${closesPanel ? '旧结果面板已收起，完成后可重新查看。' : ''}`
     })
   }
 
   async function cancelExperiment(h: { id: number; name: string }) {
+    const closesPanel = resultView?.experiment.id === h.id
     await experimentAction(
       h,
       async () => {
         await api.cancelExperiment(h.id)
-        return `已取消实验 #${h.id} 的运行。`
+        setResultView((r) => resultViewAfterLifecycle(r, h.id))
+        return `已取消实验 #${h.id} 的运行。${closesPanel ? '旧结果面板已收起，可重新查看部分结果。' : ''}`
       },
       `取消实验 #${h.id}「${h.name}」正在进行的运行？已产生的部分结果会保留。`,
     )
@@ -1241,6 +1245,15 @@ export function canRerun(status: string): boolean {
 
 export function canCancel(status: string): boolean {
   return status === 'running'
+}
+
+/** 生命周期操作会让已打开的结果面板过期（R109）：重跑追加 run、取消改变 run 状态，
+ * 而面板是打开时的一次性快照。属于该实验时收起，避免把旧结果当成最新状态。 */
+export function resultViewAfterLifecycle<T extends { experiment: { id: number } }>(
+  view: T | null,
+  experimentId: number,
+): T | null {
+  return view && view.experiment.id === experimentId ? null : view
 }
 
 const QUICK_PICKS: { modelId: string; scenarioId: string }[] = [

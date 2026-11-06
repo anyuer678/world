@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { metricColumns } from './ResultPanel'
-import { canCancel, canRerun, EXPERIMENT_STATUSES, filterSummary, historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, parseTags, quickPicks, scenarioSpec, stepProblem, versionOptions } from './App'
+import { canCancel, canRerun, EXPERIMENT_STATUSES, filterSummary, historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, parseTags, quickPicks, resultViewAfterLifecycle, scenarioSpec, stepProblem, versionOptions } from './App'
 import { modelVersionLabel, statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
@@ -952,6 +952,15 @@ describe('canRerun / canCancel (experiment actions, R84)', () => {
     expect(canCancel('running')).toBe(true)
     expect(canCancel('completed')).toBe(false)
     expect(canCancel('created')).toBe(false)
+  })
+})
+
+describe('resultViewAfterLifecycle (stale panel after rerun/cancel, R109)', () => {
+  it('closes only the panel for the acted-on experiment', () => {
+    const view = { experiment: { id: 7 }, runs: [{ id: 1 }] }
+    expect(resultViewAfterLifecycle(view, 7)).toBeNull()
+    expect(resultViewAfterLifecycle(view, 8)).toBe(view)
+    expect(resultViewAfterLifecycle(null, 7)).toBeNull()
   })
 })
 
