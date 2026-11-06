@@ -49,15 +49,17 @@ export function batchSubmitProblem(
 ): string | null {
   if (!opts.name.trim()) return '批量名称不能为空'
   if (opts.name.length > limits.nameMaxLength) return `批量名称最长 ${limits.nameMaxLength} 字符（当前 ${opts.name.length}）`
+  if (!Number.isInteger(opts.repeats)) return '每组重复需为整数'
   if (opts.repeats < limits.repeatsMin || opts.repeats > limits.repeatsMax)
     return `每组重复需在 ${limits.repeatsMin}–${limits.repeatsMax} 之间（当前 ${opts.repeats}）`
+  if (!Number.isInteger(opts.retries)) return '失败重试需为整数'
   if (opts.retries < limits.retriesMin || opts.retries > limits.retriesMax)
     return `失败重试需在 ${limits.retriesMin}–${limits.retriesMax} 之间（当前 ${opts.retries}）`
-  if (
-    opts.concurrency != null &&
-    (opts.concurrency < limits.concurrencyMin || opts.concurrency > limits.concurrencyMax)
-  )
-    return `并发数需在 ${limits.concurrencyMin}–${limits.concurrencyMax} 之间（当前 ${opts.concurrency}）`
+  if (opts.concurrency != null) {
+    if (!Number.isInteger(opts.concurrency)) return '并发数需为整数'
+    if (opts.concurrency < limits.concurrencyMin || opts.concurrency > limits.concurrencyMax)
+      return `并发数需在 ${limits.concurrencyMin}–${limits.concurrencyMax} 之间（当前 ${opts.concurrency}）`
+  }
   if (opts.perRunWallSeconds != null) {
     if (!Number.isFinite(opts.perRunWallSeconds) || opts.perRunWallSeconds <= 0)
       return '单项墙钟需为大于 0 的秒数'
@@ -73,6 +75,11 @@ export function batchSubmitProblem(
  * 单项结果表头的诚实口径：接口一次最多取一页，必须把「共多少项」一起显示，
  * 否则 1200 项的批次只出现 50 行会被读成全部数据（完整明细在 CSV 导出里）。
  */
+/** 表单数值解析（R102）：空串视为 NaN 交给校验报错，不再用 Math.max 静默兜底。 */
+export function numericField(raw: string): number {
+  return raw.trim() === '' ? NaN : Number(raw)
+}
+
 /** 批量列表的截断口径（R57）：只展示最近 10 条时必须给出总数，
  * 否则「10 条」会被当成「全部 10 条」（与 R48 的历史口径一致）。 */
 /** 批量列表每页条数（R78，与实验历史的 20 条相互独立）。 */
@@ -347,10 +354,11 @@ export default function BatchPanel({
 
   const grid = buildGrid()
   const comboCount = Object.values(grid).reduce((a, v) => a * v.length, 1) || 1
-  const repeatN = Math.max(1, Number(repeats) || 1)
-  const retryN = Math.max(0, Number(retries) || 0)
-  const concurrencyN = Math.max(1, Number(concurrency) || 1)
-  const wallN = Number(wallSec)
+  // R102：不再用 Math.max 静默兜底——空/小数/负数交给校验函数报错
+  const repeatN = numericField(repeats)
+  const retryN = numericField(retries)
+  const concurrencyN = numericField(concurrency)
+  const wallN = numericField(wallSec)
   const totalItems = comboCount * repeatN
   const problem = batchSubmitProblem(limits, {
     name,
@@ -572,7 +580,8 @@ export default function BatchPanel({
             + 添加参数
           </button>
           <p style={{ fontSize: 13, color: '#374151' }}>
-            组合数 {comboCount} × 每组重复 {repeatN} = {totalItems} 项
+            组合数 {comboCount} × 每组重复 {Number.isFinite(repeatN) ? repeatN : '—'} ={' '}
+            {Number.isFinite(totalItems) ? totalItems : '—'} 项
             {problem && <strong style={{ color: '#dc2626' }}>（{problem}）</strong>}
           </p>
           <p style={{ fontSize: 12, color: '#6b7280' }}>

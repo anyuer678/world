@@ -7,7 +7,7 @@ import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
-import { BATCH_STATUSES, canCancelBatch, canRetryFailed, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, gridRowsFromBatch, itemsHeading } from './BatchPanel'
+import { BATCH_STATUSES, canCancelBatch, canRetryFailed, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, gridRowsFromBatch, itemsHeading, numericField } from './BatchPanel'
 import { toggleCompare } from './ComparePanel'
 import { ApiError, errorDetailMessage, isNotFoundOn, specErrorText } from './api'
 
@@ -73,6 +73,28 @@ describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
     expect(
       batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0, perRunWallSeconds: 120 }),
     ).toBeNull()
+  })
+
+  it('rejects non-integer numeric inputs instead of silently coercing (R102)', () => {
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 2.5, retries: 0 }),
+    ).toBe('每组重复需为整数')
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: NaN, retries: 0 }),
+    ).toBe('每组重复需为整数')
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: NaN }),
+    ).toBe('失败重试需为整数')
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0, concurrency: NaN }),
+    ).toBe('并发数需为整数')
+    expect(
+      batchSubmitProblem(FALLBACK_LIMITS, { name: 'b', totalItems: 3, repeats: 3, retries: 0, concurrency: 2.5 }),
+    ).toBe('并发数需为整数')
+    expect(numericField('0')).toBe(0)
+    expect(numericField('2.5')).toBe(2.5)
+    expect(Number.isNaN(numericField(''))).toBe(true)
+    expect(Number.isNaN(numericField('   '))).toBe(true)
   })
 })
 
