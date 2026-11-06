@@ -148,9 +148,9 @@ export const api = {
     }),
   getResult: (id: number) => request<ExperimentResult>(`/api/experiments/${id}/result`),
   getRun: (runId: number) => request<RunDetail>(`/api/runs/${runId}`),
-  listExperiments: () =>
+  listExperiments: (limit = 20, offset = 0) =>
     request<{ total: number; experiments: { id: number; name: string; status: string; model_id: string }[] }>(
-      '/api/experiments?limit=20',
+      `/api/experiments?limit=${limit}&offset=${offset}`,
     ),
   createSession: (spec: unknown) =>
     request<SessionState>('/api/sessions', { method: 'POST', body: JSON.stringify({ spec }) }),

@@ -31,6 +31,8 @@ export default function App() {
   const [history, setHistory] = useState<{ id: number; name: string; model_id: string; status: string }[]>([])
   // R48：历史只取最近一页，必须把总数一起显示，否则用户会以为看到的就是全部
   const [historyTotal, setHistoryTotal] = useState(0)
+  // R75：历史分页——「加载更多」按 offset 追加，直到取满总数
+  const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE_SIZE)
   const sessionRef = useRef<string | null>(null)
   const simSectionRef = useRef<HTMLElement | null>(null)
   sessionRef.current = session?.session_id ?? null
@@ -148,10 +150,25 @@ export default function App() {
   }
 
   function refreshHistory() {
-    api.listExperiments().then((r) => {
+    api.listExperiments(historyLimit, 0).then((r) => {
       setHistory(r.experiments)
       setHistoryTotal(r.total)
     })
+  }
+
+  async function loadMoreHistory() {
+    setBusy(true)
+    try {
+      const r = await api.listExperiments(HISTORY_PAGE_SIZE, history.length)
+      const seen = new Set(history.map((h) => h.id))
+      setHistory([...history, ...r.experiments.filter((h) => !seen.has(h.id))])
+      setHistoryTotal(r.total)
+      setHistoryLimit((n) => n + HISTORY_PAGE_SIZE)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
   }
 
   function buildSpec(): ModelSpec {
@@ -546,6 +563,11 @@ export default function App() {
             </tbody>
           </table>
         )}
+        {history.length > 0 && history.length < historyTotal && (
+          <button onClick={loadMoreHistory} disabled={busy} style={{ ...btn, marginTop: 8 }}>
+            {historyMoreLabel(history.length, historyTotal)}
+          </button>
+        )}
       </section>
       <details style={{ ...card, padding: 0 }}>
         <summary style={{ padding: '12px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 15 }}>
@@ -570,6 +592,15 @@ export function isSessionGone(e: unknown): boolean {
 
 /** 实验历史的截断口径（R48）：与批量面板的 itemsHeading 同一原则——
  * 只展示一页时必须同时给出总数，否则「最近 20 条」会被误读成「全部 20 条」。 */
+/** 每页条数（R75）：与后端 `/api/experiments?limit` 的上限 1000 相容。 */
+export const HISTORY_PAGE_SIZE = 20
+
+/** 「加载更多」按钮文案（R75）；已取满返回 null（调用方据此隐藏按钮）。 */
+export function historyMoreLabel(shown: number, total: number): string | null {
+  if (shown >= total) return null
+  return `加载更多（还有 ${total - shown} 条）`
+}
+
 export function historyHeading(shown: number, total: number): string {
   if (total <= 0) return '实验历史'
   if (shown >= total) return `实验历史（共 ${total} 条）`

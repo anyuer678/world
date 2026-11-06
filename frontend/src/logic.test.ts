@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { historyHeading, isSessionGone, modelTypeLabel, quickPicks, scenarioSpec, stepProblem } from './App'
+import { historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, quickPicks, scenarioSpec, stepProblem } from './App'
 import { statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
@@ -753,6 +753,14 @@ describe('batchesHeading (batch list truncation, R57)', () => {
     expect(batchesHeading(0, 0)).toBe('批量实验')
     expect(batchesHeading(3, 3)).toBe('批量实验（共 3 条）')
     expect(batchesHeading(10, 19)).toBe('批量实验（显示最近 10 条 / 共 19 条，更早的未在界面列出）')
+  })
+})
+
+describe('historyMoreLabel (history paging, R75)', () => {
+  it('shows the remaining count and disappears when everything is loaded', () => {
+    expect(historyMoreLabel(20, 25)).toBe('加载更多（还有 5 条）')
+    expect(historyMoreLabel(25, 25)).toBeNull()
+    expect(historyMoreLabel(0, 0)).toBeNull()
   })
 })
 
