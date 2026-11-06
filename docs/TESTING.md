@@ -1368,3 +1368,16 @@
     重建镜像后全部通过。生产复验必须先比对镜像 Created 与 HEAD 提交时间。
     ④ 清理：探针实验/批量删除，`docker compose down`，数据卷保留；无代码改动，
     后端 **345/345**、前端 **89/89**。
+
+119. **R108 修复：批量失败项重试先校验钉住版本**。
+    ① 缺口：R97 重试直接重置失败项并启动编排，模型/版本不可用（插件卸载/版本移除）时要到
+    item 执行才发现，原始 attempts/error 已被覆盖；R35/R105 的「提交前校验」口径未覆盖批量重试。
+    ② 实现：抽出 `_pinned_spec()`（编排与重试共用版本补齐），`retry_failed()` 在重置前调用
+    `validate_spec()`；未知模型/版本抛 `unknown_model` → 422，状态不改写。
+    ③ 测试：失败批次把 `batch_runs.model_version` 改为 `9.9.9` → 重试抛 `SpecValidationError`、
+    批次仍 failed、item 仍 failed/attempts=1；HTTP 断言 422 + `detail.errors[].code`。
+    先写测试确认红（DID NOT RAISE），修复后批量 **26/26** 绿。
+    ④ 真实 TCP：临时库（`backend/data/r108_probe.db`）用临时失败模型预置 failed 批次，改
+    `model_version=9.9.9` 后起 uvicorn 8010 → `POST /api/batches/1/retry` 返回 **422**
+    `unknown_model`，GET 批次仍 failed、item 仍 failed/attempts=1；验毕停服删库。
+    ⑤ 回归：后端全量 **347/347**、前端 **89/89**、docs 一致性锁 21/21；无 UI 变更。

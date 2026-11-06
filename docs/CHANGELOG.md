@@ -1016,3 +1016,19 @@ attempts/SHA/耗时；实验创建/运行/rerun 均记录 1.0.0 且两次运行�
 **陷阱**：复验开始时运行中的 api 镜像早于 R97（retry 路由 404、报告缺新行），重建后全部通过——
 生产复验必须先核对镜像构建时间晚于 HEAD，否则会把旧镜像的失败误当代码缺陷，或把旧镜像当新证据。
 无代码改动；后端 **345/345**、前端 **89/89**。
+
+**R108（2026-11-06）修复：批量失败项重试先校验钉住版本**
+
+R97 的重试直接重置失败项并启动编排，只有执行到 item 才会发现模型/版本已不可用（插件卸载、
+版本移除）。此时失败项已被改成 pending，随后又以 `unknown_model` 全部失败，原始失败证据
+（attempts/error）被覆盖。R35/R105 已确立「实验 run/rerun/clone 提交前校验、校验先于状态改写」，
+批量重试是同一类提交路径却漏了。本轮把「按批次记录补版本」抽成 `_pinned_spec()`（编排与重试
+共用）并在 `retry_failed()` 重置前调用 `validate_spec()`：未知模型/版本返回 422 `unknown_model`，
+批次与失败项保持原状。
+
+测试：伪造失败批次后把 `batch_runs.model_version` 改成 `9.9.9`（模拟插件消失）→ 重试抛
+`SpecValidationError(unknown_model)`、批次仍 failed、item 仍 failed/attempts=1；HTTP 用例断言
+422 且 `detail.errors[].code=unknown_model`。先写测试确认红，再修到绿；批量测试 **26/26**，
+后端全量 **347/347**、前端 **89/89** 无改动。另做真实 TCP 复验：临时库预置失败批次并把记录版本
+改为 `9.9.9`，uvicorn 8010 上 `POST /api/batches/1/retry` → **422** `unknown_model`，批次仍
+`failed`、item 仍 `failed/attempts=1`；验毕停服删库。

@@ -3,6 +3,7 @@ cancellation, statistics and sensitivity, and the REST API surface."""
 from __future__ import annotations
 
 import math
+import sqlite3
 import time
 
 import pytest
@@ -496,6 +497,27 @@ def test_retry_pins_original_model_version(batches):
         registry._by_id.pop("toy_pin", None)
 
 
+def test_retry_rejects_unavailable_pinned_version_before_resetting(batches, settings):
+    """R108：重试也是提交路径，必须先校验钉住的版本。
+
+    插件被卸载/版本被移除后，失败批次的重试不应先把失败项重置成 pending 再让它们
+    以 unknown_model 全部失败——那会抹掉原始 failure 证据（attempts/error）且用户
+    只看到「又失败了」。与实验 run/rerun/clone（R35/R105）同一提交前校验口径。
+    """
+    FailOnceModel._seen.clear()
+    b = batches.create("gone-version", _flaky_spec(), {}, repeats=1, max_retries=0)
+    assert _wait_terminal(batches, b["id"])["status"] == "failed"
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("UPDATE batch_runs SET model_version='9.9.9' WHERE id=?", (b["id"],))
+
+    with pytest.raises(SpecValidationError) as exc:
+        batches.retry_failed(b["id"])
+    assert exc.value.errors[0]["code"] == "unknown_model"
+    assert batches.get_batch(b["id"], include_summary=False)["status"] == "failed"
+    item = batches.list_items(b["id"])["items"][0]
+    assert item["status"] == "failed" and item["attempts"] == 1, "校验失败时不得重置失败项"
+
+
 # ---------------------------------------------------------------- sensitivity
 def test_summary_and_sensitivity(batches):
     # total_time = delay_mean * sum(-log(1-u_i)) under a fixed seed: exactly linear
@@ -657,6 +679,27 @@ def test_batch_retry_api(client):
 
     assert client.post(f"/api/batches/{bid}/retry").status_code == 409
     assert client.post("/api/batches/99999/retry").status_code == 404
+
+
+def test_batch_retry_api_rejects_unavailable_version(client, settings):
+    """R108：不可用的钉住版本应在提交时 422，而不是重置失败项后再失败一遍。"""
+    FailOnceModel._seen.clear()
+    r = client.post(
+        "/api/batches",
+        json={"name": "retry gone", "spec": _flaky_spec(), "grid": {"key": [1]}, "repeats": 1, "max_retries": 0},
+    )
+    bid = r.json()["id"]
+    deadline = time.time() + 20
+    while time.time() < deadline and client.get(f"/api/batches/{bid}").json()["status"] != "failed":
+        time.sleep(0.05)
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("UPDATE batch_runs SET model_version='9.9.9' WHERE id=?", (bid,))
+
+    r = client.post(f"/api/batches/{bid}/retry")
+    assert r.status_code == 422, r.text
+    assert any(e["code"] == "unknown_model" for e in r.json()["detail"]["errors"])
+    assert client.get(f"/api/batches/{bid}").json()["status"] == "failed"
+    assert client.get(f"/api/batches/{bid}/items").json()["items"][0]["attempts"] == 1
 
 
 def test_batch_api_validation(client):

@@ -92,6 +92,14 @@ class BatchService:
             raise NotFoundError(f"batch {batch_id} not found")
         return row
 
+    @staticmethod
+    def _pinned_spec(row) -> dict[str, Any]:
+        """存储的 spec 常带 model_version=null；执行/重试都必须钉住批次记录的版本。"""
+        spec_raw = json.loads(row["spec_json"])
+        if not spec_raw.get("model_version"):
+            spec_raw["model_version"] = row["model_version"]
+        return spec_raw
+
     # ------------------------------------------------------------------ create
     def create(
         self,
@@ -207,10 +215,8 @@ class BatchService:
         conn = self._conn()
         try:
             row = self._get_batch_row(conn, batch_id)
-            spec_raw = json.loads(row["spec_json"])
             # 钉住批次创建时解析出的版本：重试时若注册表新增了版本，不能静默换实现
-            if not spec_raw.get("model_version"):
-                spec_raw["model_version"] = row["model_version"]
+            spec_raw = self._pinned_spec(row)
             conn.execute(
                 "UPDATE batch_runs SET status='running', started_at=COALESCE(started_at, datetime('now')) WHERE id=?",
                 (batch_id,),
@@ -404,6 +410,9 @@ class BatchService:
             ).fetchone()[0]
             if failed == 0:
                 raise ConflictError(f"batch {batch_id} has no failed items to retry")
+            # 与实验 run/rerun/clone 同一提交前校验：模型/版本不可用时直接拒绝，
+            # 不能先把失败项重置成 pending 再让它们以 unknown_model 全部失败
+            validate_spec(self._pinned_spec(row), self.registry)
             with conn:
                 conn.execute(
                     "UPDATE batch_items SET status='pending', error=NULL, finished_at=NULL,"
