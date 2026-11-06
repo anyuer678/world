@@ -1,5 +1,7 @@
-import type { ExperimentResult } from './types'
+import { useState } from 'react'
+import type { ExperimentResult, RunDetail } from './types'
 import { statusLabel } from './labels'
+import { api } from './api'
 
 /** 结果表里要显示的指标列：各次运行的指标并集，按名称排序（R82）。
  * 不能用某一次运行的键集——并行重复里失败的运行通常没有指标。 */
@@ -10,6 +12,23 @@ export function metricColumns(runs: { metrics: Record<string, number> | null }[]
 export default function ResultPanel({ result, onClose }: { result: ExperimentResult; onClose: () => void }) {
   const { experiment, runs, aggregate } = result
   const cols = metricColumns(runs)
+  // R85：单次运行详情（GET /api/runs/{id}）此前只有 API，没有界面入口
+  const [detail, setDetail] = useState<RunDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState<number | null>(null)
+  const [detailError, setDetailError] = useState('')
+
+  async function openRunDetail(runId: number) {
+    setDetailLoading(runId)
+    setDetailError('')
+    try {
+      // 运行事件落库上限 100 条；一次取满即可，分页端点留给更大的未来数据量
+      setDetail(await api.getRun(runId, 100))
+    } catch (e) {
+      setDetailError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDetailLoading(null)
+    }
+  }
   return (
     <section aria-label="实验结果详情" style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -72,6 +91,7 @@ export default function ResultPanel({ result, onClose }: { result: ExperimentRes
                       {k}
                     </th>
                   ))}
+                  <th style={th}>详情</th>
                   <th style={th}>错误</th>
                 </tr>
               </thead>
@@ -89,12 +109,72 @@ export default function ResultPanel({ result, onClose }: { result: ExperimentRes
                         {typeof run.metrics?.[k] === 'number' ? run.metrics[k].toFixed(4) : '—'}
                       </td>
                     ))}
+                    <td style={td}>
+                      <button
+                        onClick={() => openRunDetail(run.id)}
+                        disabled={detailLoading !== null}
+                        aria-label={`查看运行 ${run.id} 的事件`}
+                        style={btn}
+                      >
+                        {detailLoading === run.id ? '加载中…' : '详情'}
+                      </button>
+                    </td>
                     <td style={{ ...td, color: run.error ? '#b91c1c' : undefined, maxWidth: 260 }}>{run.error ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {detailError && (
+            <p role="alert" style={{ color: '#b91c1c', fontSize: 13 }}>
+              运行详情加载失败：{detailError}
+            </p>
+          )}
+          {detail && (
+            <div
+              aria-label="运行详情"
+              style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '8px 12px', marginTop: 10, background: 'white' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <h3 style={{ fontSize: 14, margin: '2px 0' }}>运行 #{detail.id} 详情</h3>
+                <button onClick={() => setDetail(null)} aria-label="关闭运行详情" style={btn}>
+                  关闭
+                </button>
+              </div>
+              <p style={{ fontSize: 12, color: '#374151', margin: '2px 0 6px' }}>
+                {statusLabel(detail.status)} · 种子 {detail.seed} · 步数 {detail.steps ?? '—'} · 模拟时间{' '}
+                {detail.sim_time != null ? detail.sim_time.toFixed(3) : '—'} · 耗时{' '}
+                {detail.duration_ms != null ? `${(detail.duration_ms / 1000).toFixed(2)} s` : '—'}
+              </p>
+              <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 6px', wordBreak: 'break-all' }}>
+                结果 SHA-256：{detail.result_sha256 ?? '—'}
+              </p>
+              {detail.error && (
+                <p role="alert" style={{ color: '#b91c1c', fontSize: 12 }}>
+                  运行错误：{detail.error}
+                </p>
+              )}
+              <h4 style={{ fontSize: 13, margin: '6px 0 4px' }}>
+                事件（最近 {detail.events.length} 条；服务端最多保存 100 条）
+              </h4>
+              {detail.events.length > 0 ? (
+                <div
+                  role="region"
+                  aria-label="运行事件列表"
+                  tabIndex={0}
+                  style={{ maxHeight: 200, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12 }}
+                >
+                  {detail.events.map((ev) => (
+                    <div key={ev.seq}>
+                      t={ev.time.toFixed(4)} [{ev.kind}] {ev.message}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: '#6b7280', fontSize: 12 }}>该运行没有保存事件。</p>
+              )}
+            </div>
+          )}
         </>
       )}
     </section>

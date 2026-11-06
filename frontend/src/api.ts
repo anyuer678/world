@@ -163,7 +163,8 @@ export const api = {
     }),
   getResult: (id: number) => request<ExperimentResult>(`/api/experiments/${id}/result`),
   deleteExperiment: (id: number) => request<void>(`/api/experiments/${id}`, { method: 'DELETE' }),
-  getRun: (runId: number) => request<RunDetail>(`/api/runs/${runId}`),
+  getRun: (runId: number, eventsLimit = 50) =>
+    request<RunDetail>(`/api/runs/${runId}?events_limit=${eventsLimit}`),
   listExperiments: (limit = 20, offset = 0, modelId?: string, tag?: string) => {
     const q = new URLSearchParams({ limit: String(limit), offset: String(offset) })
     if (modelId) q.set('model_id', modelId)

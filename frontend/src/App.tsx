@@ -1022,7 +1022,13 @@ export default function App() {
           </button>
         )}
       </section>
-      {resultView && <ResultPanel result={resultView} onClose={() => setResultView(null)} />}
+      {resultView && (
+        <ResultPanel
+          key={resultView.experiment.id}
+          result={resultView}
+          onClose={() => setResultView(null)}
+        />
+      )}
       <details style={{ ...card, padding: 0 }}>
         <summary style={{ padding: '12px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 15 }}>
           高级：批量实验与结果比较
