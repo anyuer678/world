@@ -20,6 +20,12 @@ export function toggleCompare(ids: number[], id: number, max: number): number[] 
   return [...ids, id]
 }
 
+/** 比较结果的失效键（R110）：选择变化或所选实验状态变化时，上次抓取的表格就不再对应当前状态。
+ * 用字符串键而不是数组依赖，避免历史轮询每次返回新数组就把结果清空。 */
+export function compareSignature(selected: number[], history: HistoryEntry[]): string {
+  return selected.map((id) => `${id}:${history.find((h) => h.id === id)?.status ?? 'gone'}`).join(',')
+}
+
 export default function ComparePanel({
   history,
   historyTotal = history.length,
@@ -35,6 +41,12 @@ export default function ComparePanel({
   useEffect(() => {
     setSelected((s) => s.filter((id) => history.some((h) => h.id === id)))
   }, [history])
+
+  // 选择或所选实验状态变化后，旧的比较结果不再代表当前状态；清空让用户重新比较（R110）
+  const signature = compareSignature(selected, history)
+  useEffect(() => {
+    setResults([])
+  }, [signature])
 
   function toggle(id: number) {
     setSelected((s) => toggleCompare(s, id, MAX_COMPARE))

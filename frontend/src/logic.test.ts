@@ -8,7 +8,7 @@ import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
 import { BATCH_STATUSES, canCancelBatch, canRetryFailed, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, gridRowsFromBatch, itemsHeading, numericField, templateSpec } from './BatchPanel'
-import { toggleCompare } from './ComparePanel'
+import { compareSignature, toggleCompare } from './ComparePanel'
 import { ApiError, errorDetailMessage, isNotFoundOn, specErrorText } from './api'
 
 describe('batchSubmitProblem (server-provided limits, R29/R30)', () => {
@@ -952,6 +952,21 @@ describe('canRerun / canCancel (experiment actions, R84)', () => {
     expect(canCancel('running')).toBe(true)
     expect(canCancel('completed')).toBe(false)
     expect(canCancel('created')).toBe(false)
+  })
+})
+
+describe('compareSignature (invalidate stale compare table, R110)', () => {
+  const history = [
+    { id: 1, name: 'a', model_id: 'sir', status: 'completed' },
+    { id: 2, name: 'b', model_id: 'sir', status: 'running' },
+  ]
+  it('is stable across list refreshes but changes with selection or status', () => {
+    const sameRefresh = history.map((h) => ({ ...h }))
+    expect(compareSignature([1, 2], history)).toBe(compareSignature([1, 2], sameRefresh))
+    expect(compareSignature([1], history)).not.toBe(compareSignature([1, 2], history))
+    const rerun = history.map((h) => (h.id === 2 ? { ...h, status: 'completed' } : h))
+    expect(compareSignature([1, 2], rerun)).not.toBe(compareSignature([1, 2], history))
+    expect(compareSignature([3], history)).toBe('3:gone')
   })
 })
 
