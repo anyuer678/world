@@ -1208,3 +1208,11 @@
     ③ 浏览器实测：SIR 默认 → 有效、`sir v1.0.0` 与默认参数；population=5 →
     「population 不能小于 10」；前后 experiments=0、sessions=[]；改参数后面板消失。
     ④ 回归：前端 **80/80**、tsc/vite 干净；后端 **337/337** 无改动（端点已有测试）。
+
+102. **R91 功能：实验历史按状态筛选**。
+    ① 缺口：模型/标签筛选已有（R83），状态无法筛选，失败/取消实验只能逐条翻。
+    ② 实现：`GET /api/experiments?status=`（Literal 7 值，未知 422；total 为筛选后数量，
+    可与 model_id/tag 组合）；界面状态下拉 + 筛选说明/空态；加载更多与自动刷新携带状态。
+    ③ 浏览器实测（4 条：sir/queueing × created/completed）：全部 4 → 已完成 2 →
+    失败 0 + 空态 → sir+已完成 1；API completed=2、created=2、sir+completed=1。
+    ④ 回归：后端 **337/337**（现有过滤测试补状态断言与 422）、前端 **81/81**、tsc/vite 干净。

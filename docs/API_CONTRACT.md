@@ -63,7 +63,9 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 ## 实验
 - `POST /api/experiments` body=`{name, spec}` → Experiment（status=created）
   - spec 经 schema 迁移+校验+参数双层校验，非法 422
-- `GET /api/experiments?limit&offset&model_id&tag` → `{total, experiments:[Experiment]}`
+- `GET /api/experiments?limit&offset&model_id&tag&status` → `{total, experiments:[Experiment]}`；
+  `status`（R91）限 `created|running|completed|failed|cancelled|step_limit|wall_timeout`，
+  未知值 422，`total` 为筛选后数量（可与 model_id/tag 组合）
 - `GET /api/experiments/{id}` → Experiment（含 runs 概要）
 - `DELETE /api/experiments/{id}` → 204
 - `POST /api/experiments/{id}/clone` body=`{name?, spec_overrides?}` → 新 Experiment

@@ -176,10 +176,11 @@ export const api = {
   deleteExperiment: (id: number) => request<void>(`/api/experiments/${id}`, { method: 'DELETE' }),
   getRun: (runId: number, eventsLimit = 50) =>
     request<RunDetail>(`/api/runs/${runId}?events_limit=${eventsLimit}`),
-  listExperiments: (limit = 20, offset = 0, modelId?: string, tag?: string) => {
+  listExperiments: (limit = 20, offset = 0, modelId?: string, tag?: string, status?: string) => {
     const q = new URLSearchParams({ limit: String(limit), offset: String(offset) })
     if (modelId) q.set('model_id', modelId)
     if (tag) q.set('tag', tag)
+    if (status) q.set('status', status)
     return request<{
       total: number
       experiments: { id: number; name: string; model_id: string; model_version: string; status: string; tags: string[] }[]

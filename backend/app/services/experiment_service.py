@@ -227,7 +227,12 @@ class ExperimentService:
             conn.close()
 
     def list_experiments(
-        self, limit: int = 50, offset: int = 0, model_id: str | None = None, tag: str | None = None
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        model_id: str | None = None,
+        tag: str | None = None,
+        status: str | None = None,
     ) -> dict[str, Any]:
         conn = self._conn()
         try:
@@ -238,6 +243,9 @@ class ExperimentService:
             if tag:
                 where.append("tags LIKE ?")
                 args.append(f'%"{tag}"%')
+            if status:
+                where.append("status=?")
+                args.append(status)
             clause = f"WHERE {' AND '.join(where)}" if where else ""
             total = conn.execute(f"SELECT COUNT(*) FROM experiments {clause}", args).fetchone()[0]
             rows = conn.execute(

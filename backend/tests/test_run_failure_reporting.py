@@ -126,3 +126,14 @@ def test_experiment_list_filters_combine_and_total_follows_filter(client):
     a = client.get("/api/experiments?tag=keep&limit=1&offset=0").json()["experiments"]
     b = client.get("/api/experiments?tag=keep&limit=1&offset=1").json()["experiments"]
     assert a[0]["id"] != b[0]["id"]
+
+    # R91：状态筛选（未知状态由 Literal 挡成 422）
+    client.post(f"/api/experiments/{ids[3]}/run", json={"wait": True})
+    done = client.get("/api/experiments?status=completed").json()
+    assert ids[3] in {x["id"] for x in done["experiments"]}
+    created = client.get("/api/experiments?status=created").json()
+    assert ids[0] in {x["id"] for x in created["experiments"]}
+    assert ids[3] not in {x["id"] for x in created["experiments"]}
+    combo = client.get("/api/experiments?status=created&model_id=sir&tag=alpha").json()
+    assert {x["id"] for x in combo["experiments"]} == {ids[0], ids[1]}
+    assert client.get("/api/experiments?status=nope").status_code == 422

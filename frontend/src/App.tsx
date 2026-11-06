@@ -49,6 +49,8 @@ export default function App() {
   // R83：模型/标签筛选（服务端 list_experiments 早已支持 model_id/tag，界面此前没接）
   const [filterModel, setFilterModel] = useState('')
   const [filterTag, setFilterTag] = useState('')
+  // R91：状态筛选（服务端 status，与批单项筛选同一原则）
+  const [filterStatus, setFilterStatus] = useState('')
   const [editingTags, setEditingTags] = useState<{ id: number; raw: string } | null>(null)
   const historySeq = useRef(0)
   // R82：实验结果查看（结果端点此前只被「载入配置」顺手用到，没显示过指标）
@@ -84,7 +86,13 @@ export default function App() {
     const t = setTimeout(() => {
       const token = ++historySeq.current
       api
-        .listExperiments(HISTORY_PAGE_SIZE, 0, filterModel || undefined, filterTag.trim() || undefined)
+        .listExperiments(
+          HISTORY_PAGE_SIZE,
+          0,
+          filterModel || undefined,
+          filterTag.trim() || undefined,
+          filterStatus || undefined,
+        )
         .then((r) => {
           if (token !== historySeq.current) return
           setHistory(r.experiments)
@@ -97,7 +105,7 @@ export default function App() {
         })
     }, 250)
     return () => clearTimeout(t)
-  }, [filterModel, filterTag])
+  }, [filterModel, filterTag, filterStatus])
 
   // 有实验在跑时自动刷新列表（重跑是异步的；此前状态会永远停在「运行中」前的旧值）
   const runningAny = history.some((h) => h.status === 'running')
@@ -105,7 +113,7 @@ export default function App() {
     if (!runningAny) return
     const t = setInterval(refreshHistory, 800)
     return () => clearInterval(t)
-  }, [runningAny, filterModel, filterTag, historyLimit])
+  }, [runningAny, filterModel, filterTag, filterStatus, historyLimit])
 
   // 配置一变，之前的校验结果就过期了——不留着旧结论误导当前表单
   useEffect(() => {
@@ -270,7 +278,13 @@ export default function App() {
   function refreshHistory() {
     const token = ++historySeq.current
     api
-      .listExperiments(historyLimit, 0, filterModel || undefined, filterTag.trim() || undefined)
+      .listExperiments(
+        historyLimit,
+        0,
+        filterModel || undefined,
+        filterTag.trim() || undefined,
+        filterStatus || undefined,
+      )
       .then((r) => {
         if (token !== historySeq.current) return
         setHistory(r.experiments)
@@ -340,6 +354,7 @@ export default function App() {
         history.length,
         filterModel || undefined,
         filterTag.trim() || undefined,
+        filterStatus || undefined,
       )
       const seen = new Set(history.map((h) => h.id))
       setHistory([...history, ...r.experiments.filter((h) => !seen.has(h.id))])
@@ -913,11 +928,28 @@ export default function App() {
               style={{ ...control, width: 220 }}
             />
           </label>
-          {(filterModel || filterTag.trim()) && (
+          <label style={{ ...rowFlex, margin: 0 }}>
+            状态筛选：
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              aria-label="按状态筛选实验"
+              style={{ ...control, width: 150 }}
+            >
+              <option value="">全部状态</option>
+              {EXPERIMENT_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {statusLabel(s)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {(filterModel || filterTag.trim() || filterStatus) && (
             <button
               onClick={() => {
                 setFilterModel('')
                 setFilterTag('')
+                setFilterStatus('')
               }}
               style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
             >
@@ -925,14 +957,16 @@ export default function App() {
             </button>
           )}
         </div>
-        {filterSummary(filterModel, filterTag) && (
+        {filterSummary(filterModel, filterTag, filterStatus) && (
           <p role="status" style={{ color: '#92400e', fontSize: 12, margin: '0 0 6px' }}>
-            {filterSummary(filterModel, filterTag)}
+            {filterSummary(filterModel, filterTag, filterStatus)}
           </p>
         )}
         {history.length === 0 ? (
           <p style={{ color: '#6b7280' }}>
-            {filterModel || filterTag.trim() ? '没有符合当前筛选条件的实验。' : '暂无实验。在上方保存会话配置为实验。'}
+            {filterModel || filterTag.trim() || filterStatus
+              ? '没有符合当前筛选条件的实验。'
+              : '暂无实验。在上方保存会话配置为实验。'}
           </p>
         ) : (
           <table style={table}>
@@ -1120,6 +1154,17 @@ export function isSessionGone(e: unknown): boolean {
 /** 每页条数（R75）：与后端 `/api/experiments?limit` 的上限 1000 相容。 */
 export const HISTORY_PAGE_SIZE = 20
 
+/** 实验历史可筛选的状态（R91）：与后端 ExperimentStatus Literal 同集合。 */
+export const EXPERIMENT_STATUSES = [
+  'created',
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+  'step_limit',
+  'wall_timeout',
+] as const
+
 /** 「加载更多」按钮文案（R75）；已取满返回 null（调用方据此隐藏按钮）。 */
 export function historyMoreLabel(shown: number, total: number): string | null {
   return moreLabel(shown, total)
@@ -1179,12 +1224,13 @@ export function parseTags(raw: string): string[] {
   return out
 }
 
-/** 历史筛选说明（R83）：只在有筛选时返回文案，告诉用户总数是筛选后的口径。 */
-export function filterSummary(modelId: string, tag: string): string | null {
+/** 历史筛选说明（R83/R91）：只在有筛选时返回文案，告诉用户总数是筛选后的口径。 */
+export function filterSummary(modelId: string, tag: string, status = ''): string | null {
   const parts: string[] = []
   if (modelId) parts.push(`模型 ${modelId}`)
   const t = tag.trim()
   if (t) parts.push(`标签 ${t}`)
+  if (status) parts.push(`状态 ${statusLabel(status)}`)
   return parts.length ? `筛选：${parts.join(' · ')}（只统计符合条件的实验）` : null
 }
 

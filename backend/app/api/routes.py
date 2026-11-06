@@ -25,6 +25,10 @@ MAX_EVENTS_LIMIT = 500
 BatchItemStatus = Literal[
     "pending", "running", "completed", "failed", "cancelled", "step_limit", "wall_timeout"
 ]
+# 实验状态（R91）：由 run 结果同步而来，created 表示尚未运行
+ExperimentStatus = Literal[
+    "created", "running", "completed", "failed", "cancelled", "step_limit", "wall_timeout"
+]
 # R64：offset 不设上限时，`offset=999999999999999999999` 会让 Python 大整数进 SQLite，
 # 触发 OverflowError → 500。路径 id 同理（用 RowId 约束）。
 MAX_OFFSET = 1_000_000_000
@@ -107,8 +111,9 @@ def list_experiments(
     offset: int = Query(0, ge=0, le=MAX_OFFSET),
     model_id: Optional[str] = None,
     tag: Optional[str] = None,
+    status: ExperimentStatus | None = None,
 ) -> dict[str, Any]:
-    return _service(request).list_experiments(limit, offset, model_id, tag)
+    return _service(request).list_experiments(limit, offset, model_id, tag, status)
 
 
 @router.get("/experiments/{exp_id}")

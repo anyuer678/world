@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { metricColumns } from './ResultPanel'
-import { canCancel, canRerun, filterSummary, historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, parseTags, quickPicks, scenarioSpec, stepProblem, versionOptions } from './App'
+import { canCancel, canRerun, EXPERIMENT_STATUSES, filterSummary, historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, parseTags, quickPicks, scenarioSpec, stepProblem, versionOptions } from './App'
 import { modelVersionLabel, statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
@@ -833,6 +833,14 @@ describe('parseTags / filterSummary (tag UI, R83)', () => {
     expect(filterSummary('', '')).toBeNull()
     expect(filterSummary('sir', '')).toBe('筛选：模型 sir（只统计符合条件的实验）')
     expect(filterSummary('sir', ' baseline ')).toBe('筛选：模型 sir · 标签 baseline（只统计符合条件的实验）')
+    expect(filterSummary('', '', 'failed')).toBe('筛选：状态 失败（只统计符合条件的实验）')
+    expect(filterSummary('sir', 'baseline', 'completed')).toBe(
+      '筛选：模型 sir · 标签 baseline · 状态 已完成（只统计符合条件的实验）',
+    )
+  })
+
+  it('has a Chinese label for every filterable experiment status (R91)', () => {
+    for (const s of EXPERIMENT_STATUSES) expect(statusLabel(s)).not.toBe(s)
   })
 })
 
