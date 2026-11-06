@@ -82,6 +82,11 @@ export function canCancelBatch(status: string): boolean {
   return status === 'queued' || status === 'running'
 }
 
+/** 失败项重试入口（R97）：只有 failed 且确有失败项时才显示。 */
+export function canRetryFailed(status: string, failed: number): boolean {
+  return status === 'failed' && failed > 0
+}
+
 export function parseValues(raw: string): unknown[] {
   return raw
     .split(/[,\s]+/)
@@ -365,8 +370,24 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
     }
   }
 
-  async function cancelBatchRow(b: BatchListItem) {
-    if (!window.confirm(`取消批量 #${b.id}「${b.name}」正在进行的运行？`)) return
+  async function retryFailed() {
+    if (!batch) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const b = await api.retryBatch(batch.id)
+      setBatch(b)
+      setNotice(`已提交批量 #${b.id} 的失败项重试。`)
+      refreshBatches()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function cancelBatchRow(b: BatchListItem) {    if (!window.confirm(`取消批量 #${b.id}「${b.name}」正在进行的运行？`)) return
     setBusy(true)
     setError('')
     setNotice('')
@@ -653,6 +674,16 @@ export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; mod
             <button onClick={cancel} disabled={busy || !active} style={{ ...smallBtn, ...(active ? {} : { opacity: 0.5 }) }}>
               取消批量
             </button>
+            {canRetryFailed(batch.status, batch.counts.failed ?? 0) && (
+              <button
+                onClick={retryFailed}
+                disabled={busy}
+                aria-label={`重试批量 ${batch.id} 的失败项`}
+                style={{ ...smallBtn, color: '#1d4ed8', borderColor: '#bfdbfe' }}
+              >
+                重试失败项（{batch.counts.failed}）
+              </button>
+            )}
             <a
               href={api.batchCsvUrl(batch.id)}
               download={`worldlab-batch-${batch.id}.csv`}

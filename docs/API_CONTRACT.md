@@ -130,6 +130,11 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 - `POST /api/batches/{id}/cancel` → Batch（协作式取消；在途上限 = min(concurrency, max_workers)，R1）
 - `DELETE /api/batches/{id}`（R87）→ 204；删除批量并级联单项。运行中（`running`）返回 **409**，
   需先 cancel 并等待终态；未知 id 与已删除 id 均 404
+- `POST /api/batches/{id}/retry`（R97）→ Batch；仅 `failed` 且存在失败项时可调用（否则 **409**，
+  未知 id 404）。把失败项重置为 `pending`（attempts 保留并累计）后只重跑这些项，
+  已完成项不动；成功后批次可变为 `completed`
+  - **整批状态语义**（R97 修正）：任一项 `failed` 则批次为 `failed`（不再要求「全部失败」）；
+    有取消项且取消标志生效时为 `cancelled`
 - `GET /api/batches/{id}/export.csv` → 逐 item 明细 CSV 附件
 - `GET /api/batches/{id}/report?format=markdown|json`（R77）→ **批量报告**（默认 markdown）。
   JSON 键：`{report_version, generated_at, software{app_version,engine_version,python_version},

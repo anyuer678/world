@@ -387,6 +387,11 @@ def cancel_batch(batch_id: RowId, request: Request) -> dict[str, Any]:
     return _batches(request).cancel(batch_id)
 
 
+@router.post("/batches/{batch_id}/retry")
+def retry_failed_items(batch_id: RowId, request: Request) -> dict[str, Any]:
+    return _batches(request).retry_failed(batch_id)
+
+
 @router.delete("/batches/{batch_id}", status_code=204)
 def delete_batch(batch_id: RowId, request: Request) -> None:
     _batches(request).delete(batch_id)

@@ -7,7 +7,7 @@ import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
-import { BATCH_STATUSES, canCancelBatch, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, itemsHeading } from './BatchPanel'
+import { BATCH_STATUSES, canCancelBatch, canRetryFailed, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, itemsHeading } from './BatchPanel'
 import { toggleCompare } from './ComparePanel'
 import { ApiError, errorDetailMessage, isNotFoundOn, specErrorText } from './api'
 
@@ -804,6 +804,13 @@ describe('batch filters (R92)', () => {
     expect(canCancelBatch('completed')).toBe(false)
     expect(canCancelBatch('failed')).toBe(false)
     expect(canCancelBatch('cancelled')).toBe(false)
+  })
+
+  it('only offers failed-item retry for failed batches with failures (R97)', () => {
+    expect(canRetryFailed('failed', 2)).toBe(true)
+    expect(canRetryFailed('failed', 0)).toBe(false)
+    expect(canRetryFailed('completed', 1)).toBe(false)
+    expect(canRetryFailed('running', 1)).toBe(false)
   })
 })
 

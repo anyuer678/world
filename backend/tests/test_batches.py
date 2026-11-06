@@ -116,6 +116,47 @@ class SlowDesModel(DiscreteEventModel):
 registry.register(SlowDesModel)
 
 
+class FailOnceParams(WorldLabParams):
+    key: int = 0
+
+
+class FailOnceModel(DiscreteEventModel):
+    """Fails the first initialize for each key, succeeds afterwards (R97 retry test)."""
+
+    model_id = "toy_fail_once"
+    display_name = "Fail once"
+    description = "Toy model that fails its first run per key, then succeeds."
+    model_type = "discrete_event"
+    version = "1.0.0"
+    param_model = FailOnceParams
+    _seen: set[int] = set()
+
+    def initialize(self, ctx) -> None:
+        key = int(self.params.key)
+        if key not in FailOnceModel._seen:
+            FailOnceModel._seen.add(key)
+            raise RuntimeError(f"first attempt fails for key {key}")
+        self._s = {"key": key}
+
+    def handle_event(self, event, ctx) -> None:  # pragma: no cover - no events scheduled
+        pass
+
+    def dump_state(self):
+        return dict(self._s)
+
+    def load_state(self, state):
+        self._s = dict(state)
+
+    def snapshot(self):
+        return dict(self._s)
+
+    def finalize_metrics(self):
+        return {"key": float(self.params.key)}
+
+
+registry.register(FailOnceModel)
+
+
 @pytest.fixture()
 def batches(settings):
     b = BatchService(settings, registry)
@@ -324,6 +365,48 @@ def test_delete_running_batch_requires_cancel(batches):
         batches.get_batch(b["id"])
 
 
+# ------------------------------------------------------------------- retry
+def _flaky_spec():
+    return {
+        "schema_version": 1,
+        "model_id": "toy_fail_once",
+        "params": {},
+        "stop_condition": {"type": "until_empty"},
+        "seed": 1,
+    }
+
+
+def test_batch_status_is_failed_when_any_item_fails(batches):
+    FailOnceModel._seen.clear()
+    FailOnceModel._seen.add(1)  # key 1 succeeds, key 2 fails on its first run
+    b = batches.create("mixed", _flaky_spec(), {"key": [1, 2]}, repeats=1, max_retries=0)
+    final = _wait_terminal(batches, b["id"])
+    assert final["status"] == "failed", "混有 completed 与 failed 的批量必须标为 failed"
+    assert final["counts"] == {"completed": 1, "failed": 1}
+
+
+def test_retry_failed_items_reruns_only_failed(batches):
+    FailOnceModel._seen.clear()
+    b = batches.create("retry", _flaky_spec(), {"key": [1, 2]}, repeats=1, max_retries=0)
+    assert _wait_terminal(batches, b["id"])["status"] == "failed"
+    first = batches.list_items(b["id"])["items"]
+    assert [i["status"] for i in first] == ["failed", "failed"]
+    assert all(i["attempts"] == 1 for i in first)
+
+    batches.retry_failed(b["id"])
+    final = _wait_terminal(batches, b["id"])
+    assert final["status"] == "completed"
+    second = batches.list_items(b["id"])["items"]
+    assert [i["status"] for i in second] == ["completed", "completed"]
+    assert all(i["attempts"] == 2 for i in second), "重试应累计 attempts 而不是重置"
+    assert all(i["error"] is None for i in second)
+
+    with pytest.raises(ConflictError):
+        batches.retry_failed(b["id"])  # 已完成，无可重试项
+    with pytest.raises(NotFoundError):
+        batches.retry_failed(99999)
+
+
 # ---------------------------------------------------------------- sensitivity
 def test_summary_and_sensitivity(batches):
     # total_time = delay_mean * sum(-log(1-u_i)) under a fixed seed: exactly linear
@@ -456,6 +539,33 @@ def test_batch_delete_api(client):
             break
         time.sleep(0.05)
     assert client.delete(f"/api/batches/{slow}").status_code == 204
+
+
+def test_batch_retry_api(client):
+    FailOnceModel._seen.clear()
+    r = client.post(
+        "/api/batches",
+        json={"name": "retry api", "spec": _flaky_spec(), "grid": {"key": [1]}, "repeats": 1, "max_retries": 0},
+    )
+    assert r.status_code == 201, r.text
+    bid = r.json()["id"]
+    deadline = time.time() + 20
+    while time.time() < deadline and client.get(f"/api/batches/{bid}").json()["status"] != "failed":
+        time.sleep(0.05)
+    assert client.get(f"/api/batches/{bid}/items").json()["items"][0]["attempts"] == 1
+
+    assert client.post(f"/api/batches/{bid}/retry").status_code == 200
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        if client.get(f"/api/batches/{bid}").json()["status"] in ("completed", "failed", "cancelled"):
+            break
+        time.sleep(0.05)
+    item = client.get(f"/api/batches/{bid}/items").json()["items"][0]
+    assert client.get(f"/api/batches/{bid}").json()["status"] == "completed"
+    assert item["status"] == "completed" and item["attempts"] == 2
+
+    assert client.post(f"/api/batches/{bid}/retry").status_code == 409
+    assert client.post("/api/batches/99999/retry").status_code == 404
 
 
 def test_batch_api_validation(client):

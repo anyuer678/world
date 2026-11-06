@@ -45,7 +45,6 @@ from .experiment_service import ConflictError, NotFoundError, canonical_metrics_
 
 MAX_BATCH_ITEMS = 2000
 SEED_STRATEGIES = ("fixed", "per_repeat_increment", "unique")
-_ITEM_TERMINAL = {"completed", "failed", "cancelled", "step_limit", "wall_timeout"}
 
 
 class BatchService:
@@ -215,7 +214,8 @@ class BatchService:
             )
             conn.commit()
             items = conn.execute(
-                "SELECT id, combo_json, seed FROM batch_items WHERE batch_id=? ORDER BY item_index",
+                "SELECT id, combo_json, seed FROM batch_items"
+                " WHERE batch_id=? AND status='pending' ORDER BY item_index",
                 (batch_id,),
             ).fetchall()
             max_inflight = max(1, int(row["concurrency"]))
@@ -271,7 +271,9 @@ class BatchService:
         finally:
             conn.close()
             with self._lock:
-                self._cancel_flags.pop(batch_id, None)
+                # 重试可能已注册新 flag；只清理属于本次 orchestration 的那个
+                if self._cancel_flags.get(batch_id) is flag:
+                    self._cancel_flags.pop(batch_id, None)
 
     def _execute_item(
         self,
@@ -353,12 +355,14 @@ class BatchService:
                 failed = counts.get("failed", 0)
                 if flag.is_set() and (cancelled or counts.get("pending", 0) or counts.get("running", 0)):
                     status = "cancelled"
-                elif failed and failed == sum(v for k, v in counts.items() if k in _ITEM_TERMINAL) - cancelled:
+                elif failed:
+                    # 任一项失败即整批 failed：混有 completed 的批次不能被标成 completed
                     status = "failed"
                 else:
                     status = "completed"
                 conn.execute(
-                    "UPDATE batch_runs SET status=?, finished_at=datetime('now'), duration_ms=? WHERE id=?",
+                    "UPDATE batch_runs SET status=?, finished_at=datetime('now'),"
+                    " duration_ms=COALESCE(duration_ms,0)+? WHERE id=?",
                     (status, int((time.monotonic() - t0) * 1000), batch_id),
                 )
         finally:
@@ -377,6 +381,48 @@ class BatchService:
             flag = self._cancel_flags.get(batch_id)
         if flag is not None:
             flag.set()
+        return self.get_batch(batch_id, include_summary=False)
+
+    def retry_failed(self, batch_id: int) -> dict[str, Any]:
+        """Re-run only the failed items of a failed batch (R97).
+
+        Items are reset to pending, the batch claim is written conditionally, and a
+        fresh orchestrator thread picks up only pending items. Completed items are
+        left untouched, so a successful retry can turn the batch into completed.
+        """
+        conn = self._conn()
+        try:
+            row = self._get_batch_row(conn, batch_id)
+            if row["status"] != "failed":
+                raise ConflictError(f"batch {batch_id} is not failed; nothing to retry")
+            failed = conn.execute(
+                "SELECT COUNT(*) FROM batch_items WHERE batch_id=? AND status='failed'",
+                (batch_id,),
+            ).fetchone()[0]
+            if failed == 0:
+                raise ConflictError(f"batch {batch_id} has no failed items to retry")
+            with conn:
+                conn.execute(
+                    "UPDATE batch_items SET status='pending', error=NULL, finished_at=NULL,"
+                    " steps=NULL, sim_time=NULL, metrics_json=NULL, result_sha256=NULL, duration_ms=NULL"
+                    " WHERE batch_id=? AND status='failed'",
+                    (batch_id,),
+                )
+                cur = conn.execute(
+                    "UPDATE batch_runs SET status='queued', error=NULL, finished_at=NULL"
+                    " WHERE id=? AND status='failed'",
+                    (batch_id,),
+                )
+                if cur.rowcount == 0:
+                    raise ConflictError(f"batch {batch_id} changed state; retry aborted")
+        finally:
+            conn.close()
+        flag = threading.Event()
+        with self._lock:
+            self._cancel_flags[batch_id] = flag
+        threading.Thread(
+            target=self._orchestrate, args=(batch_id, flag), daemon=True, name=f"batch-{batch_id}-retry"
+        ).start()
         return self.get_batch(batch_id, include_summary=False)
 
     def delete(self, batch_id: int) -> None:

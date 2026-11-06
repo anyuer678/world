@@ -1266,3 +1266,15 @@
     批单项事件（未落库，属于新数据能力）、鉴权/多用户与 WebSocket（单机课设范围，已记录）。
     ⑤ 结论：R76–R95 的功能轮均有测试与实跑证据，收口审计未发现未完成缺陷；继续工作属于上述
     可选范围或新需求，按目标口径视为**无待开发任务**。
+
+108. **R97 功能：批量失败项重试 + 整批失败状态语义修正**。
+    ① 缺口：失败批量只能整批重跑；`max_retries` 不跨批次重试；混合 completed+failed 的批量
+    会被误标 completed（旧 `_finalize` 要求全部终态项失败才判 failed）。
+    ② 实现：`POST /api/batches/{id}/retry` 仅 failed 且有失败项（否则 409/404），失败项重置
+    pending 后只重跑它们（`_orchestrate` 只取 pending），attempts 累计、completed 项不动；
+    条件状态写入 + 新 flag + 旧线程只清理自己的 flag。`_finalize` 改为任一项 failed 即 failed，
+    duration 累加。前端失败详情显示「重试失败项（N）」。
+    ③ 测试：服务级（失败一次后成功、attempts 1→2、完成后重试 409、未知 404；混合状态必须
+    failed）；HTTP 级 200→completed→409/404。浏览器实测（fail-once 插件，2 项）：
+    失败 2/2、attempts 1 → 重试 → 已完成、attempts 2、按钮消失。
+    ④ 回归：后端 **340/340**、前端 **84/84**、tsc/vite 干净。
