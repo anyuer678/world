@@ -1355,3 +1355,16 @@
     与所钉一致；未钉版本的批量解析到 2.0.0。
     ③ 结果：test_model_versions 10/10 绿；无生产代码改动。
     ④ 回归：后端 **345/345**、前端 **89/89**。
+
+118. **R107 审计：生产形态复验 R97–R106（nginx）**。
+    ① 背景：D110/R95 之后新增的重试、失败数、模板、并发、墙钟/数值边界、报告字段与版本钉住
+    只在 dev 形态验证；镜像构建上下文、nginx 反代与新静态资源需要独立一层证据。
+    ② 步骤：`docker compose build api web` → `up -d`（api healthy）；经
+    `http://127.0.0.1:5173/api` 跑 ASCII 探针：limits（concurrency_max=64）、queueing 批量
+    201→completed、列表 `failed_items=0`、已完成批量 retry→409、批量报告含
+    「重试上限 / 单项墙钟」、items 含 attempts/SHA/耗时；实验创建/运行/rerun 记录 1.0.0、
+    两次 run 完成；页面 bundle 含「单项墙钟 / 重试失败项 / 并发 / 失败项」。
+    ③ 陷阱：首次探测发现运行中的 api 镜像创建于 R97 提交之前（retry 路由 404、报告缺字段），
+    重建镜像后全部通过。生产复验必须先比对镜像 Created 与 HEAD 提交时间。
+    ④ 清理：探针实验/批量删除，`docker compose down`，数据卷保留；无代码改动，
+    后端 **345/345**、前端 **89/89**。
