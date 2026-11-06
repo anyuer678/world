@@ -218,8 +218,12 @@ export const api = {
     max_retries: number
     per_run_wall_seconds: number
   }) => request<BatchDetail>('/api/batches', { method: 'POST', body: JSON.stringify(body) }),
-  listBatches: (limit = 10, offset = 0) =>
-    request<{ total: number; batches: BatchListItem[] }>(`/api/batches?limit=${limit}&offset=${offset}`),
+  listBatches: (limit = 10, offset = 0, modelId?: string, status?: string) => {
+    const q = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+    if (modelId) q.set('model_id', modelId)
+    if (status) q.set('status', status)
+    return request<{ total: number; batches: BatchListItem[] }>(`/api/batches?${q.toString()}`)
+  },
   getBatch: (id: number) => request<BatchDetail>(`/api/batches/${id}`),
   getBatchFindings: (id: number) => request<FindingsResponse>(`/api/batches/${id}/findings`),
   listBatchItems: (id: number, limit = 50, offset = 0, status?: string) => {

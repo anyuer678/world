@@ -7,7 +7,7 @@ import { parseValues } from './BatchPanel'
 import { parseArrayText, resolve } from './ParamForm'
 import { summarizeMetrics } from './summary'
 import { formatFinding } from './findings'
-import { FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, itemsHeading } from './BatchPanel'
+import { BATCH_STATUSES, FALLBACK_LIMITS, batchSubmitProblem, batchesHeading, itemsHeading } from './BatchPanel'
 import { toggleCompare } from './ComparePanel'
 import { ApiError, errorDetailMessage, isNotFoundOn, specErrorText } from './api'
 
@@ -790,6 +790,12 @@ describe('isSessionGone (session TTL recovery, R50)', () => {
     expect(isNotFoundOn(new ApiError(404, '/api/batches/7', 'not_found', 'x'), '/batches/')).toBe(true)
     expect(isNotFoundOn(new ApiError(404, '/api/batches/7', 'not_found', 'x'), '/sessions/')).toBe(false)
     expect(isNotFoundOn(new Error('network down'), '/batches/')).toBe(false)
+  })
+})
+
+describe('batch filters (R92)', () => {
+  it('has a Chinese label for every filterable batch status', () => {
+    for (const s of BATCH_STATUSES) expect(statusLabel(s)).not.toBe(s)
   })
 })
 

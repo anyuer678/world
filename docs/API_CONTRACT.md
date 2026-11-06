@@ -113,9 +113,11 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
   `per_run_wall_seconds → min(值, engine.max_wall_seconds)`；Batch 里返回的是**生效值**
   而非请求值（例：请求 `concurrency=8`、服务端 `max_workers=2` → 批量记录 `2`）。
   两个上限都可从 `GET /api/limits` 读到，调用方据此决定请求值即可。
-- `GET /api/batches?limit&offset` → `{total, batches:[概要]}`，概要 =
+- `GET /api/batches?limit&offset&model_id&status` → `{total, batches:[概要]}`，概要 =
   `{id, name, model_id, model_version, status, total_items, repeats, seed_strategy,
   seed_base, created_at, duration_ms, done_items}`（无 started_at/finished_at）。
+  `status`（R92）限 `queued|running|completed|failed|cancelled`，未知值 422；`total` 为
+  筛选后数量，可与 `model_id` 组合。
   **进度计数在两个端点形状不同**（R30 实测）：列表用扁平 `done_items`
   （已到终态项数，含 `step_limit`/`wall_timeout` 这类非成功终态），
   详情不给 `done_items` 而给 `counts`（状态→数量分桶，进度 = 终态桶求和）

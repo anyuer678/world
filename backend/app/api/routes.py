@@ -29,6 +29,8 @@ BatchItemStatus = Literal[
 ExperimentStatus = Literal[
     "created", "running", "completed", "failed", "cancelled", "step_limit", "wall_timeout"
 ]
+# 批量状态（R92）：创建后 queued，orchestrator 启动后 running，终态三种
+BatchStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 # R64：offset 不设上限时，`offset=999999999999999999999` 会让 Python 大整数进 SQLite，
 # 触发 OverflowError → 500。路径 id 同理（用 RowId 约束）。
 MAX_OFFSET = 1_000_000_000
@@ -337,8 +339,10 @@ def list_batches(
     request: Request,
     limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(0, ge=0, le=MAX_OFFSET),
+    model_id: Optional[str] = None,
+    status: BatchStatus | None = None,
 ) -> dict[str, Any]:
-    return _batches(request).list_batches(limit, offset)
+    return _batches(request).list_batches(limit, offset, model_id, status)
 
 
 @router.get("/batches/{batch_id}")

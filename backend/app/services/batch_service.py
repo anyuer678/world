@@ -411,18 +411,35 @@ class BatchService:
             self._cancel_flags.pop(batch_id, None)
 
     # ------------------------------------------------------------------ queries
-    def list_batches(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
+    def list_batches(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        model_id: str | None = None,
+        status: str | None = None,
+    ) -> dict[str, Any]:
         conn = self._conn()
         try:
-            total = conn.execute("SELECT COUNT(*) FROM batch_runs").fetchone()[0]
+            where, args = [], []
+            if model_id:
+                where.append("b.model_id=?")
+                args.append(model_id)
+            if status:
+                where.append("b.status=?")
+                args.append(status)
+            clause = f"WHERE {' AND '.join(where)}" if where else ""
+            total = conn.execute(
+                f"SELECT COUNT(*) FROM batch_runs b {clause}", args
+            ).fetchone()[0]
             rows = conn.execute(
-                """SELECT b.id, b.name, b.model_id, b.model_version, b.status, b.total_items,
+                f"""SELECT b.id, b.name, b.model_id, b.model_version, b.status, b.total_items,
                    b.repeats, b.seed_strategy, b.seed_base, b.created_at, b.duration_ms,
                    COALESCE(SUM(CASE WHEN i.status IN ('completed','failed','cancelled','step_limit','wall_timeout')
                    THEN 1 ELSE 0 END), 0) AS done_items
                    FROM batch_runs b LEFT JOIN batch_items i ON i.batch_id = b.id
+                   {clause}
                    GROUP BY b.id ORDER BY b.id DESC LIMIT ? OFFSET ?""",
-                (limit, offset),
+                [*args, limit, offset],
             ).fetchall()
             return {"total": int(total), "batches": [dict(r) for r in rows]}
         finally:

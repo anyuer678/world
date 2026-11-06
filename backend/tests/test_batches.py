@@ -313,6 +313,10 @@ def test_delete_running_batch_requires_cancel(batches):
         time.sleep(0.02)
     with pytest.raises(ConflictError):
         batches.delete(b["id"])
+    running = batches.list_batches(status="running")
+    assert b["id"] in {x["id"] for x in running["batches"]}
+    slow_model = batches.list_batches(model_id="toy_slow_des")
+    assert b["id"] in {x["id"] for x in slow_model["batches"]}
     batches.cancel(b["id"])
     _wait_terminal(batches, b["id"])
     batches.delete(b["id"])
@@ -371,6 +375,13 @@ def test_batch_api_flow(client):
     assert client.get(f"/api/batches/{bid}/items?status=nope").status_code == 422
     listing = client.get("/api/batches").json()
     assert any(x["id"] == bid for x in listing["batches"])
+    done = client.get("/api/batches?status=completed").json()
+    assert bid in {x["id"] for x in done["batches"]}
+    assert client.get("/api/batches?status=running").json()["total"] == 0
+    assert client.get("/api/batches?model_id=toy_des").json()["total"] >= 1
+    assert client.get("/api/batches?model_id=sir").json()["total"] == 0
+    assert client.get("/api/batches?model_id=toy_des&status=completed").json()["total"] >= 1
+    assert client.get("/api/batches?status=nope").status_code == 422
     # finished batch cannot be cancelled again
     assert client.post(f"/api/batches/{bid}/cancel").status_code == 409
     assert client.get("/api/batches/99999").status_code == 404

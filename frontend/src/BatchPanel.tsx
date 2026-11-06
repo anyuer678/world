@@ -1,7 +1,7 @@
 import { modelVersionLabel, moreLabel, statusLabel } from './labels'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, isNotFoundOn } from './api'
-import type { BatchDetail, BatchItem, BatchListItem, ModelSpec } from './types'
+import type { BatchDetail, BatchItem, BatchListItem, ModelInfo, ModelSpec } from './types'
 import { formatFinding, type FindingsResponse } from './findings'
 import { buildSweep, defaultSweepSelection, sweepMetricOptions, sweepParamOptions, type SweepSelection } from './sweepChart'
 import { drawLineChart } from './chartRender'
@@ -51,6 +51,8 @@ export function batchSubmitProblem(
  * 否则「10 条」会被当成「全部 10 条」（与 R48 的历史口径一致）。 */
 /** 批量列表每页条数（R78，与实验历史的 20 条相互独立）。 */
 export const BATCH_PAGE_SIZE = 10
+// R92：批量列表可筛选的状态（与后端 BatchStatus Literal 同集合）
+export const BATCH_STATUSES = ['queued', 'running', 'completed', 'failed', 'cancelled'] as const
 // R86：批单项一次取 50 条；超过时用「加载更多」按 offset 续读（与列表分页同一交互）
 export const ITEMS_PAGE_SIZE = 50
 // R88：批单项可按状态服务端筛选（与实验历史的筛选同一原则：分页列表不能在客户端过滤）
@@ -87,7 +89,7 @@ interface GridRow {
   values: string
 }
 
-export default function BatchPanel({ spec }: { spec: ModelSpec }) {
+export default function BatchPanel({ spec, models = [] }: { spec: ModelSpec; models?: ModelInfo[] }) {
   const [rows, setRows] = useState<GridRow[]>([{ param: '', values: '' }])
   const [name, setName] = useState('参数网格批量')
   const [repeats, setRepeats] = useState('3')
@@ -99,6 +101,10 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const [batchesTotal, setBatchesTotal] = useState(0)
   // R78：「加载更多」按 offset 追加（与实验历史 R75 的交互一致）
   const [batchesLimit, setBatchesLimit] = useState(BATCH_PAGE_SIZE)
+  // R92：批量列表也支持服务端模型/状态筛选（与实验历史同一原则）
+  const [filterModel, setFilterModel] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const batchesSeq = useRef(0)
   const [batch, setBatch] = useState<BatchDetail | null>(null)
   const [items, setItems] = useState<BatchItem[]>([])
   const [itemsTotal, setItemsTotal] = useState(0)
@@ -113,14 +119,18 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const refreshBatches = useCallback(() => {
     // R51：列表拉取失败此前完全静默——服务端不可达时界面只显示「暂无批量」，
     // 用户会把失败当成「没有数据」。这里至少把原因显示出来。
+    const seq = ++batchesSeq.current
     api
-      .listBatches(batchesLimit, 0)
+      .listBatches(batchesLimit, 0, filterModel || undefined, filterStatus || undefined)
       .then((r) => {
+        if (seq !== batchesSeq.current) return
         setBatches(r.batches)
         setBatchesTotal(r.total)
       })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-  }, [batchesLimit])
+      .catch((e) => {
+        if (seq === batchesSeq.current) setError(e instanceof Error ? e.message : String(e))
+      })
+  }, [batchesLimit, filterModel, filterStatus])
 
   useEffect(() => {
     refreshBatches()
@@ -128,17 +138,40 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
 
   async function loadMoreBatches() {
     setBusy(true)
+    const seq = ++batchesSeq.current
     try {
-      const r = await api.listBatches(BATCH_PAGE_SIZE, batches.length)
+      const r = await api.listBatches(
+        BATCH_PAGE_SIZE,
+        batches.length,
+        filterModel || undefined,
+        filterStatus || undefined,
+      )
+      if (seq !== batchesSeq.current) return
       const seen = new Set(batches.map((b) => b.id))
       setBatches([...batches, ...r.batches.filter((b) => !seen.has(b.id))])
       setBatchesTotal(r.total)
       setBatchesLimit((n) => n + BATCH_PAGE_SIZE)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (seq === batchesSeq.current) setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
+  }
+
+  function changeBatchModel(value: string) {
+    setBatchesLimit(BATCH_PAGE_SIZE)
+    setFilterModel(value)
+  }
+
+  function changeBatchStatus(value: string) {
+    setBatchesLimit(BATCH_PAGE_SIZE)
+    setFilterStatus(value)
+  }
+
+  function clearBatchFilters() {
+    setBatchesLimit(BATCH_PAGE_SIZE)
+    setFilterModel('')
+    setFilterStatus('')
   }
 
   async function loadMoreItems() {
@@ -448,8 +481,56 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
         </div>
       </div>
 
-      {batches.length > 0 && (
+      {(batches.length > 0 || batchesTotal > 0 || filterModel || filterStatus) && (
         <>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '12px 0 4px' }}>
+            <label style={{ ...rowFlex, margin: 0 }}>
+              模型：
+              <select
+                value={filterModel}
+                onChange={(e) => changeBatchModel(e.target.value)}
+                aria-label="按模型筛选批量"
+                style={{ ...smallBtn, padding: '4px 8px' }}
+              >
+                <option value="">全部模型</option>
+                {models.map((m) => (
+                  <option key={m.model_id} value={m.model_id}>
+                    {m.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ ...rowFlex, margin: 0 }}>
+              状态：
+              <select
+                value={filterStatus}
+                onChange={(e) => changeBatchStatus(e.target.value)}
+                aria-label="按状态筛选批量"
+                style={{ ...smallBtn, padding: '4px 8px' }}
+              >
+                <option value="">全部状态</option>
+                {BATCH_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {statusLabel(s)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {(filterModel || filterStatus) && (
+              <button onClick={clearBatchFilters} style={smallBtn}>
+                清除筛选
+              </button>
+            )}
+          </div>
+          {(filterModel || filterStatus) && (
+            <p role="status" style={{ fontSize: 12, color: '#92400e', margin: '0 0 4px' }}>
+              筛选：{filterModel ? `模型 ${filterModel}` : ''}
+              {filterModel && filterStatus ? ' · ' : ''}
+              {filterStatus ? `状态 ${statusLabel(filterStatus)}` : ''}（只统计符合条件的批量）
+            </p>
+          )}
+          {batches.length > 0 ? (
+            <>
           <h4 style={{ fontSize: 14, margin: '12px 0 4px' }}>{batchesHeading(batches.length, batchesTotal)}</h4>
           <table style={table}>
           <thead>
@@ -494,6 +575,10 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
             <button onClick={loadMoreBatches} disabled={busy} style={{ ...smallBtn, marginTop: 8 }}>
               {moreLabel(batches.length, batchesTotal)}
             </button>
+          )}
+            </>
+          ) : (
+            <p style={{ color: '#6b7280', fontSize: 13 }}>没有符合当前筛选条件的批量。</p>
           )}
         </>
       )}

@@ -1216,3 +1216,11 @@
     ③ 浏览器实测（4 条：sir/queueing × created/completed）：全部 4 → 已完成 2 →
     失败 0 + 空态 → sir+已完成 1；API completed=2、created=2、sir+completed=1。
     ④ 回归：后端 **337/337**（现有过滤测试补状态断言与 422）、前端 **81/81**、tsc/vite 干净。
+
+103. **R92 功能：批量列表按模型/状态筛选**。
+    ① 缺口：实验历史/批单项可筛选，批量列表不能；一个列表缺席导致同一交互三套口径。
+    ② 实现：`GET /api/batches?model_id&status`（状态 Literal 5 值，未知 422；total 为筛选后）；
+    界面模型/状态下拉 + 说明/空态；加载更多携带筛选；请求计数器丢弃过期响应。
+    ③ 浏览器实测（sir 完成／queueing 完成／sir 运行中）：全部 3 → sir 2 → +已完成 1 →
+    +失败 0 + 空态 → 清除 3；API completed=2、running=1、model_id=sir=2。
+    ④ 回归：后端 **337/337**（批量 API/删除测试补筛选断言）、前端 **82/82**、tsc/vite 干净。

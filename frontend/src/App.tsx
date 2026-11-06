@@ -1134,7 +1134,7 @@ export default function App() {
         </summary>
         <div style={{ padding: '0 16px 12px' }}>
           <h3 style={{ fontSize: 14 }}>批量实验与参数搜索</h3>
-          <BatchPanel spec={buildSpec()} />
+          <BatchPanel spec={buildSpec()} models={models} />
           <h3 style={{ fontSize: 14, marginTop: 16 }}>结果比较</h3>
           <ComparePanel history={history} historyTotal={historyTotal} />
         </div>
