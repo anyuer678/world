@@ -218,6 +218,9 @@ def render_batch_report_markdown(report: dict[str, Any]) -> str:
     lines.append(
         f"- 种子策略：{batch.get('seed_strategy')}（基种子 {batch.get('seed_base')}）· 并发：{batch.get('concurrency')}"
     )
+    lines.append(
+        f"- 重试上限：{batch.get('max_retries')} · 单项墙钟：{batch.get('per_run_wall_seconds')} 秒"
+    )
     counts = batch.get("counts") or {}
     lines.append("- 终态分布：" + "，".join(f"{k}={v}" for k, v in sorted(counts.items())))
     lines.append(f"- 生成时间：{report['generated_at']}")

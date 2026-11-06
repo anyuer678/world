@@ -184,6 +184,7 @@ def test_batch_report_markdown_and_json(client):
     text = md.text
     assert "WorldLab 批量报告" in text and "统计汇总" in text and "自动发现" in text
     assert "不构成因果" in text
+    assert "重试上限：0" in text and "单项墙钟：60.0 秒" in text
 
     assert client.get("/api/batches/999999/report").status_code == 404
     assert client.get(f"/api/batches/{bid}/report?format=xml").status_code == 422

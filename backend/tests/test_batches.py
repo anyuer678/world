@@ -409,6 +409,24 @@ def test_retry_failed_items_reruns_only_failed(batches):
         batches.retry_failed(99999)
 
 
+def test_retry_keeps_completed_items_untouched(batches):
+    FailOnceModel._seen.clear()
+    FailOnceModel._seen.add(1)  # key 1 succeeds on first run, key 2 fails
+    b = batches.create("partial", _flaky_spec(), {"key": [1, 2]}, repeats=1, max_retries=0)
+    assert _wait_terminal(batches, b["id"])["status"] == "failed"
+    before = {int(i["params"]["key"]): i for i in batches.list_items(b["id"])["items"]}
+    assert before[1]["status"] == "completed" and before[2]["status"] == "failed"
+
+    batches.retry_failed(b["id"])
+    assert _wait_terminal(batches, b["id"])["status"] == "completed"
+    after = {int(i["params"]["key"]): i for i in batches.list_items(b["id"])["items"]}
+    assert after[1]["attempts"] == 1, "已完成的条目不应被重跑"
+    assert after[1]["status"] == "completed"
+    assert after[2]["attempts"] == 2 and after[2]["status"] == "completed"
+    listed = next(x for x in batches.list_batches()["batches"] if x["id"] == b["id"])
+    assert listed["failed_items"] == 0
+
+
 # ---------------------------------------------------------------- sensitivity
 def test_summary_and_sensitivity(batches):
     # total_time = delay_mean * sum(-log(1-u_i)) under a fixed seed: exactly linear
