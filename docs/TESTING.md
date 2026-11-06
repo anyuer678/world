@@ -1144,3 +1144,14 @@
     编辑 #3 为 `baseline, rerun` 后行内两枚徽章、API 回读 `["baseline","rerun"]`；点徽章进入筛选；
     22 条 `bulk` 实验首屏 20 条 +「还有 2 条」→ 加载后 22 条、按钮消失。
     ④ 回归：前端 **76/76**（新增 `parseTags`/`filterSummary` 用例）、tsc 干净；后端 **332/332** 无改动。
+
+95. **R84 功能：实验生命周期操作（重跑 / 克隆 / 取消 + 自动刷新）**。
+    ① 缺口：`POST .../clone`、`/rerun`、`/cancel` 三个端点存在但界面无入口；重跑异步，
+    列表不会自动更新状态。
+    ② 实现：`api.cloneExperiment/rerunExperiment/cancelExperiment`；行动作「重跑」（running 禁用）、
+    「克隆」、「取消」（仅 running 时渲染，确认后执行）；任一实验 running 时 800ms 轮询列表，
+    全部终态后停止。
+    ③ 浏览器实测（隔离库）：short 重跑：已创建 → 自动变已完成，API `completed`；克隆生成
+    `#3 r84-short (clone)` 且无 run；long 重跑：运行中、取消按钮出现、重跑禁用 → 确认取消 →
+    已取消、按钮消失，2.5s 后不反弹；API 三条实验/run 状态 completed/cancelled/created。
+    ④ 回归：前端 **77/77**（新增 `canRerun`/`canCancel` 用例）、tsc 干净；后端 **332/332** 无改动。

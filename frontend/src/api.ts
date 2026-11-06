@@ -150,6 +150,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ wait }),
     }),
+  rerunExperiment: (id: number) =>
+    request<{ experiment_id: number; run_id: number; status: string }>(`/api/experiments/${id}/rerun`, {
+      method: 'POST',
+    }),
+  cancelExperiment: (id: number) =>
+    request<{ id: number; status: string }>(`/api/experiments/${id}/cancel`, { method: 'POST' }),
+  cloneExperiment: (id: number, name?: string) =>
+    request<{ id: number }>(`/api/experiments/${id}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(name ? { name } : {}),
+    }),
   getResult: (id: number) => request<ExperimentResult>(`/api/experiments/${id}/result`),
   deleteExperiment: (id: number) => request<void>(`/api/experiments/${id}`, { method: 'DELETE' }),
   getRun: (runId: number) => request<RunDetail>(`/api/runs/${runId}`),

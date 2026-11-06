@@ -52,6 +52,8 @@ export default function App() {
   // R82：实验结果查看（结果端点此前只被「载入配置」顺手用到，没显示过指标）
   const [resultView, setResultView] = useState<ExperimentResult | null>(null)
   const [viewingId, setViewingId] = useState<number | null>(null)
+  // R84：行级生命周期操作（重跑/克隆/取消）的忙状态
+  const [actingId, setActingId] = useState<number | null>(null)
   const sessionRef = useRef<string | null>(null)
   const simSectionRef = useRef<HTMLElement | null>(null)
   sessionRef.current = session?.session_id ?? null
@@ -94,6 +96,14 @@ export default function App() {
     }, 250)
     return () => clearTimeout(t)
   }, [filterModel, filterTag])
+
+  // 有实验在跑时自动刷新列表（重跑是异步的；此前状态会永远停在「运行中」前的旧值）
+  const runningAny = history.some((h) => h.status === 'running')
+  useEffect(() => {
+    if (!runningAny) return
+    const t = setInterval(refreshHistory, 800)
+    return () => clearInterval(t)
+  }, [runningAny, filterModel, filterTag, historyLimit])
 
   // 会话运行中时轮询真实状态；状态离开 running 后停止
   useEffect(() => {
@@ -354,6 +364,50 @@ export default function App() {
     } finally {
       setBusy(false)
     }
+  }
+
+  async function experimentAction(
+    h: { id: number; name: string },
+    action: () => Promise<string>,
+    confirmText?: string,
+  ) {
+    if (confirmText && !window.confirm(confirmText)) return
+    setActingId(h.id)
+    setError('')
+    setNotice('')
+    try {
+      setNotice(await action())
+      refreshHistory()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  async function cloneExperiment(h: { id: number; name: string }) {
+    await experimentAction(h, async () => {
+      const r = await api.cloneExperiment(h.id)
+      return `已克隆实验 #${h.id} 为 #${r.id}（未运行；可在列表中重跑）。`
+    })
+  }
+
+  async function rerunExperiment(h: { id: number; name: string }) {
+    await experimentAction(h, async () => {
+      await api.rerunExperiment(h.id)
+      return `实验 #${h.id} 已排队重跑，状态会自动刷新。`
+    })
+  }
+
+  async function cancelExperiment(h: { id: number; name: string }) {
+    await experimentAction(
+      h,
+      async () => {
+        await api.cancelExperiment(h.id)
+        return `已取消实验 #${h.id} 的运行。`
+      },
+      `取消实验 #${h.id}「${h.name}」正在进行的运行？已产生的部分结果会保留。`,
+    )
   }
 
   function buildSpec(): ModelSpec {
@@ -898,6 +952,34 @@ export default function App() {
                     >
                       标签
                     </button>{' '}
+                    <button
+                      onClick={() => rerunExperiment(h)}
+                      disabled={busy || actingId !== null || !canRerun(h.status)}
+                      aria-label={`重跑实验 ${h.id}`}
+                      style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
+                    >
+                      重跑
+                    </button>{' '}
+                    <button
+                      onClick={() => cloneExperiment(h)}
+                      disabled={busy || actingId !== null}
+                      aria-label={`克隆实验 ${h.id}`}
+                      style={{ ...btn, padding: '4px 10px', fontSize: 12 }}
+                    >
+                      克隆
+                    </button>{' '}
+                    {canCancel(h.status) && (
+                      <>
+                        <button
+                          onClick={() => cancelExperiment(h)}
+                          disabled={busy || actingId !== null}
+                          aria-label={`取消实验 ${h.id} 的运行`}
+                          style={{ ...btn, padding: '4px 10px', fontSize: 12, color: '#b45309', borderColor: '#fde68a' }}
+                        >
+                          取消
+                        </button>{' '}
+                      </>
+                    )}
                     <a
                       href={api.reportUrl(h.id, 'markdown')}
                       download={`worldlab-report-${h.id}.md`}
@@ -1033,6 +1115,15 @@ export function filterSummary(modelId: string, tag: string): string | null {
   const t = tag.trim()
   if (t) parts.push(`标签 ${t}`)
   return parts.length ? `筛选：${parts.join(' · ')}（只统计符合条件的实验）` : null
+}
+
+/** 行操作可用性（R84）：重跑要求当前没有运行中的 run（后端会 409），取消只在运行时出现。 */
+export function canRerun(status: string): boolean {
+  return status !== 'running'
+}
+
+export function canCancel(status: string): boolean {
+  return status === 'running'
 }
 
 const QUICK_PICKS: { modelId: string; scenarioId: string }[] = [

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { metricColumns } from './ResultPanel'
-import { filterSummary, historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, parseTags, quickPicks, scenarioSpec, stepProblem, versionOptions } from './App'
+import { canCancel, canRerun, filterSummary, historyHeading, historyMoreLabel, isSessionGone, modelTypeLabel, parseTags, quickPicks, scenarioSpec, stepProblem, versionOptions } from './App'
 import { statusLabel } from './labels'
 import { formatValue } from './SimView'
 import { parseValues } from './BatchPanel'
@@ -810,6 +810,17 @@ describe('parseTags / filterSummary (tag UI, R83)', () => {
     expect(filterSummary('', '')).toBeNull()
     expect(filterSummary('sir', '')).toBe('筛选：模型 sir（只统计符合条件的实验）')
     expect(filterSummary('sir', ' baseline ')).toBe('筛选：模型 sir · 标签 baseline（只统计符合条件的实验）')
+  })
+})
+
+describe('canRerun / canCancel (experiment actions, R84)', () => {
+  it('blocks rerun while running and only offers cancel while running', () => {
+    expect(canRerun('running')).toBe(false)
+    expect(canRerun('completed')).toBe(true)
+    expect(canRerun('cancelled')).toBe(true)
+    expect(canCancel('running')).toBe(true)
+    expect(canCancel('completed')).toBe(false)
+    expect(canCancel('created')).toBe(false)
   })
 })
 
