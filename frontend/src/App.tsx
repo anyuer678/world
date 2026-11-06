@@ -156,6 +156,23 @@ export default function App() {
     })
   }
 
+  async function removeExperiment(h: { id: number; name: string }) {
+    // 删除会级联清掉该实验的全部运行记录（后端 ON DELETE CASCADE），必须显式确认
+    if (!window.confirm(`删除实验 #${h.id}「${h.name}」及其全部运行记录？此操作不可撤销。`)) return
+    setBusy(true)
+    setError('')
+    try {
+      await api.deleteExperiment(h.id)
+      setHistory((list) => list.filter((x) => x.id !== h.id))
+      setHistoryTotal((n) => Math.max(0, n - 1))
+      setNotice(`已删除实验 #${h.id}「${h.name}」及其运行记录。`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function loadMoreHistory() {
     setBusy(true)
     try {
@@ -556,7 +573,21 @@ export default function App() {
                       style={{ ...btn, padding: '4px 10px', fontSize: 12, textDecoration: 'none', display: 'inline-block' }}
                     >
                       报告JSON
-                    </a>
+                    </a>{' '}
+                    <button
+                      onClick={() => removeExperiment(h)}
+                      disabled={busy}
+                      aria-label={`删除实验 ${h.id}`}
+                      style={{
+                        ...btn,
+                        padding: '4px 10px',
+                        fontSize: 12,
+                        color: '#b91c1c',
+                        borderColor: '#fecaca',
+                      }}
+                    >
+                      删除
+                    </button>
                   </td>
                 </tr>
               ))}

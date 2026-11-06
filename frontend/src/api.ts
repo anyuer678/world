@@ -147,6 +147,7 @@ export const api = {
       body: JSON.stringify({ wait }),
     }),
   getResult: (id: number) => request<ExperimentResult>(`/api/experiments/${id}/result`),
+  deleteExperiment: (id: number) => request<void>(`/api/experiments/${id}`, { method: 'DELETE' }),
   getRun: (runId: number) => request<RunDetail>(`/api/runs/${runId}`),
   listExperiments: (limit = 20, offset = 0) =>
     request<{ total: number; experiments: { id: number; name: string; status: string; model_id: string }[] }>(
