@@ -348,3 +348,19 @@ def test_malformed_inputs_never_leak_500(client):
         r = client.request(method, path, **kwargs)
         assert r.status_code < 500, (method, path, r.status_code, r.text[:200])
 
+
+def test_run_detail_events_limit_zero_means_none(client):
+    """R72：run 详情与会话同一类切片问题——`events[-0:]` 会返回全部事件。
+
+    R59 只修了会话路径；这里固定 run 详情的语义：0 条、2 条，负数 422。"""
+    r = client.post("/api/experiments", json={"name": "r72-events", "spec": QUEUE_SPEC})
+    assert r.status_code == 201, r.text
+    eid = r.json()["id"]
+    run = client.post(f"/api/experiments/{eid}/run", json={"wait": True})
+    assert run.status_code == 200, run.text
+    rid = run.json()["run_id"]
+
+    assert client.get(f"/api/runs/{rid}?events_limit=0").json()["events"] == []
+    assert len(client.get(f"/api/runs/{rid}?events_limit=2").json()["events"]) == 2
+    assert client.get(f"/api/runs/{rid}?events_limit=-1").status_code == 422
+

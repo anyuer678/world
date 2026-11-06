@@ -627,3 +627,11 @@ repeats=1）：提交后创建成功（2 项）、轮询到「已完成」、单
 出现、导出链接指向 `/api/batches/43/export.csv` 且 CSV 为 3 行头注释 + 表头 + 2 数据行；
 列表标题按 R57 显示「显示最近 10 条 / 共 20 条」。全流程无错误，未发现缺陷；探针批量已从
 开发库删除（回到 19）。
+
+**R72（2026-11-06）run 详情的 `events_limit=0` 同样返回全部事件（R59 漏掉的第二条路径）**
+
+R59 修过会话 `_build_state` 的 `[-0:]` 切片，但 `get_run` 里同样的写法没有一起改：
+`GET /api/runs/{id}?events_limit=0` 返回**全部**已存事件（最多 100 条）。修：
+`events[-events_limit:] if events_limit > 0 else []`。实跑复核：0 → 0 条、2 → 2 条、
+-1 → 422；新增 `test_run_detail_events_limit_zero_means_none`，反证还原后该测试变红。
+后端 **317/317**。

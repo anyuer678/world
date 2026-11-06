@@ -491,7 +491,8 @@ class ExperimentService:
             d["metrics"] = json.loads(d.pop("metrics_json")) if d.get("metrics_json") else None
             d["summary"] = json.loads(d.pop("summary_json")) if d.get("summary_json") else None
             events = json.loads(d.pop("events_json")) if d.get("events_json") else []
-            d["events"] = events[-events_limit:]
+            # R72：`[-0:]` 等于 `[0:]`（全部事件）——0 必须表示不返回事件。
+            d["events"] = events[-events_limit:] if events_limit > 0 else []
             return d
         finally:
             conn.close()
