@@ -595,3 +595,13 @@ JSON 报告键集完整（aggregate/experiment/runs/software/comparability_note�
 50 次建删 + 20 次跑到完成，线程数稳定回到基线 1。随后按目标逐项对证据做本周期收口审计，
 结论见 `TESTING §79`：六个维度均无「已知可做且不靠猜」的剩余项；剩余的是已写入文档的
 部署约束（单进程）与有意不做的范围外偏好。后端 **315/315**。
+
+**R69（2026-11-06）生产镜像重建：R57–R64 的改动已进入交付形态**
+
+api 镜像最后构建于 R53，web 镜像更早于 R57；R59/R60/R62/R63/R64 都改过后端，R57 改过前端。
+本轮 `docker compose up -d --build` 后经 nginx 逐项核验：`/api/limits` 含
+`pagination.max_offset=1000000000`、`experiment.name_max_length=200`、
+`session.max_step_batch=1000000`；超大 offset 与超大路径 id → **422**（R64）；
+`clone` 201 字符名称 → **422**（R60）；打包产物内含「批量实验（显示最近」「步数不能超过」
+「最多同时比较」三处新文案（R57/R47/R49）。探针实验已删除，栈已 `down`。
+本轮未改产品代码。
