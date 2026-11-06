@@ -160,3 +160,48 @@ def test_pinned_version_changes_actual_execution(two_behavioral_versions):
     unpinned_ver, unpinned_peak = _run_and_peak(two_behavioral_versions, _spec())
     assert unpinned_ver == "2.0.0", "未钉版本应解析到数值最新（不是字符串最新）"
     assert unpinned_peak == v2_peak
+
+
+# ------------------------------------------------- 历史实验的版本钉住（R105）
+# 与 R104 的批量重试同理：spec_json 里 model_version 常为 null，历史实验的再次运行/克隆
+# 若重新解析「最新」，注册表新增版本后就会静默换实现。
+
+def test_rerun_pins_the_experiment_version_after_new_version(settings):
+    registry._by_id[MRP] = {"1.0.0": _mrp("1.0.0", _Gamma1)}
+    try:
+        with TestClient(create_app(settings)) as c:
+            exp = c.post("/api/experiments", json={"name": "pin-rerun", "spec": _spec()}).json()
+            assert exp["model_version"] == "1.0.0"
+            eid = exp["id"]
+            c.post(f"/api/experiments/{eid}/run", json={"wait": True})
+            first = c.get(f"/api/experiments/{eid}/result").json()["runs"][0]["metrics"]["peak_infected"]
+
+            registry._by_id[MRP]["2.0.0"] = _mrp("2.0.0", _Gamma2)  # 新版本成为 latest
+            c.post(f"/api/experiments/{eid}/run", json={"wait": True})
+            result = c.get(f"/api/experiments/{eid}/result").json()
+            assert len(result["runs"]) == 2
+            assert result["runs"][1]["metrics"]["peak_infected"] == pytest.approx(first), (
+                "再次运行必须仍用实验记录的 1.0.0，而不是新注册的 2.0.0"
+            )
+            assert result["experiment"]["model_version"] == "1.0.0"
+    finally:
+        registry._by_id.pop(MRP, None)
+
+
+def test_clone_pins_the_source_experiment_version(settings):
+    registry._by_id[MRP] = {"1.0.0": _mrp("1.0.0", _Gamma1)}
+    try:
+        with TestClient(create_app(settings)) as c:
+            exp = c.post("/api/experiments", json={"name": "pin-clone", "spec": _spec()}).json()
+            eid = exp["id"]
+            c.post(f"/api/experiments/{eid}/run", json={"wait": True})
+            first = c.get(f"/api/experiments/{eid}/result").json()["runs"][0]["metrics"]["peak_infected"]
+
+            registry._by_id[MRP]["2.0.0"] = _mrp("2.0.0", _Gamma2)
+            clone = c.post(f"/api/experiments/{eid}/clone", json={}).json()
+            assert clone["model_version"] == "1.0.0", "克隆必须钉住源实验的版本"
+            c.post(f"/api/experiments/{clone['id']}/run", json={"wait": True})
+            peak = c.get(f"/api/experiments/{clone['id']}/result").json()["runs"][0]["metrics"]["peak_infected"]
+            assert peak == pytest.approx(first)
+    finally:
+        registry._by_id.pop(MRP, None)

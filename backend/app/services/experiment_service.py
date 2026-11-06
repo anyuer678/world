@@ -291,6 +291,7 @@ class ExperimentService:
                     spec["params"] = {**spec.get("params", {}), **value}
                 else:
                     spec[key] = value
+        spec = self._pin_spec_version(spec, src["model_version"])
         new_name = name or f"{src['name']} (clone)"
         return self.create_experiment(new_name, spec, parent_experiment_id=exp_id)
 
@@ -310,6 +311,15 @@ class ExperimentService:
             conn.close()
 
     # ------------------------------------------------------------------- runs
+    @staticmethod
+    def _pin_spec_version(spec: dict[str, Any], version: str) -> dict[str, Any]:
+        """历史实验的执行/克隆必须钉住记录版本（R105）：spec 里的 null 不能再解析到最新。"""
+        if spec.get("model_version"):
+            return spec
+        pinned = dict(spec)
+        pinned["model_version"] = version
+        return pinned
+
     def run_experiment(self, exp_id: int, wait: bool = False) -> dict[str, Any]:
         conn = self._conn()
         try:
@@ -317,7 +327,7 @@ class ExperimentService:
             exp = self._row_to_dict(row)
             if exp["status"] == "running":
                 raise ConflictError(f"experiment {exp_id} is already running")
-            spec = json.loads(exp["spec_json"])
+            spec = self._pin_spec_version(json.loads(exp["spec_json"]), exp["model_version"])
             # 提交时就校验，与 create/clone/建批同口径：模型被卸载（插件模块没配好）或
             # 版本撤下时立刻 422 unknown_model，而不是先答 202 queued 再在工作线程里
             # 把 run 静默标成 failed（R35 实测的不对称）。
@@ -393,7 +403,7 @@ class ExperimentService:
                 # R63：实验在 claim 之后被删除（级联也删掉了 run 行）——没有可写回的目标，
                 # 安静退出，而不是在 Future 里留下一个没人观察的异常。
                 return
-            spec_raw = json.loads(exp_row["spec_json"])
+            spec_raw = self._pin_spec_version(json.loads(exp_row["spec_json"]), exp_row["model_version"])
             # Execute with the seed recorded on the run row (not spec.seed),
             # so a run with seed=None is reproducible from the stored seed.
             run_row = conn.execute("SELECT seed FROM experiment_runs WHERE id=?", (run_id,)).fetchone()

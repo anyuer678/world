@@ -69,12 +69,15 @@ Base URL: `http://localhost:8000`，前缀 `/api`。校验错误 422，业务错
 - `GET /api/experiments/{id}` → Experiment（含 runs 概要）
 - `DELETE /api/experiments/{id}` → 204
 - `POST /api/experiments/{id}/clone` body=`{name?, spec_overrides?}` → 新 Experiment
+  （未显式指定 `model_version` 时钉住源实验记录的版本，R105）
 - `PUT /api/experiments/{id}/tags` body=`{tags:[string]}` → Experiment
 - `POST /api/experiments/{id}/run` body=`{wait?:bool}` → **200** `{experiment_id, run_id, status:"queued"}`
   （R35 实测纠正：既不是 202，也不返回 `runs:[…]` 数组）；`wait=true` 时阻塞到跑完再返回同一形态
   - **提交时即校验库中 spec**：模型或版本不在注册表（插件模块没配好、版本被撤下）→ 422
     `spec_invalid` + `errors[].code="unknown_model"`，与 create/clone/建批同口径；
     校验发生在状态改写**之前**，失败不会把实验留在 `running`
+  - **再次运行/重跑钉住实验记录的 `model_version`**（R105）：库中 spec 的
+    `model_version` 为空时用 `experiments.model_version` 补齐，注册表新增版本不会换实现
 - `GET /api/experiments/{id}/result` → `{experiment, runs:[RunDetail], aggregate?}`；
   run 条目键为 **`id`**（不是 `run_id`——`run_id` 只出现在 POST run/rerun 的响应里），
   完整形态 `{id, experiment_id, repeat_index, seed, status, steps, sim_time, metrics,
