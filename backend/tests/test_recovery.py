@@ -307,3 +307,49 @@ def test_worker_exits_quietly_when_experiment_is_gone(settings):
     finally:
         svc.shutdown()
 
+
+def test_worker_does_not_overwrite_a_cancel_that_landed_before_start(settings):
+    """R73：取消落在「run 已插入、worker 未启动」的窗口时不能被覆盖。
+
+    旧实现启动时无条件把 run 置为 running，最终写成 completed——用户已收到 200 的取消
+    静默失效。现在启动占位是条件 UPDATE（`status!='cancelled'`），命中即退出并收口实验状态。"""
+    import sqlite3
+
+    from app.core.registry import registry
+    from app.services.experiment_service import ExperimentService
+
+    svc = ExperimentService(settings, registry)
+    try:
+        spec = {
+            "schema_version": 1,
+            "model_id": "sir",
+            "params": {},
+            "stop_condition": {"type": "steps", "value": 50},
+            "seed": 1,
+        }
+        exp = svc.create_experiment("r73-cancel-window", spec)
+        conn = svc._conn()  # noqa: SLF001 - 直接造出「已 claim、worker 未启动」的状态
+        try:
+            with conn:
+                conn.execute("UPDATE experiments SET status='running' WHERE id=?", (exp["id"],))
+                cur = conn.execute(
+                    "INSERT INTO experiment_runs(experiment_id, repeat_index, seed, status)"
+                    " VALUES (?,?,?,'pending')",
+                    (exp["id"], 0, 1),
+                )
+                run_id = int(cur.lastrowid)
+        finally:
+            conn.close()
+
+        svc.cancel_experiment(exp["id"])
+        svc._execute_run(run_id, exp["id"])  # noqa: SLF001 - 模拟 worker 迟到启动
+
+        row = sqlite3.connect(settings.db_path).execute(
+            "SELECT status, steps FROM experiment_runs WHERE id=?", (run_id,)
+        ).fetchone()
+        assert row[0] == "cancelled", f"取消被覆盖成 {row[0]}"
+        assert row[1] is None, "被取消的 run 不应执行任何步数"
+        assert svc.get_experiment(exp["id"])["status"] == "cancelled"
+    finally:
+        svc.shutdown()
+

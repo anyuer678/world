@@ -393,11 +393,19 @@ class ExperimentService:
                 return
             run_seed = run_row["seed"]
             try:
-                conn.execute(
-                    "UPDATE experiment_runs SET status='running', started_at=datetime('now') WHERE id=?",
+                # R73：取消可能落在「run 行已插入、worker 尚未启动」的窗口里。此前无条件
+                # UPDATE 会把 DB 里的 cancelled 覆盖成 running，随后再写成 completed——
+                # 用户已经收到 200 的取消就静默失效了。条件 UPDATE 让取消不可被覆盖。
+                cur = conn.execute(
+                    "UPDATE experiment_runs SET status='running', started_at=datetime('now')"
+                    " WHERE id=? AND status!='cancelled'",
                     (run_id,),
                 )
                 conn.commit()
+                if cur.rowcount == 0:
+                    with conn:
+                        self._sync_experiment_status(conn, exp_id)
+                    return
                 spec, model_cls = validate_spec(spec_raw, self.registry)
                 model = model_cls(spec.params, run_seed)
                 model.configure_event_log(self.settings.event_log_size)

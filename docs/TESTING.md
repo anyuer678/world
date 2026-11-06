@@ -1031,3 +1031,11 @@
     ② 修：0 返回空列表；实跑 0→0、2→2、-1→422。
     ③ 回归：`test_run_detail_events_limit_zero_means_none`；反证还原切片即变红。
     后端 **317/317**。
+
+84. **R73 取消窗口：worker 启动覆盖 `cancelled`**。
+    ① 缺陷：run 行插入后、worker 启动前若收到 cancel（进程内标志尚未注册），worker 的
+    无条件 `UPDATE … status='running'` 会覆盖 DB 里的 cancelled，最终写成 completed。
+    实跑：cancelled → 调用 worker → ('completed', 50)。
+    ② 修：启动占位改条件 UPDATE（`status!='cancelled'`），rowcount=0 时同步实验状态并退出。
+    ③ 复核：run 保持 cancelled、steps 为 NULL、实验 cancelled；反证注入即变红。
+    后端 **318/318**。

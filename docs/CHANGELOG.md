@@ -635,3 +635,14 @@ R59 修过会话 `_build_state` 的 `[-0:]` 切片，但 `get_run` 里同样的�
 `events[-events_limit:] if events_limit > 0 else []`。实跑复核：0 → 0 条、2 → 2 条、
 -1 → 422；新增 `test_run_detail_events_limit_zero_means_none`，反证还原后该测试变红。
 后端 **317/317**。
+
+**R73（2026-11-06）取消落在「run 已插入、worker 未启动」窗口时被覆盖成 completed**
+
+`run_experiment` 先插入 `pending` 行、再提交线程；`_execute_run` 启动时**无条件**把 run 置为
+running。若这期间 `POST /cancel` 已把 DB 行置为 `cancelled`（此时进程内 `_cancel_flags` 还没
+注册，cancel 找不到标志），worker 启动后会覆盖成 running，最终写成 `completed`——用户已经拿到
+200 的取消静默失效。实跑复现：DB 已是 `cancelled`，调用 worker 后变成 `('completed', 50)`。
+修：启动占位改为条件 UPDATE（`WHERE id=? AND status!='cancelled'`），rowcount=0 时收口实验
+状态并退出。复核：同一构造下 run 保持 `cancelled`、`steps IS NULL`、实验状态 `cancelled`。
+新增 `test_worker_does_not_overwrite_a_cancel_that_landed_before_start`，反证还原即变红。
+后端 **318/318**。
