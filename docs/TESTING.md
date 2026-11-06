@@ -1448,3 +1448,14 @@
     ④ 注意：首次 400ms 过早读取 `[aria-label="批单项详情"]` 得到 false-negative，目标状态出现后
     复查为 absent；异步 UI 断言必须等状态。
     ⑤ 清理：停服、删除临时库；无代码改动；后端 **348/348**、前端 **92/92**。
+
+127. **R116 收口审计：R107–R115 无未完成缺陷**。
+    ① 文档：`test_docs_consistency` 21/21——README 模型表/计数、BENCHMARKS 覆盖、OpenAPI 端点
+    逐项在 API_CONTRACT、契约不承诺不存在端点。
+    ② 测试/构建：后端 **348 passed**（含 docs 锁）、前端 **92 passed**、tsc -b 与 vite build 干净。
+    ③ 远端：CI run 42214131936（0ead44f）双 job success；`git rev-parse HEAD` 与
+    `git ls-remote origin refs/heads/master` 均为 0ead44f；工作区干净。
+    ④ 端点：39 个路由中仅 sessions 列表/删除、run events 分页、health 无 UI，均为已记录
+    API-only；新增端点（重试/删除/筛选/报告/validate）都有 UI 入口与实测。
+    ⑤ 生产/浏览器：R114 nginx 全通过；R109/R110/R112/R115 有真实浏览器 DOM 证据。
+    ⑥ 残留候选（可选增强，非缺陷）：鉴权/多用户、WebSocket、批单项事件、报告预览、会话列表 UI。
