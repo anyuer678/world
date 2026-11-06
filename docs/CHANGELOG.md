@@ -646,3 +646,11 @@ running。若这期间 `POST /cancel` 已把 DB 行置为 `cancelled`（此时�
 状态并退出。复核：同一构造下 run 保持 `cancelled`、`steps IS NULL`、实验状态 `cancelled`。
 新增 `test_worker_does_not_overwrite_a_cancel_that_landed_before_start`，反证还原即变红。
 后端 **318/318**。
+
+**R74（2026-11-06）批量侧即时取消复核（阴性）+ 本周期收口审计**
+
+建批返回后**立即**取消（orchestrator 可能尚未启动）连跑 5 轮，每轮 40 项 / 8 并发：
+5 轮全部 `status=cancelled`、`counts={'cancelled': 40}`——批量侧没有 R73 那种窗口
+（标志在建批内注册且条目开工前先查）。随后按目标逐项对证据做本周期收口审计，结论见
+`TESTING §85`：本周期修 3 处真实缺陷（R70/R72/R73），其余为镜像/浏览器/取消时序的复核；
+六维度无「已知可做且不靠猜」的剩余项。
