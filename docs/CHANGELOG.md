@@ -548,3 +548,12 @@ R55 只验到加载器层面；本轮把 `PLUGINS.md` 的示例代码块原样�
 ② worker 启动时若实验或 run 行已消失则**安静退出**，不再把异常留在 Future 里。
 反证：把删除改回无条件语句，`test_delete_refuses_when_a_run_claims_between_check_and_delete`
 立即变红；还原后全绿。后端 **311/311**。
+
+**R64（2026-11-06）畸形输入不再漏 500：大整数 offset / 路径 id**
+
+对 11 个畸形输入做了一轮扫描（深度嵌套 checkpoint、错误类型的 spec/grid、坏 tag、坏 version、
+超大 id 与 offset）：**只有一处漏出 500**——`GET /api/experiments?offset=999999999999999999999`
+让 Python 大整数进入 SQLite，抛 `OverflowError`；路径 id 同理（`/api/experiments/999…`）。
+修：`offset` 加 `le=1_000_000_000`；路径 id 统一 `Annotated[int, Path(ge=1, le=2**63-1)]`；
+边界经 `/api/limits.pagination.max_offset` 导出。复核：11 个用例全部 4xx/201（畸形 restore
+深度嵌套也稳定 422）。新增 `test_malformed_inputs_never_leak_500` 常驻。后端 **312/312**。

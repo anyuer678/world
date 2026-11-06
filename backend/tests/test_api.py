@@ -316,3 +316,35 @@ def test_default_app_never_points_at_repo_database():
     repo_db = (Path(__file__).resolve().parents[1] / "data" / "worldlab.db").resolve()
     assert Path(main_module.default_settings.db_path).resolve() != repo_db
 
+
+def test_malformed_inputs_never_leak_500(client):
+    """R64：畸形输入只应得到 4xx。
+
+    实测漏点：`offset=999999999999999999999` 让 Python 大整数进 SQLite，抛
+    `OverflowError` → 500；路径 id 同样。现在 offset 有上限、id 用 RowId 约束。
+    """
+    import json
+
+    deep = "[" * 900 + "]" * 900
+    cases = [
+        ("POST", "/api/sessions/nope/restore", '{"checkpoint": ' + deep + "}"),
+        ("POST", "/api/experiments", json.dumps({"name": "x", "spec": []})),
+        ("POST", "/api/sessions", json.dumps({"spec": None})),
+        ("POST", "/api/batches", json.dumps(
+            {"name": "b",
+             "spec": {"schema_version": 1, "model_id": "sir", "params": {},
+                      "stop_condition": {"type": "steps", "value": 5}, "seed": 1},
+             "grid": {"gamma": 1}, "repeats": 1})),
+        ("GET", "/api/experiments?tag=%FF%FE", None),
+        ("GET", "/api/experiments?offset=999999999999999999999", None),
+        ("GET", "/api/models/sir?version=%00", None),
+        ("GET", "/api/experiments/999999999999999999999", None),
+        ("GET", "/api/runs/999999999999999999999", None),
+        ("GET", "/api/batches/999999999999999999999", None),
+        ("GET", "/api/batches/1/items?offset=999999999999999999999", None),
+    ]
+    for method, path, body in cases:
+        kwargs = {"content": body.encode("utf-8"), "headers": {"content-type": "application/json"}} if body else {}
+        r = client.request(method, path, **kwargs)
+        assert r.status_code < 500, (method, path, r.status_code, r.text[:200])
+

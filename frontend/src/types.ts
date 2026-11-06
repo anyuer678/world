@@ -161,7 +161,7 @@ export interface LimitsResponse {
   }
   engine: { max_wall_seconds: number; max_workers: number; default_max_steps: number }
   session: { max_step_batch: number }
-  pagination: { max_limit: number; max_events: number }
+  pagination: { max_limit: number; max_events: number; max_offset: number }
   experiment: { name_max_length: number }
 }
 

@@ -947,3 +947,12 @@
     （run 行在、实验已删，直接调 `_execute_run` 不抛异常）。
     ④ 反证：把 DELETE 改回无条件，第一条测试变红（AssertionError：运行中的实验不应被删除）；
     还原后全绿。后端 **311/311**。
+
+75. **R64 畸形输入扫描（11 例）与 500 修复**。
+    ① 用例：900 层嵌套 checkpoint、spec 为 list/null、grid 值非列表、坏 tag（非 UTF-8）、
+    坏 version（ ）、超大 offset 与超大路径 id。
+    ② 唯一 500：`offset=999999999999999999999` → SQLite `OverflowError`；路径 id 同理。
+    ③ 修：offset `le=1_000_000_000`；路径 id 用 `Annotated[int, Path(ge=1, le=2**63-1)]`；
+    `pagination.max_offset` 进 `/api/limits`。
+    ④ 复核：11 例全部 < 500（422/404/201）；`test_malformed_inputs_never_leak_500` 常驻。
+    后端 **312/312**。

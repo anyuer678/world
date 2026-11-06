@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Path, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from .. import APP_VERSION
@@ -21,6 +21,10 @@ router = APIRouter(prefix="/api")
 # `events_limit=0` 的切片 `[-0:]` 反而会返回全部事件。所有列表端点统一用这里的边界。
 MAX_PAGE_SIZE = 1000
 MAX_EVENTS_LIMIT = 500
+# R64：offset 不设上限时，`offset=999999999999999999999` 会让 Python 大整数进 SQLite，
+# 触发 OverflowError → 500。路径 id 同理（用 RowId 约束）。
+MAX_OFFSET = 1_000_000_000
+RowId = Annotated[int, Path(ge=1, le=2**63 - 1)]
 
 
 class CreateExperimentBody(BaseModel):
@@ -96,7 +100,7 @@ def create_experiment(request: Request, body: CreateExperimentBody) -> dict[str,
 def list_experiments(
     request: Request,
     limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     model_id: Optional[str] = None,
     tag: Optional[str] = None,
 ) -> dict[str, Any]:
@@ -104,50 +108,50 @@ def list_experiments(
 
 
 @router.get("/experiments/{exp_id}")
-def get_experiment(exp_id: int, request: Request) -> dict[str, Any]:
+def get_experiment(exp_id: RowId, request: Request) -> dict[str, Any]:
     return _service(request).get_experiment(exp_id)
 
 
 @router.delete("/experiments/{exp_id}", status_code=204)
-def delete_experiment(exp_id: int, request: Request) -> None:
+def delete_experiment(exp_id: RowId, request: Request) -> None:
     _service(request).delete_experiment(exp_id)
 
 
 @router.post("/experiments/{exp_id}/clone")
-def clone_experiment(exp_id: int, request: Request, body: CloneBody | None = None) -> dict[str, Any]:
+def clone_experiment(exp_id: RowId, request: Request, body: CloneBody | None = None) -> dict[str, Any]:
     body = body or CloneBody()
     return _service(request).clone_experiment(exp_id, body.name, body.spec_overrides)
 
 
 @router.put("/experiments/{exp_id}/tags")
-def set_tags(exp_id: int, request: Request, body: TagsBody) -> dict[str, Any]:
+def set_tags(exp_id: RowId, request: Request, body: TagsBody) -> dict[str, Any]:
     return _service(request).set_tags(exp_id, body.tags)
 
 
 @router.post("/experiments/{exp_id}/run")
-def run_experiment(exp_id: int, request: Request, body: RunBody | None = None) -> dict[str, Any]:
+def run_experiment(exp_id: RowId, request: Request, body: RunBody | None = None) -> dict[str, Any]:
     body = body or RunBody()
     return _service(request).run_experiment(exp_id, wait=body.wait)
 
 
 @router.get("/experiments/{exp_id}/result")
-def get_result(exp_id: int, request: Request) -> dict[str, Any]:
+def get_result(exp_id: RowId, request: Request) -> dict[str, Any]:
     return _service(request).get_result(exp_id)
 
 
 @router.post("/experiments/{exp_id}/cancel")
-def cancel_experiment(exp_id: int, request: Request) -> dict[str, Any]:
+def cancel_experiment(exp_id: RowId, request: Request) -> dict[str, Any]:
     return _service(request).cancel_experiment(exp_id)
 
 
 @router.post("/experiments/{exp_id}/rerun")
-def rerun_experiment(exp_id: int, request: Request) -> dict[str, Any]:
+def rerun_experiment(exp_id: RowId, request: Request) -> dict[str, Any]:
     return _service(request).rerun_experiment(exp_id)
 
 
 @router.get("/experiments/{exp_id}/report")
 def get_experiment_report(
-    exp_id: int, request: Request, format: Literal["markdown", "json"] = "markdown"
+    exp_id: RowId, request: Request, format: Literal["markdown", "json"] = "markdown"
 ) -> Any:
     service = _service(request)
     result = service.get_result(exp_id)
@@ -165,17 +169,17 @@ def get_experiment_report(
 # ----------------------------------------------------------------------- runs
 @router.get("/runs/{run_id}")
 def get_run(
-    run_id: int, request: Request, events_limit: int = Query(50, ge=0, le=MAX_EVENTS_LIMIT)
+    run_id: RowId, request: Request, events_limit: int = Query(50, ge=0, le=MAX_EVENTS_LIMIT)
 ) -> dict[str, Any]:
     return _service(request).get_run(run_id, events_limit)
 
 
 @router.get("/runs/{run_id}/events")
 def get_run_events(
-    run_id: int,
+    run_id: RowId,
     request: Request,
     limit: int = Query(100, ge=1, le=MAX_PAGE_SIZE),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
 ) -> dict[str, Any]:
     return _service(request).get_run_events(run_id, limit, offset)
 
@@ -296,7 +300,7 @@ def get_limits(request: Request) -> dict[str, Any]:
         # 与校验共用常量，前端据此做 input max 与提交前拦截。
         "session": {"max_step_batch": MAX_STEP_BATCH},
         # R59：列表分页与事件数量的边界（同一个常量供校验与契约使用）
-        "pagination": {"max_limit": MAX_PAGE_SIZE, "max_events": MAX_EVENTS_LIMIT},
+        "pagination": {"max_limit": MAX_PAGE_SIZE, "max_events": MAX_EVENTS_LIMIT, "max_offset": MAX_OFFSET},
         "experiment": {"name_max_length": EXPERIMENT_NAME_MAX},
     }
 
@@ -323,39 +327,39 @@ def create_batch(request: Request, body: CreateBatchBody) -> dict[str, Any]:
 def list_batches(
     request: Request,
     limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
 ) -> dict[str, Any]:
     return _batches(request).list_batches(limit, offset)
 
 
 @router.get("/batches/{batch_id}")
-def get_batch(batch_id: int, request: Request) -> dict[str, Any]:
+def get_batch(batch_id: RowId, request: Request) -> dict[str, Any]:
     return _batches(request).get_batch(batch_id)
 
 
 @router.get("/batches/{batch_id}/findings")
-def batch_findings(batch_id: int, request: Request) -> dict[str, Any]:
+def batch_findings(batch_id: RowId, request: Request) -> dict[str, Any]:
     batch = _batches(request).get_batch(batch_id, include_summary=True)
     return analyze_summary(batch.get("summary", {}), batch.get("grid", {}))
 
 
 @router.get("/batches/{batch_id}/items")
 def list_batch_items(
-    batch_id: int,
+    batch_id: RowId,
     request: Request,
     limit: int = Query(200, ge=1, le=MAX_PAGE_SIZE),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
 ) -> dict[str, Any]:
     return _batches(request).list_items(batch_id, limit, offset)
 
 
 @router.post("/batches/{batch_id}/cancel")
-def cancel_batch(batch_id: int, request: Request) -> dict[str, Any]:
+def cancel_batch(batch_id: RowId, request: Request) -> dict[str, Any]:
     return _batches(request).cancel(batch_id)
 
 
 @router.get("/batches/{batch_id}/export.csv")
-def export_batch_csv(batch_id: int, request: Request) -> Response:
+def export_batch_csv(batch_id: RowId, request: Request) -> Response:
     batches = _batches(request)
     batch = batches.get_batch(batch_id, include_summary=False)
     items: list[dict[str, Any]] = []
