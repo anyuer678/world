@@ -170,8 +170,8 @@ export const api = {
     max_retries: number
     per_run_wall_seconds: number
   }) => request<BatchDetail>('/api/batches', { method: 'POST', body: JSON.stringify(body) }),
-  listBatches: () =>
-    request<{ total: number; batches: BatchListItem[] }>('/api/batches?limit=10'),
+  listBatches: (limit = 10, offset = 0) =>
+    request<{ total: number; batches: BatchListItem[] }>(`/api/batches?limit=${limit}&offset=${offset}`),
   getBatch: (id: number) => request<BatchDetail>(`/api/batches/${id}`),
   getBatchFindings: (id: number) => request<FindingsResponse>(`/api/batches/${id}/findings`),
   listBatchItems: (id: number, limit = 50) =>

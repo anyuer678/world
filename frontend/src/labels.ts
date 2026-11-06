@@ -18,6 +18,12 @@ const STATUS_LABELS: Record<string, string> = {
   wall_timeout: '超时',
 }
 
+/** 分页「加载更多」文案：已取满返回 null，调用方据此隐藏按钮（R75/R78 共用）。 */
+export function moreLabel(shown: number, total: number): string | null {
+  if (shown >= total) return null
+  return `加载更多（还有 ${total - shown} 条）`
+}
+
 export function statusLabel(s: string): string {
   return STATUS_LABELS[s] ?? s
 }

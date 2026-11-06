@@ -686,3 +686,12 @@ PLUGINS kind 清单、ARCHITECTURE 清单、QUICK_PICKS 快捷入口、e2e 预�
 前端批量详情新增「报告MD」「报告JSON」下载链接（与 CSV 并列，带 aria-label）。
 测试：`test_batch_report_markdown_and_json`（键集、统计表、自动发现段、404、format 非法 422）。
 后端 **332/332**、前端 **71/71**。
+
+**R78（2026-11-06）功能：批量列表「加载更多」**
+
+R57 只给批量列表加了截断提示（现有 19 个批量只显示 10 个），与实验历史（R75）还不一致。
+本轮补分页：`api.listBatches(limit, offset)`；列表下方「加载更多（还有 N 条）」按
+`offset=已显示条数` 追加、按 id 去重，取满后按钮消失、标题转为「共 N 条」。
+「加载更多」文案抽到 `labels.ts` 的 `moreLabel()`，实验历史与批量列表共用一份实现
+（`historyMoreLabel` 改为委托）。浏览器实测：19 条数据下初始 10 行 +「还有 9 条」→
+点击后 19 行、按钮消失、标题「共 19 条」。前端 **71/71**。

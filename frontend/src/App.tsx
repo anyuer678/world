@@ -4,7 +4,7 @@ import type { ModelInfo, ModelSpec, ScenarioInfo, SessionState } from './types'
 import ParamForm from './ParamForm'
 import TrafficPanel from './TrafficPanel'
 import SimView from './SimView'
-import { statusLabel } from './labels'
+import { moreLabel, statusLabel } from './labels'
 import BatchPanel from './BatchPanel'
 import ComparePanel from './ComparePanel'
 import { summarizeMetrics } from './summary'
@@ -597,8 +597,7 @@ export const HISTORY_PAGE_SIZE = 20
 
 /** 「加载更多」按钮文案（R75）；已取满返回 null（调用方据此隐藏按钮）。 */
 export function historyMoreLabel(shown: number, total: number): string | null {
-  if (shown >= total) return null
-  return `加载更多（还有 ${total - shown} 条）`
+  return moreLabel(shown, total)
 }
 
 export function historyHeading(shown: number, total: number): string {

@@ -1,4 +1,4 @@
-import { statusLabel } from './labels'
+import { moreLabel, statusLabel } from './labels'
 import { useCallback, useEffect, useState } from 'react'
 import { api, isNotFoundOn } from './api'
 import type { BatchDetail, BatchItem, BatchListItem, ModelSpec } from './types'
@@ -49,6 +49,9 @@ export function batchSubmitProblem(
  */
 /** 批量列表的截断口径（R57）：只展示最近 10 条时必须给出总数，
  * 否则「10 条」会被当成「全部 10 条」（与 R48 的历史口径一致）。 */
+/** 批量列表每页条数（R78，与实验历史的 20 条相互独立）。 */
+export const BATCH_PAGE_SIZE = 10
+
 export function batchesHeading(shown: number, total: number): string {
   if (total <= 0) return '批量实验'
   if (shown >= total) return `批量实验（共 ${total} 条）`
@@ -82,6 +85,8 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
   const [batches, setBatches] = useState<BatchListItem[]>([])
   // R57：列表固定取最近 10 条，必须同时显示总数（与 R48 的实验历史同一口径）
   const [batchesTotal, setBatchesTotal] = useState(0)
+  // R78：「加载更多」按 offset 追加（与实验历史 R75 的交互一致）
+  const [batchesLimit, setBatchesLimit] = useState(BATCH_PAGE_SIZE)
   const [batch, setBatch] = useState<BatchDetail | null>(null)
   const [items, setItems] = useState<BatchItem[]>([])
   const [itemsTotal, setItemsTotal] = useState(0)
@@ -96,17 +101,32 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
     // R51：列表拉取失败此前完全静默——服务端不可达时界面只显示「暂无批量」，
     // 用户会把失败当成「没有数据」。这里至少把原因显示出来。
     api
-      .listBatches()
+      .listBatches(batchesLimit, 0)
       .then((r) => {
         setBatches(r.batches)
         setBatchesTotal(r.total)
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-  }, [])
+  }, [batchesLimit])
 
   useEffect(() => {
     refreshBatches()
   }, [refreshBatches])
+
+  async function loadMoreBatches() {
+    setBusy(true)
+    try {
+      const r = await api.listBatches(BATCH_PAGE_SIZE, batches.length)
+      const seen = new Set(batches.map((b) => b.id))
+      setBatches([...batches, ...r.batches.filter((b) => !seen.has(b.id))])
+      setBatchesTotal(r.total)
+      setBatchesLimit((n) => n + BATCH_PAGE_SIZE)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   // 提交上限取自服务端 /api/limits（R29）：取不到时用 FALLBACK_LIMITS，不阻塞表单
   useEffect(() => {
@@ -382,6 +402,11 @@ export default function BatchPanel({ spec }: { spec: ModelSpec }) {
             ))}
           </tbody>
           </table>
+          {batches.length < batchesTotal && (
+            <button onClick={loadMoreBatches} disabled={busy} style={{ ...smallBtn, marginTop: 8 }}>
+              {moreLabel(batches.length, batchesTotal)}
+            </button>
+          )}
         </>
       )}
 
