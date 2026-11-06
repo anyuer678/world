@@ -48,12 +48,12 @@ def test_registry_picks_numerically_latest_version():
 
 
 @pytest.fixture()
-def multi_version_client():
+def multi_version_client(settings):
     """往全局注册表临时挂三个版本，测完摘掉（注册表是模块级单例，不能留垃圾）。"""
     added = ("1.0.0", "2.0.0", "10.0.0")
     registry._by_id[PROBE_ID] = {v: probe_class(v) for v in added}
     try:
-        with TestClient(create_app()) as c:
+        with TestClient(create_app(settings)) as c:
             yield c
     finally:
         registry._by_id.pop(PROBE_ID, None)
@@ -115,10 +115,10 @@ def _mrp(version: str, params_cls):
 
 
 @pytest.fixture()
-def two_behavioral_versions():
+def two_behavioral_versions(settings):
     registry._by_id[MRP] = {"1.0.0": _mrp("1.0.0", _Gamma1), "2.0.0": _mrp("2.0.0", _Gamma2)}
     try:
-        with TestClient(create_app()) as c:
+        with TestClient(create_app(settings)) as c:
             yield c
     finally:
         registry._by_id.pop(MRP, None)

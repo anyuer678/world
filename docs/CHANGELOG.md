@@ -515,3 +515,16 @@ R55 只验到加载器层面；本轮把 `PLUGINS.md` 的示例代码块原样�
 `/api/limits` 新增 `experiment.name_max_length`，工作台的实验名称输入框据此设 `maxLength`，
 超长名称在界面层就不可输入。实跑复核：clone(201) → 422、clone(200) → 200。
 后端 **307/307**、前端 **70/70**。
+
+**R61（2026-11-06）测试污染真实数据：两处 `create_app()` 未传 settings，每轮往开发库塞 3 个实验**
+
+起因是开发库的实验数在几轮之间从 46 涨到 64，而我没有创建这么多。实测：跑一次全量测试，
+`backend/data/worldlab.db` 的实验数 **58 → 61**（runs 同步 +3）。二分定位到
+`tests/test_model_versions.py`：两个 fixture 用 `TestClient(create_app())` 且未传 settings，
+`create_app` 回落 `default_settings` → 直接写仓库里的开发库；`two_behavioral_versions` 每次
+创建 3 个 `mrp_probe` 实验。修：两个 fixture 改用 `settings` 临时库；并在 `conftest.py` 加
+**会话级 autouse 保险**——把 `app.main.default_settings` 换成临时库，任何"忘了传 settings"的
+调用都写不到仓库数据；新增 `test_default_app_never_points_at_repo_database` 绑定该保险。
+复核：全量测试前后实验数 **64 → 64**（修前 58 → 61）。开发库里已被写入的 51 条 `mrp_probe`
+探针实验（模型不在注册表、名称 `mrp`）按 R35 判据清理（先备份到临时目录），剩 13 条真实数据
+（queueing 6 / sir 6 / cache_sim 1）。后端 **308/308**。

@@ -2,6 +2,7 @@ import hashlib
 import json
 
 import pytest
+from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -305,4 +306,13 @@ def test_clone_rejects_overlong_name_like_create(client):
     assert over.json()["detail"]["code"] == "spec_invalid"
     ok = client.post(f"/api/experiments/{eid}/clone", json={"name": "y" * 200})
     assert ok.status_code in (200, 201), ok.text
+
+
+def test_default_app_never_points_at_repo_database():
+    """R61：`create_app()` 不带参数时会用 `app.main.default_settings`。
+    测试会话里它必须被换成临时库，否则一次全量测试就会往开发库写入实验/运行记录。"""
+    import app.main as main_module
+
+    repo_db = (Path(__file__).resolve().parents[1] / "data" / "worldlab.db").resolve()
+    assert Path(main_module.default_settings.db_path).resolve() != repo_db
 

@@ -913,3 +913,15 @@
     ③ 测试：`test_clone_rejects_overlong_name_like_create`（201 → 422；200 → 200）。
     ④ 实跑复核：clone(201)=422、clone(200)=200；limits 呈现 200。探针实验已删。
     ⑤ 回归：后端 **307/307**、前端 **70/70**、tsc/vite 干净。
+
+72. **R61 测试污染真实数据（create_app 未传 settings）**。
+    ① 现象：开发库实验数几轮内 46 → 64，而这是测试在写。实测量化：跑一次全量测试，
+    `backend/data/worldlab.db` 的 experiments **58 → 61**、runs +3。
+    ② 二分定位：`tests/test_model_versions.py` 两个 fixture 用 `TestClient(create_app())`，
+    未传 settings → `default_settings` → 仓库开发库；`two_behavioral_versions` 每次建 3 个
+    `mrp_probe` 实验。
+    ③ 修：fixture 改用 `settings`（tmp 库）；`conftest.py` 会话级 autouse 把
+    `app.main.default_settings` 换成临时库（兜住所有「忘了传 settings」的调用）；
+    `test_default_app_never_points_at_repo_database` 绑定该保险。
+    ④ 复核：全量测试前后 **64 → 64**（修前 58 → 61）。已写入开发库的 51 条 `mrp_probe`
+    探针实验按 R35 判据清理（先备份到临时目录），剩 13 条真实数据。后端 **308/308**。
