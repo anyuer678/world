@@ -925,3 +925,13 @@
     `test_default_app_never_points_at_repo_database` 绑定该保险。
     ④ 复核：全量测试前后 **64 → 64**（修前 58 → 61）。已写入开发库的 51 条 `mrp_probe`
     探针实验按 R35 判据清理（先备份到临时目录），剩 13 条真实数据。后端 **308/308**。
+
+73. **R62 并发 run 占位（TOCTOU：同一实验被并发执行两次）**。
+    ① 探针：同实验 8 线程同时 `run_experiment`（schelling 2000 步保持 running）→
+    **2 个成功、DB 2 条 run**；根因是先读 status 再无条件 UPDATE+INSERT。
+    ② 修：占位改为 `UPDATE … WHERE id=? AND status!='running'`，以 rowcount 判定归属，
+    输者 409；写事务由 SQLite 单写者串行化。
+    ③ 复核：服务层 8 线程 → ok=1 / conflict=7 / run=1；真实 HTTP 8 并发 curl →
+    1×200 + 7×409、run=1；探针实验已 cancel + delete。
+    ④ 回归：`test_concurrent_run_claims_exactly_once`（8 线程、断言恰好 1 个成功且 DB 1 条 run）。
+    后端 **309/309**。

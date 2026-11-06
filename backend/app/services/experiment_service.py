@@ -308,10 +308,16 @@ class ExperimentService:
             # 把 run 静默标成 failed（R35 实测的不对称）。
             validate_spec(spec, self.registry)
             with conn:
-                conn.execute(
-                    "UPDATE experiments SET status='running', started_at=datetime('now'), finished_at=NULL, error=NULL WHERE id=?",
+                # R62：检查与占位必须是一条语句。此前「先读 status、再无条件 UPDATE」是
+                # TOCTOU——实测 8 个并发 POST /run 有 2 个成功、插入了 2 条 run，
+                # 同一实验被并发执行两次。条件 UPDATE 让 SQLite 的单写者串行化成为判据。
+                claimed = conn.execute(
+                    "UPDATE experiments SET status='running', started_at=datetime('now'),"
+                    " finished_at=NULL, error=NULL WHERE id=? AND status!='running'",
                     (exp_id,),
                 )
+                if claimed.rowcount != 1:
+                    raise ConflictError(f"experiment {exp_id} is already running")
                 cur = conn.execute(
                     "INSERT INTO experiment_runs(experiment_id, repeat_index, seed, status) VALUES (?,?,?,'pending')",
                     (exp_id, 0, spec.get("seed") if spec.get("seed") is not None else secrets.randbelow(2**31)),

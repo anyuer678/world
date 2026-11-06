@@ -201,3 +201,50 @@ def test_corrupted_checkpoint_rejected_session_stays_usable(client):
         assert r.json()["snapshot"]["step"] == 5
     finally:
         client.delete(f"/api/sessions/{sid}")
+
+
+def test_concurrent_run_claims_exactly_once(settings):
+    """R62：并发 POST /run 只能有一个成功。
+
+    旧实现先读 status 再无条件 UPDATE+INSERT——实测 8 线程同时发起时有 2 个成功、
+    库里 2 条 run，同一实验被并发执行。现在占位是一条条件 UPDATE，rowcount 决定归属。"""
+    import sqlite3
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.core.registry import registry
+    from app.services.experiment_service import ConflictError, ExperimentService
+
+    svc = ExperimentService(settings, registry)
+    try:
+        spec = {
+            "schema_version": 1,
+            "model_id": "toy_slow_step",
+            "params": {},
+            "stop_condition": {"type": "steps", "value": 200000},
+            "seed": 3,
+        }
+        exp = svc.create_experiment("r62-race", spec)
+        workers = 8
+        barrier = threading.Barrier(workers)
+
+        def fire(_i: int) -> str:
+            barrier.wait(timeout=10)
+            try:
+                svc.run_experiment(exp["id"])
+                return "ok"
+            except ConflictError:
+                return "conflict"
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            outcomes = list(pool.map(fire, range(workers)))
+
+        assert outcomes.count("ok") == 1, outcomes
+        runs = sqlite3.connect(settings.db_path).execute(
+            "SELECT COUNT(*) FROM experiment_runs WHERE experiment_id=?", (exp["id"],)
+        ).fetchone()[0]
+        assert runs == 1, f"并发调用为同一实验插入了 {runs} 条 run"
+        svc.cancel_experiment(exp["id"])
+    finally:
+        svc.shutdown()
+

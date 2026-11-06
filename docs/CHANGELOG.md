@@ -528,3 +528,13 @@ R55 只验到加载器层面；本轮把 `PLUGINS.md` 的示例代码块原样�
 复核：全量测试前后实验数 **64 → 64**（修前 58 → 61）。开发库里已被写入的 51 条 `mrp_probe`
 探针实验（模型不在注册表、名称 `mrp`）按 R35 判据清理（先备份到临时目录），剩 13 条真实数据
 （queueing 6 / sir 6 / cache_sim 1）。后端 **308/308**。
+
+**R62（2026-11-06）并发 `POST /run` 的 TOCTOU：同一实验曾被并发执行两次**
+
+`run_experiment` 是「先读 status、再无条件 UPDATE + INSERT」两段式，检查与占位之间没有原子性。
+探针用 8 线程同时打同一实验（schelling 2000 步保持 running）：**2 个成功、库里 2 条 run**——
+同一 spec 被并发执行两次，结果目录里出现两条互相竞争的 run。修：占位改成一条**条件 UPDATE**
+（`WHERE id=? AND status!='running'`），以 `rowcount` 判定归属，输者 409；SQLite 单写者
+串行化使这条判断成立。复核：服务层 8 线程 → ok=1 / conflict=7 / DB run=1；真实 HTTP
+8 个并发 curl → **1×200、7×409**、run=1。新增
+`test_concurrent_run_claims_exactly_once`。后端 **309/309**。
